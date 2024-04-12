@@ -23,14 +23,14 @@ np.random.seed(30)
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 300,
+          "N": 10,
           "erdos_p": 3,
-          "steps": 200,
+          "steps": 100,
           "w_i": 5,
           "immune_n": 0.25,
           "M": 4,
-          "veg_f":0.6,
-          "meat_f": 0.4,  
+          "veg_f":0.499,
+          "meat_f": 0.501,  
           "n": 5,
           "v": 10,
           'topology': "BA"
@@ -52,7 +52,7 @@ class Agent():
         self.global_norm = 0.5
         self.reduction_out = 0
         # implement other distributions (pareto)
-        self.alpha = 0.3
+        self.alpha = 1
         self.beta = 0.3
     def choose_diet(self, params):
         
@@ -92,9 +92,11 @@ class Agent():
         
         u_i = self.calc_utility(mode = "same")
         u_s = self.calc_utility(mode = "different")
+        #u_s = -u_i
         #print(u_i, u_s)
-        prob_switch = 1/(1+math.exp(-1*(u_i-u_s)))
-#u_s-u_i        
+        #prob_switch = 1/2*(u_s-u_i)+0.5#
+        prob_switch = 1/(1+math.exp(-2*(u_s-u_i)))
+        #print(prob_switch)
         return prob_switch
     
     def dissonance(self, case):
@@ -197,6 +199,7 @@ class Agent():
     #working
     def calc_utility(self, mode):
         #print(self.dissonance("simple") + 1 * (1-2*self.get_ratio()[0]) + 1 * self.global_norm)
+        #print(self.dissonance("simple"),self.alpha*(1-2*self.get_ratio(mode)[0]),self.beta*self.global_norm)
         return self.dissonance("simple") + 1 * self.alpha*(1-2*self.get_ratio(mode)[0]) - self.beta*self.global_norm
         
         
