@@ -12,6 +12,7 @@ from scipy.stats import norm
 from scipy.stats import truncnorm
 import math
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 # %% Preliminary settings
 random.seed(30)
@@ -46,7 +47,7 @@ class Agent():
         self.C = self.diet_emissions(self.diet, self.params)
         self.memory = []
         self.i = i
-        self.individual_norm = truncnorm.rvs(0, 1)
+        self.individual_norm = truncnorm.rvs(-1, 1)
         self.global_norm = truncnorm.rvs(0, 1)
         self.reduction_out = 0
         # implement other distributions (pareto)
@@ -89,11 +90,32 @@ class Agent():
         prob_switch = 1/(1+math.exp(u_i-u_s))
             
         return prob_switch
-        
-        
-    def dissonance_calc(self, signs):
-        
-        return 0.1
+    
+    def dissonance(self, case):
+        if case == "simple":
+            if self.diet == "veg":
+                if self.individual_norm >= 0:
+                    sign = 1
+                else:
+                    sign = -1
+            elif self.diet == "meat":    
+                if self.individual_norm >= 0:
+                    sign = -1
+                else:
+                    sign = 1
+            else: 
+                return ValueError("This " + self.diet +" diet is not defined!")
+            return sign * self.individual_norm
+        elif case == "sigmoid":
+            current_diet = 1 if self.diet == "veg" else -1
+            # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
+            return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.4621171572600098
+
+        else:
+            return ValueError("You can only select form either 'simple' or 'sigmoid'. ")
+
+
+
         
         
     def select_node(self, i, G, i_x=None):
@@ -162,15 +184,8 @@ class Agent():
         return ratio_dissimilar, ratio_similar 
 
 
-    def calc_utility(self,ut_diet):
-        if ut_diet == "veg":
-            sign = 1
-        elif ut_diet == "meat":    
-            sign = -1
-        else: 
-            return ValueError("This " + self.diet +" diet is not defined!")
-        
-        return sign * self.individual_norm + self.alpha * (1-2*self.get_ratio()) + self.beta * self.global_norm
+    def calc_utility(self, i):
+        return self.dissonance("sigmoid") + 1 * (1-2*self.get_ratio()[0]) + 1 * self.global_norm
     
         
     def step(self, G, agents, params):
@@ -190,7 +205,7 @@ class Agent():
 
         prob_switch = self.prob_calc()
         if self.flip(prob_switch):
-            self.diet = "meat" if self.diet == "veg" else "meat"
+            self.diet = "meat" if self.diet == "veg" else "veg"
         
         #neighbour_node = self.select_node(first_n, G, i_x = self.i)
         
@@ -271,7 +286,6 @@ class Model():
         
         time_array = list(range(self.params["steps"]))
         for t in time_array:
-        
             for i in self.agents:
                 i.step(self.G1, self.agents, self.params)
             self.system_C.append(self.get_attribute("C")/self.params["N"])
@@ -282,8 +296,11 @@ class Model():
 
 # %%
 test_model = Model(params)
+
 test_model.run()
-# trajec = test_model.system_C
+trajec = test_model.system_C
+plt.plot(trajec)
+plt.show()
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
 
