@@ -141,7 +141,7 @@ class Agent():
     #get ratio of meat eaters for a given agent
     def get_ratio(self, i):
         i_diet = i.diet
-        neghbours = i.neighbours
+        neighbours = i.neighbours
         neighbour_diets = self.get_neighbour_attributes("diet", neighbours)
     
         ratio_similar = sum(neighbour_diets == i.diet for i in neighbour_diets)/sum(neighbour_diets)
