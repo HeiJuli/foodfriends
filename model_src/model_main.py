@@ -28,7 +28,7 @@ params = {"veg_CO2": 1390,
           "w_i": 5,
           "immune_n": 0.25,
           "M": 4,
-          "veg_f":0.24,
+          "veg_f":0.14,
           "meat_f": 0.86,  
           "n": 5,
           "v": 10
@@ -46,7 +46,7 @@ class Agent():
         self.C = self.diet_emissions(self.diet, self.params)
         self.memory = []
         self.i = i
-        self.individual_norm = truncnorm.rvs(0, 1)
+        self.individual_norm = truncnorm.rvs(-1, 1)
         self.global_norm = truncnorm.rvs(0, 1)
         self.reduction_out = 0
         # implement other distributions (pareto)
@@ -61,7 +61,7 @@ class Agent():
     # need to add probabilstic selection
     def diet_emissions(self, diet, params):
 
-        veg, vegan, meat = list(map(lambda x: norm.rvs(loc=x, scale=0.1*x),
+        veg, meat = list(map(lambda x: norm.rvs(loc=x, scale=0.1*x),
                                 list(map(params.get, ["veg_CO2", "meat_CO2"]))))
         lookup = {"veg": veg, "meat": meat}
 
@@ -71,7 +71,7 @@ class Agent():
 
     
         
-    def prob_calc(self, params, sign):
+    def prob_calc(self):
         """
         Calculates the probability of a dietry change in either direction
         Args:
@@ -82,11 +82,43 @@ class Agent():
             float: the probability of change
         """
         
-        u_i = self.calc_utility()
-        prob_switch = 1/1+math.exp(u_i-)
+        alternative_diet = "meat" if self.diet == "veg" else "meat"
+        u_i = self.calc_utility(self.diet)
+        u_s = self.calc_utility(alternative_diet)
         
-    def diss_calc(self, params, signs):
+        prob_switch = 1/(1+math.exp(u_i-u_s))
+            
+        return prob_switch
+    
+    def dissonance(self, case):
+        if case == "simple":
+            if self.diet == "veg":
+                if self.individual_norm >= 0:
+                    sign = 1
+                else:
+                    sign = -1
+            elif self.diet == "meat":    
+                if self.individual_norm >= 0:
+                    sign = -1
+                else:
+                    sign = 1
+            else: 
+                return ValueError("This " + self.diet +" diet is not defined!")
+            return sign * self.individual_norm
+        elif case == "sigmoid":
+            current_diet = 1 if self.diet == "veg" else -1
+            # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
+            return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.4621171572600098
+
+        else:
+            return ValueError("You can only select form either 'simple' or 'sigmoid'. ")
+
+
         
+        
+    def dissonance_calc(self, signs):
+        
+        return 0.1
         
         
     def select_node(self, i, G, i_x=None):
@@ -120,7 +152,7 @@ class Agent():
       
         neighbour.reduction_out += delta
         
-    def get_neighbour_attributes(self, attribute, neighbours):
+    def get_neighbour_attributes(self, attribute):
         """
        gets a list of neighbour attributes
     
@@ -134,18 +166,21 @@ class Agent():
         
         attribute = str(attribute)
         # get all agent attibutes from graph single
-        attribute_l = [getattr(self.agents[i], attribute)
-                       for i in i.neighbours]
+        attribute_l = [getattr(neighbour, attribute)
+                       for neighbour in self.neighbours]
         return attribute_l
     
     
     #get ratio of meat eaters for a given agent
-    def get_ratio(self, i):
-        i_diet = i.diet
-        neighbours = i.neighbours
-        neighbour_diets = self.get_neighbour_attributes("diet", neighbours)
+    def get_ratio(self):
+        
+        neighbour_diets = self.get_neighbour_attributes("diet")
     
-        ratio_similar = sum(neighbour_diets == i.diet for i in neighbour_diets)/sum(neighbour_diets)
+        count=0
+        for i in neighbour_diets:
+            if i == self.diet:
+                count += 1 
+        ratio_similar = count/len(neighbour_diets)
         
         ratio_dissimilar = 1 - ratio_similar
         
@@ -153,14 +188,8 @@ class Agent():
 
 
     def calc_utility(self, i):
-        if self.diet == "veg":
-            sign = 1
-        elif self.diet == "meat":    
-            sign = -1
-        else: 
-            return ValueError("This " + self.diet +" diet is not defined!")
-        
-        return sign * self.individual_norm + self.alpha * (1-2*self.get_ratio(i)) + self.beta * self.global_norm
+
+        return self.dissonance("simple") + 1 * (1-2*self.get_ratio()[0]) + 1 * self.global_norm
     
         
     def step(self, G, agents, params):
@@ -176,12 +205,17 @@ class Agent():
         """
 
         # need to implent this recursively to avoid high-degree node bias
-        first_n = self.select_node(self.i, G)
-       
-        neighbour_node = self.select_node(first_n, G, i_x = self.i)
-        
-        assert neighbour_node != self.i, f"node: {self.i} and neighbour: {neighbour_node} index same"
+        self.neighbours = [agents[neighbour] for neighbour in G.neighbors(self.i)]
 
+        prob_switch = self.prob_calc()
+        if self.flip(prob_switch):
+            self.diet = "meat" if self.diet == "veg" else "meat"
+        
+        #neighbour_node = self.select_node(first_n, G, i_x = self.i)
+        
+        
+    def flip(self, p):
+        return np.random.random() < p
 
 #%% Model 
 class Model():
@@ -249,14 +283,13 @@ class Model():
         attribute_l = [getattr(self.agents[i], attribute)
                        for i in range(len(self.agents))]
         return attribute_l
-        
+    
 
     def run(self):
         self.agent_ini(self.params)
         
         time_array = list(range(self.params["steps"]))
         for t in time_array:
-        
             for i in self.agents:
                 i.step(self.G1, self.agents, self.params)
             self.system_C.append(self.get_attribute("C")/self.params["N"])
@@ -266,8 +299,8 @@ class Model():
 
 
 # %%
-# test_model = Model(params)
-# test_model.run()
+test_model = Model(params)
+test_model.run()
 # trajec = test_model.system_C
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
