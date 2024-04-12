@@ -48,6 +48,9 @@ class Agent():
         self.C = self.diet_emissions(self.diet, self.params)
         self.memory = []
         self.i = i
+        self.individual_norm = truncnorm.rvs(0, 1)
+        self.social_norm = truncnorm.rvs(0, 1)
+        self.global_norm = truncnorm.rvs(0, 1)
         self.reduction_out = 0
         # implement other distributions (pareto)
         self.threshold = truncnorm.rvs(0, 1) if self.diet in "meat_f" else params["v_threshold"]
@@ -56,7 +59,7 @@ class Agent():
 
     def choose_diet(self, params):
         
-        choices = ["veg", "vegan", "meat"]
+        choices = ["veg",  "meat"] #"vegan",
         return np.random.choice(choices, p=[params["veg_f"], params["vegan_f"], params["meat_f"]])
 
     # need to add probabilstic selection
@@ -72,19 +75,40 @@ class Agent():
 
     
         
-    # need to make the bidirectional
-    # def prob_calc(self, params, sign):
-    #     """
-    #    Calculates the probability of a dietry change in either direction
-    #    Args:
-    #        params (dic): a dictionary of model parameters
-    #        sign (bool): indicates positive or negative interaction
+    def prob_calc(self, params, sign):
+        """
+        Calculates the probability of a dietry change in either direction
+        Args:
+            params (dic): a dictionary of model parameters
+            sign (bool): indicates positive or negative interaction
     
-    #    Returns:
-    #        float: the probability of change
-    #     """
+        Returns:
+            float: the probability of change
+        """
+        
+        
       
+    def get_neighbours(self, i, G):
+        neighbours = set(G.neighbours(i))
+        
+        
+    #get ratio of meat eaters
+    def get_ratio(self, i, G):
+        state = i.diet
     
+    
+        
+    
+        
+    def calc_utility(self, i):
+    #TODO: Jtown
+    
+    
+        
+     
+        
+                         
+        
     def select_node(self, i, G, i_x=None):
         neighbours = set(G.neighbors(i))
         if i_x is not None:
@@ -164,7 +188,8 @@ class Model():
                 break
         
         return
-
+    
+    
     def get_attribute(self, attribute):
         """
         sums a given attribute over N agents 
@@ -223,3 +248,5 @@ class Model():
 # trajec = test_model.system_C
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
+
+
