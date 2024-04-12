@@ -50,14 +50,8 @@ class Agent():
         self.global_norm = truncnorm.rvs(0, 1)
         self.reduction_out = 0
         # implement other distributions (pareto)
-<<<<<<< HEAD
-        self.threshold = truncnorm.rvs(0, 1) if self.diet in "meat_f" else params["v_threshold"]
         self.alpha = truncnorm.rvs(0, 1)
         self.beta = truncnorm.rvs(0, 1)
-=======
-        
->>>>>>> ee649c3 (added replicator function (unfinished)
-    # helpers
 
     def choose_diet(self, params):
         
@@ -77,7 +71,7 @@ class Agent():
 
     
         
-    def prob_calc(self, params, sign) :
+    def prob_calc(self, params, sign):
         """
         Calculates the probability of a dietry change in either direction
         Args:
@@ -88,9 +82,6 @@ class Agent():
             float: the probability of change
         """
         
-<<<<<<< HEAD
-                    
-=======
         u_i = self.calc_utility()
         prob_switch = 1/1+math.exp(u_i-)
         
@@ -98,7 +89,6 @@ class Agent():
         
         
         
->>>>>>> ee649c3 (added replicator function (unfinished)
     def select_node(self, i, G, i_x=None):
         neighbours = set(G.neighbors(i))
         if i_x is not None:
@@ -111,19 +101,6 @@ class Agent():
         assert neighbour_node != i, f"node: {i} and neighbour: {neighbour_node} same"
 
         return neighbour_node
-    
-<<<<<<< HEAD
-=======
-        
-    
-        
-    #def calc_utility(self, i):
-    #TODO: Jtown
-    
-    
-        
-    
->>>>>>> ee649c3 (added replicator function (unfinished)
     
     def reduction_tracker(self, C_j, agents):
         """
