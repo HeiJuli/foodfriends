@@ -17,23 +17,23 @@ import matplotlib.pyplot as plt
 # %% Preliminary settings
 random.seed(30)
 np.random.seed(30)
-
+#currently agents being incentives to go to other diet
 # # CO2 measures are in kg/year, source: https://pubmed.ncbi.nlm.nih.gov/25834298/
 
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 100,
+          "N": 300,
           "erdos_p": 3,
-          "steps": 500,
+          "steps": 200,
           "w_i": 5,
           "immune_n": 0.25,
           "M": 4,
-          "veg_f":0.14,
-          "meat_f": 0.86,  
+          "veg_f":0.6,
+          "meat_f": 0.4,  
           "n": 5,
           "v": 10,
-          'topology': "complete"
+          'topology': "BA"
           }
 
 # %% Agent
@@ -49,12 +49,11 @@ class Agent():
         self.memory = []
         self.i = i
         self.individual_norm = truncnorm.rvs(-1, 1)
-        self.global_norm = truncnorm.rvs(0, 1)
+        self.global_norm = 0.5
         self.reduction_out = 0
         # implement other distributions (pareto)
-        self.alpha = truncnorm.rvs(0, 1)
-        self.beta = truncnorm.rvs(0, 1)
-
+        self.alpha = 0.3
+        self.beta = 0.3
     def choose_diet(self, params):
         
         choices = ["veg",  "meat"] #"vegan",
@@ -72,7 +71,7 @@ class Agent():
     #def interact(self, neighbour):
 
     
-        
+
     def prob_calc(self):
         """
         Calculates the probability of a dietry change in either direction
@@ -84,12 +83,18 @@ class Agent():
             float: the probability of change
         """
         
-        alternative_diet = "meat" if self.diet == "veg" else "meat"
-        u_i = self.calc_utility(self.diet)
-        u_s = self.calc_utility(alternative_diet)
+        #alternative_diet = "meat" if self.diet == "veg" else "veg"
         
-        prob_switch = 1/(1+math.exp(u_i-u_s))
-            
+        # if self.diet == "veg":
+        #     alternative_diet = "meat"
+        # if self.diet == "meat":
+        #     alternative_diet = "veg"
+        
+        u_i = self.calc_utility(mode = "same")
+        u_s = self.calc_utility(mode = "different")
+        #print(u_i, u_s)
+        prob_switch = 1/(1+math.exp(-1*(u_i-u_s)))
+#u_s-u_i        
         return prob_switch
     
     def dissonance(self, case):
@@ -110,7 +115,7 @@ class Agent():
         elif case == "sigmoid":
             current_diet = 1 if self.diet == "veg" else -1
             # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
-            return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.4621171572600098
+            return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.5
 
         else:
             return ValueError("You can only select form either 'simple' or 'sigmoid'. ")
@@ -170,24 +175,30 @@ class Agent():
     
     
     #get ratio of meat eaters for a given agent
-    def get_ratio(self):
+    #working
+    def get_ratio(self, mode = "same"):
         
+        if mode == "same":
+            diet = self.diet
+        else:
+            diet = "meat" if self.diet == "veg" else "veg"
+            
         neighbour_diets = self.get_neighbour_attributes("diet")
-    
+        
         count=0
         for i in neighbour_diets:
-            if i == self.diet:
+            if i == diet:
                 count += 1 
         ratio_similar = count/len(neighbour_diets)
         
         ratio_dissimilar = 1 - ratio_similar
-        
         return ratio_dissimilar, ratio_similar 
 
-
-    def calc_utility(self, i):
-        return self.dissonance("sigmoid") + 1 * (1-2*self.get_ratio()[0]) + 1 * self.global_norm
-    
+    #working
+    def calc_utility(self, mode):
+        #print(self.dissonance("simple") + 1 * (1-2*self.get_ratio()[0]) + 1 * self.global_norm)
+        return self.dissonance("simple") + 1 * self.alpha*(1-2*self.get_ratio(mode)[0]) - self.beta*self.global_norm
+        
         
     def step(self, G, agents, params):
         """
@@ -203,11 +214,14 @@ class Agent():
 
         # need to implent this recursively to avoid high-degree node bias
         self.neighbours = [agents[neighbour] for neighbour in G.neighbors(self.i)]
-
+        
         prob_switch = self.prob_calc()
+        #print("before", self.diet)
         if self.flip(prob_switch):
             self.diet = "meat" if self.diet == "veg" else "veg"
-        
+            
+        self.C = self.diet_emissions(self.diet, self.params)
+        #print("after", self.diet)
         #neighbour_node = self.select_node(first_n, G, i_x = self.i)
         
         
@@ -226,31 +240,26 @@ class Model():
                 self.params["N"], self.params["erdos_p"])
         
         self.system_C = []
-    def add_agents(self, agents):
-           for agent in agents:
-               # Assume each agent has an 'index' attribute and other attributes
-               self.G.add_node(agent.index, **agent.attributes)
+        
+        
+    def map_agents(self):
+        # Map each agent object to the corresponding node in the graph
+        for agent in self.agents:
+            # Update the node with a reference to the agent object
+            self.G1.nodes[agent.i]['agent'] = agent
 
-  
 
-    #initates agents
     def agent_ini(self, params):
-        self.agents = [Agent(i, params) for i in range(len(self.G1.nodes))]
+        # Ensure agents are created for each node specifically
+        self.agents = [Agent(node, params) for node in self.G1.nodes()]
         
+        # Assigning immune threshold randomly to a fraction of agents
+        num_immune = int(self.params["immune_n"] * len(self.agents))
+        immune_agents = np.random.choice(self.agents, num_immune, replace=False)
         
-        #this calculates the immune node f
-        n = 0
-        
-        for i in range(len(self.G1.nodes)):
-            self.agents[np.random.choice(
-                range(len(self.G1.nodes)))].threshold = 1
-            n += 1
-            frac = n/len(self.agents)
-            if frac > self.params["immune_n"]:
-                break
-        
-        return
-    
+        for agent in immune_agents:
+            agent.threshold = 1
+
 
     def get_attribute(self, attribute, ):
         """
@@ -293,13 +302,13 @@ class Model():
 
     def run(self):
         self.agent_ini(self.params)
-        
+        self.map_agents()
         time_array = list(range(self.params["steps"]))
         for t in time_array:
             for i in self.agents:
                 i.step(self.G1, self.agents, self.params)
             self.system_C.append(self.get_attribute("C")/self.params["N"])
-            
+            #print(self.G1.nodes[1]["agent"].C, self.agents[1].C)
     
     
 
