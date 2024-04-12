@@ -151,7 +151,7 @@ class Agent():
         return ratio
 
 
-    def calc_utility(self, i, G):
+    def calc_utility(self, i):
         if self.diet == "veg":
             sign = 1
         elif self.diet == "meat":    
@@ -159,7 +159,7 @@ class Agent():
         else: 
             return ValueError("This " + self.diet +" diet is not defined!")
         
-        return sign * self.individual_norm + self.alpha * (1-2*self.get_ratio(self, i, G)) + self.beta * self.global_norm
+        return sign * self.individual_norm + self.alpha * (1-2*self.get_ratio(i)) + self.beta * self.global_norm
     
         
     def step(self, G, agents, params):
