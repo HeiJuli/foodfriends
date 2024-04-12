@@ -134,7 +134,7 @@ class Agent():
         attribute = str(attribute)
         # get all agent attibutes from graph single
         attribute_l = [getattr(self.agents[i], attribute)
-                       for i in i.neighbours)]
+                       for i in i.neighbours]
         return attribute_l
     
     
