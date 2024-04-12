@@ -32,7 +32,8 @@ params = {"veg_CO2": 1390,
           "veg_f":0.14,
           "meat_f": 0.86,  
           "n": 5,
-          "v": 10
+          "v": 10,
+          'topology': "complete"
           }
 
 # %% Agent
@@ -216,11 +217,21 @@ class Agent():
 #%% Model 
 class Model():
     def __init__(self, params):
-
+        
         self.params = params
-        self.G1 = nx.erdos_renyi_graph(
-            self.params["N"], self.params["erdos_p"])
+        if params['topology'] == "complete":
+            self.G1 = nx.complete_graph(params["N"])
+        elif params['topology'] == "BA":  
+            self.G1 = nx.erdos_renyi_graph(
+                self.params["N"], self.params["erdos_p"])
+        
         self.system_C = []
+    def add_agents(self, agents):
+           for agent in agents:
+               # Assume each agent has an 'index' attribute and other attributes
+               self.G.add_node(agent.index, **agent.attributes)
+
+  
 
     #initates agents
     def agent_ini(self, params):
@@ -240,8 +251,7 @@ class Model():
         
         return
     
-    
-    
+
     def get_attribute(self, attribute, ):
         """
         sums a given attribute over N agents 
