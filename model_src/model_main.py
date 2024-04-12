@@ -12,6 +12,7 @@ from scipy.stats import norm
 from scipy.stats import truncnorm
 import math
 import seaborn as sns
+import matplotlib.pyplot as plt
 
 # %% Preliminary settings
 random.seed(30)
@@ -114,11 +115,7 @@ class Agent():
             return ValueError("You can only select form either 'simple' or 'sigmoid'. ")
 
 
-        
-        
-    def dissonance_calc(self, signs):
-        
-        return 0.1
+
         
         
     def select_node(self, i, G, i_x=None):
@@ -188,8 +185,7 @@ class Agent():
 
 
     def calc_utility(self, i):
-
-        return self.dissonance("simple") + 1 * (1-2*self.get_ratio()[0]) + 1 * self.global_norm
+        return self.dissonance("sigmoid") + 1 * (1-2*self.get_ratio()[0]) + 1 * self.global_norm
     
         
     def step(self, G, agents, params):
@@ -209,7 +205,7 @@ class Agent():
 
         prob_switch = self.prob_calc()
         if self.flip(prob_switch):
-            self.diet = "meat" if self.diet == "veg" else "meat"
+            self.diet = "meat" if self.diet == "veg" else "veg"
         
         #neighbour_node = self.select_node(first_n, G, i_x = self.i)
         
@@ -300,8 +296,11 @@ class Model():
 
 # %%
 test_model = Model(params)
+
 test_model.run()
-# trajec = test_model.system_C
+trajec = test_model.system_C
+plt.plot(trajec)
+plt.show()
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
 
