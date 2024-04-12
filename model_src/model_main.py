@@ -19,22 +19,22 @@ np.random.seed(30)
 
 # # CO2 measures are in kg/year, source: https://pubmed.ncbi.nlm.nih.gov/25834298/
 
-# params = {"veg_CO2": 1390,
-#           "vegan_CO2": 1054,
-#           "meat_CO2": 2054,
-#           "N": 500,
-#           "erdos_p": 3,
-#           "steps": 500,
-#           "w_i": 5,
-#           "immune_n": 0.2,
-#           "M": 4,
-#           "vegan_f":0.02,
-#           "veg_f":0.12,
-#           "meat_f": 0.86,  
-#           "n": 5,
-#           "v": 10,
-#           "v_threshold": 0.8
-#           }
+params = {"veg_CO2": 1390,
+          "vegan_CO2": 1054,
+          "meat_CO2": 2054,
+          "N": 500,
+          "erdos_p": 3,
+          "steps": 500,
+          "w_i": 5,
+          "immune_n": 0.2,
+          "M": 4,
+          "vegan_f":0.02,
+          "veg_f":0.12,
+          "meat_f": 0.86,  
+          "n": 5,
+          "v": 10,
+          "v_threshold": 0.8
+          }
 
 # %% Agent
 
@@ -49,7 +49,6 @@ class Agent():
         self.memory = []
         self.i = i
         self.individual_norm = truncnorm.rvs(0, 1)
-        self.social_norm = truncnorm.rvs(0, 1)
         self.global_norm = truncnorm.rvs(0, 1)
         self.reduction_out = 0
         # implement other distributions (pareto)
@@ -60,14 +59,14 @@ class Agent():
     def choose_diet(self, params):
         
         choices = ["veg",  "meat"] #"vegan",
-        return np.random.choice(choices, p=[params["veg_f"], params["vegan_f"], params["meat_f"]])
+        return np.random.choice(choices, p=[params["veg_f"], params["meat_f"]])
 
     # need to add probabilstic selection
     def diet_emissions(self, diet, params):
 
         veg, vegan, meat = list(map(lambda x: norm.rvs(loc=x, scale=0.1*x),
-                                list(map(params.get, ["veg_CO2", "vegan_CO2", "meat_CO2"]))))
-        lookup = {"veg": veg, "vegan": vegan, "meat": meat}
+                                list(map(params.get, ["veg_CO2", "meat_CO2"]))))
+        lookup = {"veg": veg, "meat": meat}
 
         return lookup[diet]
 
@@ -87,27 +86,6 @@ class Agent():
         """
         
         
-      
-    def get_neighbours(self, i, G):
-        neighbours = set(G.neighbours(i))
-        
-        
-    #get ratio of meat eaters
-    def get_ratio(self, i, G):
-        state = i.diet
-    
-    
-        
-    
-        
-    def calc_utility(self, i):
-    #TODO: Jtown
-    
-    
-        
-     
-        
-                         
         
     def select_node(self, i, G, i_x=None):
         neighbours = set(G.neighbors(i))
@@ -121,6 +99,18 @@ class Agent():
         assert neighbour_node != i, f"node: {i} and neighbour: {neighbour_node} same"
 
         return neighbour_node
+    
+        
+    
+        
+    def calc_utility(self, i):
+    #TODO: Jtown
+    
+    
+        
+     
+        
+    
     
     def reduction_tracker(self, C_j, agents):
         """
@@ -140,7 +130,36 @@ class Agent():
       
         neighbour.reduction_out += delta
         
+    def get_neighbour_attributes(self, attribute, neighbours):
+        """
+       gets a list of neighbour attributes
     
+       Args:
+           attribute (str): the desired agent attribute, e.g C, or diet
+           neighbours (list): neighbour indexes of i
+    
+       Returns:
+           list: contains all attributes from N agents 
+        """
+        
+        attribute = str(attribute)
+        # get all agent attibutes from graph single
+        attribute_l = [getattr(self.agents[i], attribute)
+                       for i in i.neighbours)]
+        return attribute_l
+    
+    
+    #get ratio of meat eaters for a given agent
+    def get_ratio(self, i):
+        i_diet = i.diet
+        neghbours = i.neighbours
+        neighbour_diets = self.get_neighbour_attributes("diet", neighbours)
+    
+        ratio_similar = sum(neighbour_diets == i.diet for i in neighbour_diets)/sum(neighbour_diets)
+        
+        ratio_dissimilar = 1 - ratio_similar
+        
+        return ratio
 
     def step(self, G, agents, params):
         """
@@ -190,7 +209,8 @@ class Model():
         return
     
     
-    def get_attribute(self, attribute):
+    
+    def get_attribute(self, attribute, ):
         """
         sums a given attribute over N agents 
     
@@ -227,6 +247,7 @@ class Model():
         attribute_l = [getattr(self.agents[i], attribute)
                        for i in range(len(self.agents))]
         return attribute_l
+        
 
     def run(self):
         self.agent_ini(self.params)
