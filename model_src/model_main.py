@@ -53,7 +53,8 @@ class Agent():
         self.reduction_out = 0
         # implement other distributions (pareto)
         self.threshold = truncnorm.rvs(0, 1) if self.diet in "meat_f" else params["v_threshold"]
-
+        self.alpha = truncnorm.rvs(0, 1)
+        self.beta = truncnorm.rvs(0, 1)
     # helpers
 
     def choose_diet(self, params):
@@ -85,8 +86,7 @@ class Agent():
             float: the probability of change
         """
         
-        
-        
+                    
     def select_node(self, i, G, i_x=None):
         neighbours = set(G.neighbors(i))
         if i_x is not None:
@@ -99,17 +99,6 @@ class Agent():
         assert neighbour_node != i, f"node: {i} and neighbour: {neighbour_node} same"
 
         return neighbour_node
-    
-        
-    
-        
-    def calc_utility(self, i):
-    #TODO: Jtown
-    
-    
-        
-     
-        
     
     
     def reduction_tracker(self, C_j, agents):
@@ -161,6 +150,18 @@ class Agent():
         
         return ratio
 
+
+    def calc_utility(self, i, G):
+        if self.diet == "veg":
+            sign = 1
+        elif self.diet == "meat":    
+            sign = -1
+        else: 
+            return ValueError("This " + self.diet +" diet is not defined!")
+        
+        return sign * self.individual_norm + self.alpha * (1-2*self.get_ratio(self, i, G)) + self.beta * self.global_norm
+    
+        
     def step(self, G, agents, params):
         """
        Steps agent i forward one t
