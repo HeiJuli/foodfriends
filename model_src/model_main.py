@@ -23,7 +23,7 @@ np.random.seed(30)
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 5,
+          "N": 100,
           "erdos_p": 3,
           "steps": 100,
           "w_i": 5,
@@ -54,10 +54,10 @@ class Agent():
         # implement other distributions (pareto)
         self.alpha = 0#1
         self.beta = 0#0.3
-    def choose_diet(self, params):
+    # def choose_diet(self, params):
         
-        choices = ["veg",  "meat"] #"vegan",
-        return np.random.choice(choices, p=[params["veg_f"], params["meat_f"]])
+    #     choices = ["veg",  "meat"] #"vegan",
+    #     return np.random.choice(choices, p=[params["veg_f"], params["meat_f"]])
 
     # need to add probabilstic selection
     def diet_emissions(self, diet, params):
@@ -202,7 +202,7 @@ class Agent():
         #print(self.dissonance("simple"),self.alpha*(1-2*self.get_ratio(mode)[0]),self.beta*self.global_norm)
         return self.dissonance("simple") + 1 * self.alpha*(1-2*self.get_ratio(mode)[0]) - self.beta*self.global_norm
         
-        
+
     def step(self, G, agents, params):
         """
        Steps agent i forward one t
@@ -246,7 +246,7 @@ class Model():
         self.fraction_veg = []  
     
     def record_fraction(self):
-        fraction_veg = sum(i == "veg" for i in test_model.get_attributes("diet"))/len(test_model.get_attributes("diet"))
+        fraction_veg = sum(i == "veg" for i in self.get_attributes("diet"))/len(self.get_attributes("diet"))
         self.fraction_veg.append(fraction_veg)
 
     
@@ -262,12 +262,21 @@ class Model():
         # Ensure agents are created for each node specifically
         self.agents = [Agent(node, params) for node in self.G1.nodes()]
         
-        # Assigning immune threshold randomly to a fraction of agents
-        num_immune = int(self.params["immune_n"] * len(self.agents))
-        immune_agents = np.random.choice(self.agents, num_immune, replace=False)
-        
-        for agent in immune_agents:
-            agent.threshold = 1
+        total_agents = len(self.agents)
+        num_veg = int(params["veg_f"] * total_agents)
+        num_meat = int(params["meat_f"] * total_agents)
+
+        # Shuffle agents and assign diets
+        shuffled_agents = np.random.permutation(self.agents)
+
+        # Vegetarian agents
+        for agent in shuffled_agents[:num_veg]:
+            agent.diet = "veg"
+
+        # Meat-eating agents
+        for agent in shuffled_agents[num_veg:num_veg + num_meat]:
+            agent.diet = "meat"
+
 
 
     def get_attribute(self, attribute, ):
@@ -311,7 +320,8 @@ class Model():
 
     def run(self):
         self.agent_ini(self.params)
-        self.map_agents()
+        self.map_agents() 
+        self.record_fraction()
         time_array = list(range(self.params["steps"]))
         for t in time_array:
             for i in self.agents:
