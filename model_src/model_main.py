@@ -23,17 +23,17 @@ np.random.seed(30)
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 10,
+          "N": 5,
           "erdos_p": 3,
           "steps": 100,
           "w_i": 5,
           "immune_n": 0.25,
           "M": 4,
-          "veg_f":0.499,
-          "meat_f": 0.501,  
+          "veg_f":0.8,
+          "meat_f": 0.2,  
           "n": 5,
           "v": 10,
-          'topology': "BA"
+          'topology': "complete"
           }
 
 # %% Agent
@@ -52,8 +52,8 @@ class Agent():
         self.global_norm = 0.5
         self.reduction_out = 0
         # implement other distributions (pareto)
-        self.alpha = 1
-        self.beta = 0.3
+        self.alpha = 0#1
+        self.beta = 0#0.3
     def choose_diet(self, params):
         
         choices = ["veg",  "meat"] #"vegan",
@@ -243,8 +243,14 @@ class Model():
                 self.params["N"], self.params["erdos_p"])
         
         self.system_C = []
-        
-        
+        self.fraction_veg = []  
+    
+    def record_fraction(self):
+        fraction_veg = sum(i == "veg" for i in test_model.get_attributes("diet"))/len(test_model.get_attributes("diet"))
+        self.fraction_veg.append(fraction_veg)
+
+    
+
     def map_agents(self):
         # Map each agent object to the corresponding node in the graph
         for agent in self.agents:
@@ -311,6 +317,7 @@ class Model():
             for i in self.agents:
                 i.step(self.G1, self.agents, self.params)
             self.system_C.append(self.get_attribute("C")/self.params["N"])
+            self.record_fraction()
             #print(self.G1.nodes[1]["agent"].C, self.agents[1].C)
     
     
@@ -320,7 +327,7 @@ class Model():
 test_model = Model(params)
 
 test_model.run()
-trajec = test_model.system_C
+trajec = test_model.fraction_veg
 plt.plot(trajec)
 plt.show()
 # end_state_A = test_model.get_attributes("reduction_out")
