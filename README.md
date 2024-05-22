@@ -32,7 +32,7 @@ isolation.
 Thus, you can install our dependencies without causing conflicts with your
 setup (even with different Python versions).
 
-Run the following command in the repository folder (where `environment.yml`
+Run the following command in the repository folder (where `environment_foodfriends.yml`
 is located) to create a separate environment and install all required
 dependencies in it:
 
