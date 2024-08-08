@@ -24,12 +24,12 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 100,
           "erdos_p": 3,
-          "steps":1000,
-          "w_i": 5,
-          "immune_n": 0.25,
+          "steps":2000,
+          "w_i": 5, #weight of the replicator function
+          "immune_n": 0.1,
           "M": 4,
-          "veg_f":0.4,
-          "meat_f": 0.6,  
+          "veg_f":0.6, #vegetarian fraction
+          "meat_f": 0.4,  #meat eater fraciton
           "n": 5,
           "v": 10,
           'topology': "BA" #can either be barabasi albert with "BA", or fully connected with "complete"
@@ -83,13 +83,11 @@ class Agent():
             float: the probability of change
         """
     
-        #actually utility, mode means whether 
-        u_i = self.calc_utility(mode = "different")
+        #actually utility, mode means whether calcing sam diet or opposit 
+        u_i = self.calc_utility(mode = "same")
         
         #utlity shadow - alternative utlity
-        
-     
-        u_s = self.calc_utility(mode = "same")
+        u_s = self.calc_utility(mode = "diff")
         
     
         prob_switch = 1/(1+math.exp(-3*(u_s-u_i)))
@@ -97,24 +95,39 @@ class Agent():
      
         return prob_switch
     
-    def dissonance(self, case):
+    def dissonance(self, case, mode):
+        
+        
+        
+        if mode == "same":
+            diet = self.diet
+        #if mode diff
+        else:
+            diet = "meat" if self.diet == "veg" else "veg"
+            
+        #uses the discrete dissonance function
+        
         if case == "simple":
             
-            if self.diet == "veg":
+            if diet == "veg":
+                #norm from 0-1 means you prefer veg inherently 
                 if self.individual_norm >= 0:
                     sign = 1
                 else:
                     sign = -1
                     
-            elif self.diet == "meat":    
+            elif diet == "meat":    
+                
                 if self.individual_norm >= 0:
                     sign = -1
                 else:
                     sign = 1
             else: 
                 return ValueError("This " + self.diet +" diet is not defined!")
+            
             return sign * self.individual_norm
         
+        #uses the sigmoid function to calculate dissonance
         elif case == "sigmoid":
             current_diet = 1 if self.diet == "veg" else -1
             # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
@@ -205,18 +218,21 @@ class Agent():
         for i in neighbour_diets:
             if i == diet:
                 count += 1 
-        ratio_similar = count/len(neighbour_diets)
+        ratio_diet = count/len(neighbour_diets)
         
       
         
-        return  ratio_similar 
+        return ratio_diet 
 
     #working
     def calc_utility(self, mode):
        
+        #TODO: reformulate this to use similar agents  
+        util = self.alpha*(2*self.get_ratio(mode)-1) #- self.beta*self.global_norm)
         
-        util = self.dissonance("simple") + self.alpha*(1-2*self.get_ratio(mode)) #- self.beta*self.global_norm)
         
+        #util_first_order = self.dissonance("simple", mode) + self.get_ratio(mode)
+        #print(util)
         # util = self.alpha*self.get_ratio(mode)
        
         return util 
@@ -236,6 +252,7 @@ class Agent():
         # need to implent this recursively to avoid high-degree node bias
         self.neighbours = [agents[neighbour] for neighbour in G.neighbors(self.i)]
         
+        
         prob_switch = self.prob_calc()
       
         if self.flip(prob_switch):
@@ -254,6 +271,7 @@ class Model():
         
         self.params = params
         if params['topology'] == "complete":
+            
             self.G1 = nx.complete_graph(params["N"])
         elif params['topology'] == "BA":  
             self.G1 = nx.erdos_renyi_graph(
@@ -263,7 +281,7 @@ class Model():
         self.fraction_veg = []  
     
     def record_fraction(self):
-        fraction_veg = sum(i == "veg" for i in self.get_attributes("diet"))/len(self.get_attributes("diet"))
+        fraction_veg = sum(i == "veg" for i in self.get_attributes("diet"))/self.params["N"]
         self.fraction_veg.append(fraction_veg)
 
     
@@ -315,11 +333,13 @@ class Model():
     
 
     def run(self):
+        #initiate agents
         self.agent_ini(self.params)
         #self.map_agents() 
         self.record_fraction()
         time_array = list(range(self.params["steps"]))
         for t in time_array:
+            #selecting an index at random
             i = np.random.choice(range(len(self.agents)))
             #for i in self.agents:
             self.agents[i].step(self.G1, self.agents, self.params)
