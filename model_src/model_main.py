@@ -351,15 +351,16 @@ class Model():
 
 
 # %%
-test_model = Model(params)
+if  __name__ ==  '__main__': 
+	test_model = Model(params)
 
-test_model.run()
-trajec = test_model.fraction_veg
+	test_model.run()
+	trajec = test_model.fraction_veg
 
-plt.plot(trajec)
-plt.ylabel("Vegetarian Fraction")
-plt.xlabel("t (steps)")
-plt.show()
+	plt.plot(trajec)
+	plt.ylabel("Vegetarian Fraction")
+	plt.xlabel("t (steps)")
+	plt.show()
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
 
