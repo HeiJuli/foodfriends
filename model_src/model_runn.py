@@ -59,6 +59,7 @@ def parameter_sweep(params, param_to_vary, num_iterations, param_min, param_max,
     param_values = np.linspace(param_min, param_max, num_samples)
     
     runs = []
+    runs_reduc = []
     for _ in range(num_iterations):
         print(f"Started iteration: {_ + 1}/{num_iterations}")
         for p in param_values:
@@ -71,11 +72,12 @@ def parameter_sweep(params, param_to_vary, num_iterations, param_min, param_max,
             params.update({param_to_vary: p})
             test_model = run_model(params)
             #trajec_end = test_model.fraction_veg[-1:]
+            runs_reduc.append([test_model.get_attributes("reduction_out"), p])
 
             trajec_end = test_model.system_C[-1:]
             runs.append([trajec_end, p])
     
-    return runs
+    return runs, runs_reduc
 
 def timer(func, *args):
     start = time.time()
@@ -91,20 +93,20 @@ def timer(func, *args):
 #%% Running sensitivity analysis
 #run_model()
 #params.update({"n":5,"v": 10})
-model_out = timer(parameter_sweep, params, "veg_f", params["n"], 0.0, 1.0, params["v"])
+model_out = timer(parameter_sweep, params, "veg_f", params["n"], 0.0, 1.0, 10)
 
 
 #%% Processesing data frames
 
 ####consumption
-df_C = pd.DataFrame(model_out)
+df_C = pd.DataFrame(model_out[0])
 df_C = df_C.explode(0).rename(columns={0:"C_t_max", 1: "paramater_value"} )
 df_C.to_csv(f"../model_output/output_N_{params['N']}_n_{params['n']}_v_{params['v']}_.csv")
 #df_C = pd.read_csv(f"../model_output/output_N_{params['N']}_n_{params['n']}_v_{params['v']}_.csv")
 
 ####agents reduction
-# df_reduc = pd.DataFrame(model_out[1])
-# df_reduc = df_reduc.explode(0).rename(columns={0:"Reduced", 1: "paramater_value"} )
+df_reduc = pd.DataFrame(model_out[1])
+df_reduc = df_reduc.explode(0).rename(columns={0:"Reduced", 1: "paramater_value"} )
 
 
 #%% Rough/Demo plots
@@ -113,9 +115,9 @@ plt.xlabel('% vegans & vegetarians')
 plt.ylabel('Final average dietry consumption [kg/c02/year]')  
 plt.savefig("../visualisations_output/Example_consumption.png", dpi = 600)
 
-# reduc_plot = sns.histplot(df_reduc["Reduced"])
-# plt.xlabel('Final reduced average dietry consumption [kg/c02/year]') 
-# plt.savefig("../visualisations_output/Example_reduc_distrtibutions.png", dpi = 600)
+reduc_plot = sns.histplot(df_reduc["Reduced"])
+plt.xlabel('Final reduced average dietry consumption [kg/c02/year]') 
+plt.savefig("../visualisations_output/Example_reduc_distrtibutions.png", dpi = 600)
 
 # reduc_cdf = sns.ecdfplot(df_reduc["Reduced"])
 # plt.ylabel('Final average dietry consumption [kg/c02/year]') 

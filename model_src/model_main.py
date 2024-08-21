@@ -15,8 +15,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 # %% Preliminary settings
-random.seed(30)
-np.random.seed(30)
+#random.seed(30)
+#np.random.seed(30)
 #currently agents being incentives to go to other diet
 # # CO2 measures are in kg/year, source: https://pubmed.ncbi.nlm.nih.gov/25834298/
 params = {"veg_CO2": 1390,
@@ -95,46 +95,6 @@ class Agent():
      
         return prob_switch
     
-    # def dissonance(self, case, mode):
-        
-        
-        
-    #     if mode == "same":
-    #         diet = self.diet
-    #     #if mode diff
-    #     else:
-    #         diet = "meat" if self.diet == "veg" else "veg"
-            
-    #     #uses the discrete dissonance function
-        
-    #     if case == "simple":
-            
-    #         diet == "veg":
-    #             #norm from 0-1 means you prefer veg inherently 
-    #         if self.individual_norm >= 0:
-    #             sign = 1
-    #         else:
-    #             sign = -1
-                    
-    #         # elif diet == "meat":    
-                
-    #         #     if self.individual_norm >= 0:
-    #         #         sign = -1
-    #         #     else:
-    #         #         sign = 1
-    #         # else: 
-    #         # return ValueError("This " + self.diet +" diet is not defined!")
-            
-    #         return sign * self.individual_norm
-        
-    #     #uses the sigmoid function to calculate dissonance
-    #     elif case == "sigmoid":
-    #         current_diet = 1 if self.diet == "veg" else -1
-    #         # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
-    #         return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.46
-
-    #     else:
-    #         return ValueError("You can only select form either 'simple' or 'sigmoid'. ")
 
 
     def dissonance_new(self, case, mode):
@@ -149,11 +109,14 @@ class Agent():
             return self.individual_norm
         else:
             return -1*self.individual_norm
-        
-        
-        
-        
-        
+    
+    #uses the sigmoid function to calculate dissonance
+   #     elif case == "sigmoid":
+   #         current_diet = 1 if self.diet == "veg" else -1
+   #         # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
+   #         return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.46
+
+
         
     def select_node(self, i, G, i_x=None):
         neighbours = set(G.neighbors(i))
@@ -168,23 +131,27 @@ class Agent():
 
         return neighbour_node
     
-    def reduction_tracker(self, C_j, agents):
+    def reduction_tracker(self, old_c, similar_neighbours):
         """
        Takes the reduction of consumption emissions as a result of an 
        interaction with agent j, and adds it to agent i's total reduction caused
     
        Args:
-           C_j: An agent object
+           agents: agent objects
     
        Returns:
            int: The product of a and b.
         """
         
-        neighbour = agents[C_j]
+        
+        delta = old_c - self.C
+        
+        
+        #TODO: this is uneccesarily intensive, optimise
+        for i in self.neighbours:
+            current = getattr(i, "reduction_out")
+            setattr(i, "reduction_out", current + delta)
     
-        delta = self.C - neighbour.C
-      
-        neighbour.reduction_out += delta
         
     def get_neighbour_attributes(self, attribute):
         """
@@ -242,13 +209,10 @@ class Agent():
     #working
     def calc_utility(self, mode):
        
-        #TODO: reformulate this to use similar agents  
+    
         util = self.alpha*(2*self.get_ratio(mode)-1) + self.beta*self.dissonance_new("simple", mode)#- self.beta*self.global_norm)
         
         
-        #util_first_order = self.dissonance("simple", mode) + self.get_ratio(mode)
-        #print(util)
-        # util = self.alpha*self.get_ratio(mode)
        
         return util 
     
@@ -257,13 +221,13 @@ class Agent():
        Steps agent i forward one t
     
        Args:
-           G (dic): a dictionary representing a graph G
+           G (dic): an nx graph object
            agents (list): list of agents in G
            params (dic): model parameters
        Returns:
            
         """
-
+        
         # need to implent this recursively to avoid high-degree node bias
         self.neighbours = [agents[neighbour] for neighbour in G.neighbors(self.i)]
         
@@ -271,7 +235,23 @@ class Agent():
         prob_switch = self.prob_calc()
       
         if self.flip(prob_switch):
+            old_C = self.C
             self.diet = "meat" if self.diet == "veg" else "veg"
+            
+            #getting neighbours with similar diet
+            similar_neighbours = [i for i in self.neighbours if i.diet == self.diet]
+            
+            #getting list
+            neighbours_C = [neighbour.C for neighbour in self.neighbours]
+            
+            #makes C (emissions) the average of neighbours with the same diet
+            self.C = np.mean(neighbours_C) if len(neighbours_C) >= 1 else \
+                self.diet_emissions(self.diet, params)
+            
+          
+            # if dietry emissions are reduced, attribute this to veg network neighbours
+            if self.diet == "veg":
+                self.reduction_tracker(old_C, similar_neighbours)
             
         self.C = self.diet_emissions(self.diet, self.params)
       
@@ -292,6 +272,9 @@ class Model():
             self.G1 = nx.erdos_renyi_graph(
                 self.params["N"], self.params["erdos_p"])
         
+        # elif params['topology'] == "FB":  
+        #     self.G1 = 
+        
         self.system_C = []
         self.fraction_veg = []  
     
@@ -308,7 +291,7 @@ class Model():
         
 
 
-    def get_attribute(self, attribute, ):
+    def get_attribute(self, attribute):
         """
         sums a given attribute over N agents 
     
