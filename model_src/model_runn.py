@@ -16,7 +16,7 @@ import time
 
 params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
-          "N": 100,
+          "N": 200,
           "erdos_p": 3,
           "steps":2000,
           "w_i": 5, #weight of the replicator function
@@ -70,6 +70,8 @@ def parameter_sweep(params, param_to_vary, num_iterations, param_min, param_max,
             
             params.update({param_to_vary: p})
             test_model = run_model(params)
+            #trajec_end = test_model.fraction_veg[-1:]
+
             trajec_end = test_model.system_C[-1:]
             runs.append([trajec_end, p])
     

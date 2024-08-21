@@ -83,61 +83,76 @@ class Agent():
             float: the probability of change
         """
     
-        #actually utility, mode means whether calcing sam diet or opposit 
+        #actually utility, if you don;t change, mode means whether calcing same diet or opposite 
         u_i = self.calc_utility(mode = "same")
         
-        #utlity shadow - alternative utlity
+        #utlity shadow - alternative utlity - if agent were to change
         u_s = self.calc_utility(mode = "diff")
         
     
-        prob_switch = 1/(1+math.exp(-3*(u_s-u_i)))
+        prob_switch = 1/(1+math.exp(-4*(u_s-u_i)))
         #print(f"u_s: {u_s}, u_i: {u_i}, Switching p: {prob_switch}")
      
         return prob_switch
     
-    def dissonance(self, case, mode):
+    # def dissonance(self, case, mode):
         
         
+        
+    #     if mode == "same":
+    #         diet = self.diet
+    #     #if mode diff
+    #     else:
+    #         diet = "meat" if self.diet == "veg" else "veg"
+            
+    #     #uses the discrete dissonance function
+        
+    #     if case == "simple":
+            
+    #         diet == "veg":
+    #             #norm from 0-1 means you prefer veg inherently 
+    #         if self.individual_norm >= 0:
+    #             sign = 1
+    #         else:
+    #             sign = -1
+                    
+    #         # elif diet == "meat":    
+                
+    #         #     if self.individual_norm >= 0:
+    #         #         sign = -1
+    #         #     else:
+    #         #         sign = 1
+    #         # else: 
+    #         # return ValueError("This " + self.diet +" diet is not defined!")
+            
+    #         return sign * self.individual_norm
+        
+    #     #uses the sigmoid function to calculate dissonance
+    #     elif case == "sigmoid":
+    #         current_diet = 1 if self.diet == "veg" else -1
+    #         # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
+    #         return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.46
+
+    #     else:
+    #         return ValueError("You can only select form either 'simple' or 'sigmoid'. ")
+
+
+    def dissonance_new(self, case, mode):
         
         if mode == "same":
             diet = self.diet
-        #if mode diff
+       
         else:
             diet = "meat" if self.diet == "veg" else "veg"
-            
-        #uses the discrete dissonance function
         
-        if case == "simple":
-            
-            if diet == "veg":
-                #norm from 0-1 means you prefer veg inherently 
-                if self.individual_norm >= 0:
-                    sign = 1
-                else:
-                    sign = -1
-                    
-            elif diet == "meat":    
-                
-                if self.individual_norm >= 0:
-                    sign = -1
-                else:
-                    sign = 1
-            else: 
-                return ValueError("This " + self.diet +" diet is not defined!")
-            
-            return sign * self.individual_norm
-        
-        #uses the sigmoid function to calculate dissonance
-        elif case == "sigmoid":
-            current_diet = 1 if self.diet == "veg" else -1
-            # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
-            return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.46
-
+        if diet == "veg":
+            return self.individual_norm
         else:
-            return ValueError("You can only select form either 'simple' or 'sigmoid'. ")
-
-
-
+            return -1*self.individual_norm
+        
+        
+        
+        
         
         
     def select_node(self, i, G, i_x=None):
@@ -228,7 +243,7 @@ class Agent():
     def calc_utility(self, mode):
        
         #TODO: reformulate this to use similar agents  
-        util = self.alpha*(2*self.get_ratio(mode)-1) #- self.beta*self.global_norm)
+        util = self.alpha*(2*self.get_ratio(mode)-1) + self.beta*self.dissonance_new("simple", mode)#- self.beta*self.global_norm)
         
         
         #util_first_order = self.dissonance("simple", mode) + self.get_ratio(mode)
