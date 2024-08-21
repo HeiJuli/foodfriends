@@ -113,11 +113,12 @@ df_reduc = df_reduc.explode(0).rename(columns={0:"Reduced", 1: "paramater_value"
 sp = sns.scatterplot(data = df_C, x = "paramater_value", y = "C_t_max" )  
 plt.xlabel('% vegans & vegetarians')
 plt.ylabel('Final average dietry consumption [kg/c02/year]')  
-plt.savefig("../visualisations_output/Example_consumption.png", dpi = 600)
+plt.show()
+plt.savefig("../visualisations_output/Example_consumption.png", dpi = 300)
 
 reduc_plot = sns.histplot(df_reduc["Reduced"])
 plt.xlabel('Final reduced average dietry consumption [kg/c02/year]') 
-plt.savefig("../visualisations_output/Example_reduc_distrtibutions.png", dpi = 600)
+plt.savefig("../visualisations_output/Example_reduc_distrtibutions.png", dpi = 300)
 
 # reduc_cdf = sns.ecdfplot(df_reduc["Reduced"])
 # plt.ylabel('Final average dietry consumption [kg/c02/year]') 
