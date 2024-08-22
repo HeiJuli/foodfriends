@@ -10,6 +10,9 @@ import seaborn as sns
 import pandas as pd
 import model_main
 import matplotlib.pyplot as plt
+import itertools
+import pandas as pd
+from datetime import date
 import time
 
 #%% Setting parameters
@@ -26,7 +29,9 @@ params = {"veg_CO2": 1390,
           "meat_f": 0.4,  #meat eater fraciton
           "n": 5,
           "v": 10,
-          'topology': "BA" #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "BA", #can either be barabasi albert with "BA", or fully connected with "complete"
+          "alpha": 0.5,
+          "beta": 0.5
           }
 
 #%% Main functions
@@ -40,44 +45,71 @@ def run_model(params=params):
     #print(params)
     return test_model
 
-#expand this to include other parameters/be generic
-def parameter_sweep(params, param_to_vary, num_iterations, param_min, param_max, num_samples):
+
+
+def basic_run():
+
+    pass
+
+
+def parameter_sweep(params, param_ranges, num_iterations):
     """
-    Runs multiple model simulations of the ABM while varying a given parameter.
+    Runs multiple model simulations of the ABM while varying multiple parameters.
     
     Args:
-        params (dict): The dictionary of model parameters.
-        param_to_vary (str): The name of the parameter to be varied.
-        num_iterations (int): The number of iterations to run.
-        param_min (float): The minimum value of the parameter to be tested.
-        param_max (float): The maximum value of the parameter to be tested.
-        num_samples (int): The number of samples to take from the parameter space.
+        params (dict): The base dictionary of model parameters.
+        param_ranges (dict): A dictionary where keys are parameter names and values are lists of values to test.
+        num_iterations (int): The number of iterations to run for each parameter combination.
         
     Returns:
-        list: A list of lists, where each inner list corresponds to one model output.
+        pd.DataFrame: A DataFrame containing the results of all runs.
     """
-    param_values = np.linspace(param_min, param_max, num_samples)
+    # Generate all combinations of parameter values
+    param_names = list(param_ranges.keys())
+    param_values = list(param_ranges.values())
+    param_combinations = list(itertools.product(*param_values))
     
     runs = []
-    runs_reduc = []
-    for _ in range(num_iterations):
-        print(f"Started iteration: {_ + 1}/{num_iterations}")
-        for p in param_values:
-            # Ensure that the fractions always sum to 1
-            if param_to_vary == "veg_f":
-                params["meat_f"] = 1 - p
-            elif param_to_vary == "meat_f":
-                params["veg_f"] = 1 - p
-            
-            params.update({param_to_vary: p})
-            test_model = run_model(params)
-            #trajec_end = test_model.fraction_veg[-1:]
-            runs_reduc.append([test_model.get_attributes("reduction_out"), p])
-
-            trajec_end = test_model.system_C[-1:]
-            runs.append([trajec_end, p])
+    total_combinations = len(param_combinations)
     
-    return runs, runs_reduc
+    for i, combination in enumerate(param_combinations):
+        print(f"Processing combination {i+1}/{total_combinations}")
+        
+        # Update params with the current combination
+        current_params = params.copy()
+        for name, value in zip(param_names, combination):
+            current_params[name] = value
+            
+            # Ensure that the fractions always sum to 1 if we're changing veg_f or meat_f
+            if name == "veg_f":
+                current_params["meat_f"] = 1 - value
+            elif name == "meat_f":
+                current_params["veg_f"] = 1 - value
+        
+        for _ in range(num_iterations):
+            test_model = run_model(current_params)
+            
+            # Collect results
+            result = [
+                test_model.system_C[-1],  # Final system C
+                test_model.fraction_veg[-1],  # Final fraction of vegetarians
+                test_model.get_attributes("reduction_out")  # Individual agent emissions reduction
+            ]
+            result.extend(combination)  # Add the parameter values
+            runs.append(result)
+    
+    # Create DataFrame
+    columns = ['final_system_C', 'final_fraction_veg', 'individual_reduction'] + param_names
+    df = pd.DataFrame(runs, columns=columns)
+    
+    # Save to CSV
+    today = date.today()
+    date_str = today.strftime("%b_%d_%Y")
+    fname = f'../model_output/parameter_sweep_{date_str}_N_{params["N"]}_{"_".join(param_names)}.csv'
+    df.to_csv(fname, index=False)
+    
+    return df
+
 
 def timer(func, *args):
     start = time.time()
@@ -88,43 +120,83 @@ def timer(func, *args):
     print(f'Runtime complete: {mins:5.0f} mins {sec}s\n')
     
     return outputs
-    
+
+#%% Default runs with trajectories
 
 #%% Running sensitivity analysis
-#run_model()
-#params.update({"n":5,"v": 10})
-model_out = timer(parameter_sweep, params, "veg_f", params["n"], 0.0, 1.0, 10)
+
+# Example usage:
+param_ranges = {
+    "veg_f": np.linspace(0.0, 1.0, 10),
+}
 
 
-#%% Processesing data frames
-
-####consumption
-df_C = pd.DataFrame(model_out[0])
-df_C = df_C.explode(0).rename(columns={0:"C_t_max", 1: "paramater_value"} )
-df_C.to_csv(f"../model_output/output_N_{params['N']}_n_{params['n']}_v_{params['v']}_.csv")
-#df_C = pd.read_csv(f"../model_output/output_N_{params['N']}_n_{params['n']}_v_{params['v']}_.csv")
-
-####agents reduction
-df_reduc = pd.DataFrame(model_out[1])
-df_reduc = df_reduc.explode(0).rename(columns={0:"Reduced", 1: "paramater_value"} )
+num_iterations = 3
+results_df = timer(parameter_sweep, params, param_ranges, num_iterations)
 
 
-#%% Rough/Demo plots
-sp = sns.scatterplot(data = df_C, x = "paramater_value", y = "C_t_max" )  
+#%% Processesing data frames and Rough/Demo plots
+#TODO: these sections will be put into a differnt script eventually
+
+# Plot for final average dietary consumption vs. veg_f
+plt.figure(figsize=(10, 6))
+sns.scatterplot(data=results_df, x="veg_f", y="final_system_C")
 plt.xlabel('% vegans & vegetarians')
-plt.ylabel('Final average dietry consumption [kg/c02/year]')  
+plt.ylabel('Final average dietary consumption [kg/CO2/year]')
+plt.title('Final Consumption vs. Vegetarian Fraction')
+plt.savefig("../visualisations_output/Example_consumption.png", dpi=300)
 plt.show()
-plt.savefig("../visualisations_output/Example_consumption.png", dpi = 300)
 
-reduc_plot = sns.histplot(df_reduc["Reduced"])
-plt.xlabel('Final reduced average dietry consumption [kg/c02/year]') 
-plt.savefig("../visualisations_output/Example_reduc_distrtibutions.png", dpi = 300)
+# Histogram of individual reductions
+plt.figure(figsize=(10, 6))
+sns.histplot(results_df["individual_reduction"].explode())
+plt.xlabel('Final reduced average dietary consumption [kg/CO2/year]')
+plt.title('Distribution of Individual Reductions')
+plt.savefig("../visualisations_output/Example_reduc_distributions.png", dpi=300)
+plt.show()
 
-# reduc_cdf = sns.ecdfplot(df_reduc["Reduced"])
-# plt.ylabel('Final average dietry consumption [kg/c02/year]') 
-# plt.xlabel('Reduced dietry consumption [kg/c02/year]')
-# plt.savefig("../visualisations_output/Example_reduc_distrtibutions_ecdf.png", dpi = 600)
+# IECDF
+plt.figure(figsize=(10, 6))
+sns.ecdfplot(results_df["individual_reduction"].explode())
+plt.ylabel('Cumulative Probability')
+plt.xlabel('Reduced dietary consumption [kg/CO2/year]')
+plt.title('ECDF of Individual Reductions')
+plt.savefig("../visualisations_output/Example_reduc_distributions_ecdf.png", dpi=600)
+plt.show()
 
+#%%% Other plotting ideas
+
+
+# Heatmap for n and v (replace values)
+if "n" in results_df.columns and "v" in results_df.columns:
+    plt.figure(figsize=(12, 8))
+    pivot_df = results_df.pivot(index="n", columns="v", values="final_system_C")
+    sns.heatmap(pivot_df, annot=True, fmt=".2f", cmap="YlOrRd")
+    plt.title('Final Consumption for different n and v values')
+    plt.xlabel('v')
+    plt.ylabel('n')
+    plt.savefig("../visualisations_output/heatmap_n_v.png", dpi=300)
+    plt.show()
+
+# Boxplot of final consumption for different parameter values
+if "n" in results_df.columns:
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(x="n", y="final_system_C", data=results_df)
+    plt.xlabel('n')
+    plt.ylabel('Final average dietary consumption [kg/CO2/year]')
+    plt.title('Final Consumption Distribution for Different n Values')
+    plt.savefig("../visualisations_output/boxplot_n_consumption.png", dpi=300)
+    plt.show()
+
+# Scatter plot with different colors for different parameter
+if "v" in results_df.columns:
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(data=results_df, x="veg_f", y="final_system_C", hue="v", palette="viridis")
+    plt.xlabel('% vegans & vegetarians')
+    plt.ylabel('Final average dietary consumption [kg/CO2/year]')
+    plt.title('Final Consumption vs. Vegetarian Fraction for Different v Values')
+    plt.savefig("../visualisations_output/scatter_veg_f_consumption_v.png", dpi=300)
+    plt.show()
 
 
 

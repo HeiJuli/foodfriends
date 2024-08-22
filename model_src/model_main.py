@@ -32,7 +32,10 @@ params = {"veg_CO2": 1390,
           "meat_f": 0.4,  #meat eater fraciton
           "n": 5,
           "v": 10,
-          'topology': "BA" #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "BA", #can either be barabasi albert with "BA", or fully connected with "complete"
+          "alpha": 0.8,
+          "beta": 0.2
+          
           }
 
 # %% Agent
@@ -51,8 +54,8 @@ class Agent():
         self.global_norm = 0.5
         self.reduction_out = 0
         # implement other distributions (pareto)
-        self.alpha = 0.5
-        self.beta = 0.5#0.3
+        self.alpha = self.params["alpha"]
+        self.beta = self.params["beta"]
         
     def choose_diet(self, params):
         
@@ -90,7 +93,7 @@ class Agent():
         u_s = self.calc_utility(mode = "diff")
         
     
-        prob_switch = 1/(1+math.exp(-4*(u_s-u_i)))
+        prob_switch = 1/(1+math.exp(-5*(u_s-u_i)))
         #print(f"u_s: {u_s}, u_i: {u_i}, Switching p: {prob_switch}")
      
         return prob_switch
