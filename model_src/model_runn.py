@@ -8,7 +8,8 @@ Created on Tue Oct 31 18:03:54 2023
 import numpy as np
 import seaborn as sns
 import pandas as pd
-import model_main
+#import model_main
+import model_main_single as model_main
 import matplotlib.pyplot as plt
 import itertools
 import pandas as pd
@@ -16,6 +17,8 @@ from datetime import date
 import time
 
 #%% Setting parameters
+
+
 
 params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
@@ -150,6 +153,14 @@ plt.show()
 # Histogram of individual reductions
 plt.figure(figsize=(10, 6))
 sns.histplot(results_df["individual_reduction"].explode())
+plt.xlabel('Final reduced average dietary consumption [kg/CO2/year]')
+plt.title('Distribution of Individual Reductions')
+plt.savefig("../visualisations_output/Example_reduc_distributions.png", dpi=300)
+plt.show()
+
+# Histogram of individual reductions
+plt.figure(figsize=(10, 6))
+sns.histplot(results_df["individual_reduction"][6])
 plt.xlabel('Final reduced average dietary consumption [kg/CO2/year]')
 plt.title('Distribution of Individual Reductions')
 plt.savefig("../visualisations_output/Example_reduc_distributions.png", dpi=300)
