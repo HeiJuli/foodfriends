@@ -22,19 +22,19 @@ import matplotlib.pyplot as plt
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 100,
+          "N": 300,
           "erdos_p": 3,
-          "steps":2000,
+          "steps":50000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.1,
           "M": 4,
-          "veg_f":0.6, #vegetarian fraction
-          "meat_f": 0.4,  #meat eater fraciton
+          "veg_f":0.7, #vegetarian fraction
+          "meat_f": 0.3,  #meat eater fraciton
           "n": 5,
           "v": 10,
           'topology': "BA", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.5,
-          "beta": 0.5
+          "alpha": 0.3, #self dissonance
+          "beta": 0.7 #social dissonance
           
           }
 
@@ -210,7 +210,7 @@ class Agent():
         # Calculate ratio based on single comparison
         ratio = 1 if other_agent.diet == diet else 0
         
-        util = self.beta*(1-2*ratio) + self.alpha*self.dissonance_new("simple", mode)
+        util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
         
         return util
     
