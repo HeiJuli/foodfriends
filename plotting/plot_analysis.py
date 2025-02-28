@@ -90,6 +90,8 @@ def load_data():
 
 def plot_heatmap(df, x_param, y_param, value_param, title=None):
     """Creates a publication-quality heatmap"""
+    import matplotlib.ticker as ticker
+    
     # Calculate mean and std for the value parameter
     pivot_df = df.groupby([x_param, y_param])[value_param].agg(['mean', 'std']).reset_index()
     pivot_table = pivot_df.pivot(index=y_param, columns=x_param, values='mean')
@@ -100,7 +102,7 @@ def plot_heatmap(df, x_param, y_param, value_param, title=None):
     
     # Create heatmap with annotations showing mean ± std
     sns.heatmap(pivot_table, annot=True, fmt=".2f", 
-                annot_kws={'size': 8}, cmap = nature_cmap,
+                annot_kws={'size': 8}, cmap = "crest",
                 cbar_kws={'label': "Final System Emissions [kg/CO2/year]"})
     
     # Add standard deviation annotations
@@ -111,6 +113,19 @@ def plot_heatmap(df, x_param, y_param, value_param, title=None):
                 ax.text(j + 0.5, i + 0.7, text, 
                        ha='center', va='center', 
                        color='gray', fontsize=6)
+    
+    # Format x and y axis tick labels to 2 decimal places
+    # For the x-axis (which shows the column values)
+    x_labels = [f'{float(label):.2f}' for label in pivot_table.columns]
+    ax.set_xticklabels(x_labels)
+    
+    # For the y-axis (which shows the index values)
+    y_labels = [f'{float(label):.2f}' for label in pivot_table.index]
+    ax.set_yticklabels(y_labels)
+    
+    # Format the colorbar ticks to 2 decimal places
+    cbar = ax.collections[0].colorbar
+    cbar.ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.2f'))
     
     plt.title(title or f'Effect of {x_param} and {y_param} on {value_param}')
     plt.xlabel(x_param.replace('_', ' ').title())
@@ -274,8 +289,7 @@ if __name__ == "__main__":
     summary_stats = create_summary_statistics(df)
     print("\nSummary Statistics:")
     print(summary_stats)
-    
-    # Plot main visualizations
+
     if all(param in df.columns for param in ['alpha', 'beta']):
         plot_heatmap(df, 'alpha', 'beta', 'final_system_C', 
                     'Impact of Social and Individual Dissonance on Emissions')
