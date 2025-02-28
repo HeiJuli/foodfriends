@@ -27,9 +27,9 @@ params = {"veg_CO2": 1390,
           "steps":50000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.1,
-          "M": 4,
-          "veg_f":0.7, #vegetarian fraction
-          "meat_f": 0.3,  #meat eater fraciton
+          "M": 10, # memory length
+          "veg_f":0.3, #vegetarian fraction
+          "meat_f": 0.7,  #meat eater fraciton
           "n": 5,
           "v": 10,
           'topology': "BA", #can either be barabasi albert with "BA", or fully connected with "complete"
@@ -163,35 +163,6 @@ class Agent():
     #get ratio of meat eaters for a given agent
     #if mode = same, 
     #working
-    def get_ratio(self, mode = "same"):
-        """
-       gets the ratio of agents with a certain diet over k neighbours of the agent
-       object. This ratio is based on neighbours with the same diet of the agent with
-       mode = same, or the opposite diet if anything else.
-    
-       Args:
-           mode (str): the mode of counting
-    
-       Returns:
-           float: fraction of specified diet over the total neighbours k
-        """
-        
-        if mode == "same":
-            diet = self.diet
-        else:
-            diet = "meat" if self.diet == "veg" else "veg"
-            
-        neighbour_diets = self.get_neighbour_attributes("diet")
-        
-        count=0
-        for i in neighbour_diets:
-            if i == diet:
-                count += 1 
-        ratio_diet = count/len(neighbour_diets)
-        
-      
-        
-        return ratio_diet 
 
     #working
     def calc_utility(self, other_agent, mode):
@@ -206,9 +177,15 @@ class Agent():
             diet = self.diet
         else:
             diet = "meat" if self.diet == "veg" else "veg"
-            
+        
+        
         # Calculate ratio based on single comparison
-        ratio = 1 if other_agent.diet == diet else 0
+        if len(self.memory) == 0:
+            return
+        mem_same = sum(1 for x in self.memory[-params["M"]:] if x == diet)
+        
+        ratio =  [mem_same/len(self.memory[-params["M"]:])][0]
+
         
         util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
         
@@ -233,6 +210,7 @@ class Agent():
             return
             
         other_agent = random.choice(self.neighbours)
+        self.memory.append(other_agent.diet)
         
         # Calculate probability of switching based on pairwise comparison
         prob_switch = self.prob_calc(other_agent)
@@ -269,8 +247,8 @@ class Model():
             self.G1 = nx.erdos_renyi_graph(
                 self.params["N"], self.params["erdos_p"])
         
-        # elif params['topology'] == "FB":  
-        #     self.G1 = 
+        elif params['topology'] == "CSF":  
+             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, 0.4)
         
         self.system_C = []
         self.fraction_veg = []  

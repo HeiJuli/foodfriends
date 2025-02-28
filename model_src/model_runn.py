@@ -1,72 +1,56 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Oct 31 18:03:54 2023
-
-@author: everall
+Extended version of model_runn.py focusing only on running simulations
+and saving outputs to model_output directory
 """
 #%% Imports
 import numpy as np
-import seaborn as sns
 import pandas as pd
-#import model_main
 import model_main_single as model_main
-import matplotlib.pyplot as plt
 import itertools
-import pandas as pd
 from datetime import date
 import time
+import os
+import pickle
+
+# Import simulation functions
+from extended_model_runner import (
+    run_emissions_vs_vegetarian_fraction,
+    run_parameter_sensitivity,
+    run_topology_comparison,
+    run_targeted_interventions,
+    run_critical_dynamics,
+    analyze_cluster_formation
+)
 
 #%% Setting parameters
-
-
-
 params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
-          "N": 300,
+          "N": 500,
           "erdos_p": 3,
-          "steps":5000,
+          "steps": 5000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.1,
-          "M": 4,
-          "veg_f":0.6, #vegetarian fraction
-          "meat_f": 0.4,  #meat eater fraciton
+          "M": 10,
+          "veg_f": 0.3, #vegetarian fraction
+          "meat_f": 0.7,  #meat eater fraciton
           "n": 5,
           "v": 10,
-          'topology': "BA", #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "CSF", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.5,
           "beta": 0.5
           }
 
-#%% Main functions
+#%% Original functions from model_runn.py
 
 def run_model(params=params):
-
+    """Original run_model function"""
     test_model = model_main.Model(params)
     test_model.run()
-    # end_state_A = test_model.get_attributes("C")
-    # end_state_frac = test_model.get_attributes("threshold")
-    #print(params)
     return test_model
 
-
-
-def basic_run():
-
-    pass
-
-
 def parameter_sweep(params, param_ranges, num_iterations):
-    """
-    Runs multiple model simulations of the ABM while varying multiple parameters.
-    
-    Args:
-        params (dict): The base dictionary of model parameters
-        param_ranges (dict): Dictionary where keys are parameter names and values are lists of values to test
-        num_iterations (int): Number of iterations per parameter combination
-        
-    Returns:
-        pd.DataFrame: DataFrame containing results of all runs
-    """
+    """Original parameter_sweep function"""
     results = []
     param_names = list(param_ranges.keys())
     param_values = list(param_ranges.values())
@@ -120,17 +104,10 @@ def parameter_sweep(params, param_ranges, num_iterations):
     # Save full results as pickle for complete data preservation
     results_df.to_pickle(f'../model_output/{filename}.pkl')
     
-    # Save a CSV with flattened data for basic analysis
-    # Convert complex columns to string representation for CSV
-    # csv_df = results_df.copy()
-    # csv_df['individual_reductions'] = csv_df['individual_reductions'].apply(str)
-    # csv_df['system_C_trajectory'] = csv_df['system_C_trajectory'].apply(str)
-    # csv_df['fraction_veg_trajectory'] = csv_df['fraction_veg_trajectory'].apply(str)
-    # csv_df.to_csv(f'../model_output/{filename}.csv', index=False)
-    
     return results_df
 
 def timer(func, *args):
+    """Original timer function"""
     start = time.time()
     outputs = func(*args)
     end = time.time()
@@ -140,26 +117,302 @@ def timer(func, *args):
     
     return outputs
 
-#%% Default runs with trajectories
+#%% New integrated functions - SIMULATION ONLY
 
-#%% Running sensitivity analysis
+def ensure_output_dir():
+    """Ensure model_output directory exists"""
+    if not os.path.exists('../model_output'):
+        os.makedirs('../model_output')
 
+def run_emissions_analysis(save_prefix="emissions"):
+    """
+    Run CO2 emissions vs vegetarian fraction analysis and save results
+    """
+    print("Running emissions vs vegetarian fraction analysis...")
+    ensure_output_dir()
+    
+    results_df = run_emissions_vs_vegetarian_fraction(
+        params, 
+        num_runs=3, 
+        veg_fractions=np.linspace(0, 1, 20)
+    )
+    
+    # Save results
+    today = date.today()
+    date_str = today.strftime("%b_%d_%Y")
+    filename = f'{save_prefix}_{date_str}.pkl'
+    results_df.to_pickle(f'../model_output/{filename}')
+    
+    print(f"Results saved to ../model_output/{filename}")
+    return results_df
 
-param_sweeps = ["alpha", "beta"]
+def run_tipping_point_analysis(save_prefix="tipping"):
+    """
+    Run parameter sensitivity analysis to find tipping points
+    """
+    print("Running tipping point analysis...")
+    ensure_output_dir()
+    
+    # Define parameter ranges
+    alpha_range = np.linspace(0.1, 0.9, 10)
+    beta_range = np.linspace(0.1, 0.9, 10)
+    
+    # Run for multiple initial vegetarian fractions
+    
+    veg_fractions = np.linspace(0.1, 0.6, num = 10) 
+    
+    all_results = []
+    
+    for veg_f in veg_fractions:
+        print(f"Testing initial vegetarian fraction: {veg_f}")
+        
+        # Run parameter sensitivity
+        results = run_parameter_sensitivity(
+            params,
+            alpha_range=alpha_range,
+            beta_range=beta_range,
+            fixed_veg_f=veg_f
+        )
+        
+        # Add vegetarian fraction to results
+        results['initial_veg_f'] = veg_f
+        
+        # Save individual results
+        individual_filename = f'{save_prefix}_veg{veg_f}_{date.today().strftime("%b_%d_%Y")}.pkl'
+        results.to_pickle(f'../model_output/{individual_filename}')
+        
+        all_results.append(results)
+    
+    # Combine all results
+    combined_df = pd.concat(all_results)
+    
+    # Save combined results
+    combined_filename = f'{save_prefix}_all_{date.today().strftime("%b_%d_%Y")}.pkl'
+    combined_df.to_pickle(f'../model_output/{combined_filename}')
+    
+    print(f"Combined results saved to ../model_output/{combined_filename}")
+    return combined_df
 
-# # Example usage:
-# param_ranges_t = {
-#     "veg_f": np.linspace(0.0, 1.0, 10),
-# }
+def run_network_topology_comparison(save_prefix="topology"):
+    """
+    Compare different network topologies
+    """
+    print("Running network topology comparison...")
+    ensure_output_dir()
+    
+    # Define topologies and vegetarian fractions
+    topologies = ["CSF", "complete"]
+    veg_fractions = np.linspace(0.1, 0.5, 9)
+    
+    # Run comparison
+    results = run_topology_comparison(
+        params,
+        topologies=topologies,
+        veg_fractions=veg_fractions,
+        runs_per_config=3
+    )
+    
+    # Save results
+    filename = f'{save_prefix}_{date.today().strftime("%b_%d_%Y")}.pkl'
+    results.to_pickle(f'../model_output/{filename}')
+    
+    print(f"Results saved to ../model_output/{filename}")
+    return results
 
-param_ranges = {i:np.linspace(0.0, 1.0, 5) for i in param_sweeps}
+def run_intervention_analysis(save_prefix="intervention"):
+    """
+    Analyze the effect of targeted interventions
+    """
+    print("Running intervention analysis...")
+    ensure_output_dir()
+    
+    # Run for different minority vegetarian fractions
+    veg_fractions = [0.05, 0.1, 0.15, 0.2]
+    all_results = []
+    
+    for veg_f in veg_fractions:
+        print(f"Testing {veg_f*100}% vegetarian intervention...")
+        
+        # Run targeted interventions
+        results = run_targeted_interventions(
+            params,
+            veg_fraction=veg_f,
+            steps=25000,
+            num_iterations=3
+        )
+        
+        # Save individual results
+        individual_filename = f'{save_prefix}_veg{veg_f}_{date.today().strftime("%b_%d_%Y")}.pkl'
+        results.to_pickle(f'../model_output/{individual_filename}')
+        
+        all_results.append(results)
+    
+    # Combine all results
+    combined_df = pd.concat(all_results)
+    
+    # Save combined results
+    combined_filename = f'{save_prefix}_all_{date.today().strftime("%b_%d_%Y")}.pkl'
+    combined_df.to_pickle(f'../model_output/{combined_filename}')
+    
+    print(f"Combined results saved to ../model_output/{combined_filename}")
+    return combined_df
 
-num_iterations = 3
-results_df = timer(parameter_sweep, params, param_ranges, num_iterations)
+def run_cluster_analysis(save_prefix="clusters"):
+    """
+    Analyze vegetarian cluster formation
+    """
+    print("Running cluster analysis...")
+    ensure_output_dir()
+    
+    # Run for different initial vegetarian fractions
+    veg_fractions = np.linspace(0.1, 0.5, 5)
+    cluster_stats = []
+    cluster_results = {}
+    
+    for veg_f in veg_fractions:
+        print(f"Analyzing clusters for {veg_f*100}% initial vegetarians...")
+        
+        # Modify params
+        test_params = params.copy()
+        test_params["veg_f"] = veg_f
+        test_params["meat_f"] = 1 - veg_f
+        
+        # Run cluster analysis
+        cluster_result = analyze_cluster_formation(
+            test_params,
+            veg_fraction=veg_f,
+            steps=25000
+        )
+        
+        # Extract stats for comparison
+        stats = {
+            'initial_veg_fraction': veg_f,
+            'num_clusters': cluster_result['num_clusters'],
+            'avg_cluster_size': cluster_result['avg_cluster_size'],
+            'max_cluster_size': cluster_result['max_cluster_size'],
+            'final_veg_fraction': cluster_result['final_veg_fraction']
+        }
+        
+        cluster_stats.append(stats)
+        
+        # Store full cluster results (excluding model object for pickle compatibility)
+        result_copy = cluster_result.copy()
+        result_copy.pop('model', None)  # Remove model object which might cause pickle issues
+        cluster_results[f"veg_{veg_f}"] = result_copy
+        
+        # Save individual cluster result
+        individual_filename = f'{save_prefix}_veg{veg_f}_{date.today().strftime("%b_%d_%Y")}.pkl'
+        with open(f'../model_output/{individual_filename}', 'wb') as f:
+            pickle.dump(result_copy, f)
+    
+    # Convert stats to DataFrame
+    stats_df = pd.DataFrame(cluster_stats)
+    
+    # Save stats
+    stats_filename = f'{save_prefix}_stats_{date.today().strftime("%b_%d_%Y")}.pkl'
+    stats_df.to_pickle(f'../model_output/{stats_filename}')
+    
+    # Save all cluster results
+    full_filename = f'{save_prefix}_full_{date.today().strftime("%b_%d_%Y")}.pkl'
+    with open(f'../model_output/{full_filename}', 'wb') as f:
+        pickle.dump(cluster_results, f)
+    
+    print(f"Cluster stats saved to ../model_output/{stats_filename}")
+    print(f"Full cluster results saved to ../model_output/{full_filename}")
+    return stats_df, cluster_results
 
+def run_critical_dynamics_analysis(save_prefix="critical"):
+    """
+    Analyze critical dynamics near tipping points
+    """
+    print("Running critical dynamics analysis...")
+    ensure_output_dir()
+    
+    # Run for different potential tipping points
+    tipping_estimates = [0.25, 0.3, 0.35]
+    all_results = []
+    
+    for tipping_est in tipping_estimates:
+        print(f"Analyzing critical dynamics near {tipping_est} vegetarian fraction...")
+        
+        # Modify alpha and beta to create conditions for this tipping point
+        test_params = params.copy()
+        test_params["alpha"] = 0.3  # Example values that might create tipping at these points
+        test_params["beta"] = 0.7
+        
+        # Run critical dynamics analysis
+        results = run_critical_dynamics(
+            test_params,
+            near_tipping=tipping_est,
+            steps=50000
+        )
+        
+        # Add tipping estimate to results
+        results['tipping_estimate'] = tipping_est
+        
+        # Save individual results
+        individual_filename = f'{save_prefix}_tip{tipping_est}_{date.today().strftime("%b_%d_%Y")}.pkl'
+        results.to_pickle(f'../model_output/{individual_filename}')
+        
+        all_results.append(results)
+    
+    # Combine all results
+    combined_df = pd.concat(all_results)
+    
+    # Save combined results
+    combined_filename = f'{save_prefix}_all_{date.today().strftime("%b_%d_%Y")}.pkl'
+    combined_df.to_pickle(f'../model_output/{combined_filename}')
+    
+    print(f"Combined results saved to ../model_output/{combined_filename}")
+    return combined_df
 
+def run_all_analyses():
+    """Run all analyses and save results"""
+    print("Running all analyses...")
+    
+    # Run each analysis and time it
+    print("\n=== Running emissions analysis ===")
+    emissions_results = timer(run_emissions_analysis)
+    
+    print("\n=== Running tipping point analysis ===")
+    tipping_results = timer(run_tipping_point_analysis)
+    
+    print("\n=== Running network topology comparison ===")
+    topology_results = timer(run_network_topology_comparison)
+    
+    print("\n=== Running intervention analysis ===")
+    intervention_results = timer(run_intervention_analysis)
+    
+    print("\n=== Running cluster analysis ===")
+    cluster_stats, cluster_results = timer(run_cluster_analysis)
+    
+    print("\n=== Running critical dynamics analysis ===")
+    critical_results = timer(run_critical_dynamics_analysis)
+    
+    print("All analyses complete!")
+    return {
+        'emissions': emissions_results,
+        'tipping': tipping_results,
+        'topology': topology_results,
+        'intervention': intervention_results,
+        'cluster_stats': cluster_stats,
+        'cluster_results': cluster_results,
+        'critical': critical_results
+    }
 
+#%% Examples of running the analyses
 
-
-
-
+if __name__ == "__main__":
+    # Example 1: Run standard parameter sweep (original functionality)
+    param_sweeps = ["alpha", "beta"]
+    param_ranges = {i: np.linspace(0.0, 1.0, 10) for i in param_sweeps}
+    num_iterations = 10
+    
+    print("=== Running original parameter sweep ===")
+    results_df = timer(parameter_sweep, params, param_ranges, num_iterations)
+    
+    # Example 2: Run all new analyses
+    # all_results = run_all_analyses()
+    
+    # Example 3: Run just one specific analysis
+    # emissions_results = run_emissions_analysis()
