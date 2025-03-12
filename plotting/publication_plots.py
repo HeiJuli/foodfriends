@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Import our custom plotting style
-from plotting.plot_styles import (
+from plot_styles import (
     set_publication_style, 
     apply_axis_style, 
     COLORS, 
@@ -45,10 +45,10 @@ def load_data_file(file_path):
 
 def plot_heatmap_alpha_beta(data=None, file_path=None, save=True):
     """
-    Create heatmap showing how alpha and beta affect vegetarian growth
+    Create heatmap showing how alpha and beta affect system metrics using parameter sweep data
     
     Args:
-        data (DataFrame): DataFrame with alpha, beta, and change columns
+        data (DataFrame): DataFrame with alpha, beta columns
         file_path (str): Path to data file if data not provided
         save (bool): Whether to save the plot
     """
@@ -64,44 +64,29 @@ def plot_heatmap_alpha_beta(data=None, file_path=None, save=True):
         if data is None:
             return None
     
-    # Get alpha and beta values
-    alpha_values = sorted(data['alpha'].unique())
-    beta_values = sorted(data['beta'].unique())
+    # Ensure alpha, beta columns exist
+    if 'alpha' not in data.columns or 'beta' not in data.columns:
+        print("Data must contain alpha and beta columns")
+        return None
     
-    # Create pivot table for heatmap
-    pivot_table = data.pivot_table(index='beta', columns='alpha', values='change')
-    
-    # Create plot
+    # Create figure
     plt.figure(figsize=(8, 6))
+    
+    # Create pivot table for heatmap - average final_veg_fraction by alpha and beta
+    pivot_data = data.groupby(['alpha', 'beta'])['final_veg_fraction'].mean().reset_index()
+    pivot_table = pivot_data.pivot(index='beta', columns='alpha', values='final_veg_fraction')
     
     # Plot heatmap
     ax = sns.heatmap(
         pivot_table, 
-        cmap=ECO_DIV_CMAP, 
-        center=0,
-        cbar_kws={'label': 'Change in Vegetarian Fraction'}
+        cmap=ECO_CMAP, 
+        cbar_kws={'label': 'Final Vegetarian Fraction'}
     )
-    
-    # Add contour lines if 'tipped' column exists
-    if 'tipped' in data.columns:
-        pivot_tipped = data.pivot_table(index='beta', columns='alpha', values='tipped').astype(int)
-        CS = plt.contour(
-            np.arange(len(alpha_values)) + 0.5, 
-            np.arange(len(beta_values)) + 0.5,
-            pivot_tipped.values, 
-            levels=[0.5], 
-            colors=COLORS['neutral'], 
-            linewidths=2
-        )
     
     # Set labels and title
     plt.xlabel('Individual preference weight (α)', fontsize=12)
     plt.ylabel('Social influence weight (β)', fontsize=12)
     plt.title('Parameter Effect on Growth in Vegetarian Population', fontsize=14)
-    
-    # Fix axis labels
-    plt.xticks(np.arange(len(alpha_values)) + 0.5, [f"{x:.1f}" for x in alpha_values], rotation=0)
-    plt.yticks(np.arange(len(beta_values)) + 0.5, [f"{y:.1f}" for y in beta_values], rotation=0)
     
     plt.tight_layout()
     
@@ -149,28 +134,10 @@ def plot_emissions_vs_veg_fraction(data=None, file_path=None, save=True):
         linewidth=1.0
     )
     
-    # Fit and plot trend line
-    if len(data) > 2:  # Need at least 3 points for good regression
-        x = data['veg_fraction']
-        y = data['final_CO2']
-        coef = np.polyfit(x, y, 1)
-        poly1d_fn = np.poly1d(coef)
-        plt.plot(
-            np.sort(x), 
-            poly1d_fn(np.sort(x)), 
-            '--', 
-            color=COLORS['neutral'],
-            alpha=0.7,
-            label=f'Trend: y = {coef[0]:.1f}x + {coef[1]:.1f}'
-        )
-    
     # Format plot
     plt.xlabel('Vegetarian Fraction', fontsize=12)
     plt.ylabel('Final Average CO₂ Emissions [kg/year]', fontsize=12)
     plt.title('Impact of Vegetarian Population on CO₂ Emissions', fontsize=14)
-    
-    if 'Trend' in plt.gca().get_legend_handles_labels()[1]:
-        plt.legend()
     
     # Apply style to axis
     apply_axis_style(plt.gca())
@@ -237,19 +204,6 @@ def plot_growth_in_veg_population(data=None, file_path=None, save=True, max_veg_
     
     # Plot y=x reference line
     plt.plot([0, max_veg_fraction], [0, max_veg_fraction], 'k--', alpha=0.5, label='No Change')
-    
-    # Calculate and plot growth trend
-    if len(x_filtered) > 2:  # Need at least 3 points for good regression
-        coef = np.polyfit(x_filtered, y_filtered, 1)
-        poly1d_fn = np.poly1d(coef)
-        plt.plot(
-            np.sort(x_filtered), 
-            poly1d_fn(np.sort(x_filtered)), 
-            '-', 
-            color=COLORS['neutral'],
-            alpha=0.7,
-            label=f'Trend: y = {coef[0]:.2f}x + {coef[1]:.2f}'
-        )
     
     # Format plot
     plt.xlabel('Initial Vegetarian Fraction', fontsize=12)
@@ -344,20 +298,65 @@ def plot_individual_reductions_distribution(data=None, file_path=None, save=True
         output_dir = ensure_output_dir()
         output_file = os.path.join(output_dir, 'individual_reductions_distribution.png')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {output_file}")
+        
+        
+
+
+
+def select_file(pattern):
+    """Display a list of files matching the pattern and let user select one"""
+    import os
+    import glob
+    from datetime import datetime
     
-    return fig, (ax1, ax2)
+    # Look for files in model_output directory
+    model_output_dir = '../model_output'
+    search_pattern = os.path.join(model_output_dir, f'{pattern}_*.pkl')
+    
+    # Get all matching files
+    matching_files = glob.glob(search_pattern)
+    
+    if not matching_files:
+        print(f"No files found matching pattern: {pattern}")
+        return None
+    
+    # Sort files by modification time (newest first)
+    matching_files.sort(key=os.path.getmtime, reverse=True)
+    
+    # Display files to user
+    print(f"\nAvailable {pattern} files:")
+    for idx, file in enumerate(matching_files):
+        base_name = os.path.basename(file)
+        mod_time = datetime.fromtimestamp(os.path.getmtime(file))
+        print(f"[{idx+1}] {base_name} (Modified: {mod_time.strftime('%Y-%m-%d %H:%M')})")
+    
+    # Let user select a file
+    while True:
+        try:
+            selection = input(f"\nSelect {pattern} file (1-{len(matching_files)}, or press Enter for latest): ")
+            
+            # Default to the latest file if user just presses Enter
+            if selection == "":
+                return matching_files[0]
+                
+            selection_idx = int(selection) - 1
+            if 0 <= selection_idx < len(matching_files):
+                return matching_files[selection_idx]
+            else:
+                print(f"Invalid selection. Please enter a number between 1 and {len(matching_files)}")
+        except ValueError:
+            print("Please enter a valid number or press Enter for the latest file")
 
 def main():
-    """Main function to run all plots"""
+    """Main function to run publication plots with file selection"""
     print("Running publication plots...")
     
     # Ask user which plots to create
     print("\nAvailable plots:")
-    print("[1] Heatmap of Alpha and Beta")
+    print("[1] Heatmap of Alpha and Beta (from parameter sweep)")
     print("[2] Emissions vs Vegetarian Fraction")
     print("[3] Growth in Vegetarian Population")
-    print("[4] Individual Reductions Distribution")
+    print("[4] Individual Reductions Distribution (from parameter sweep)")
     print("[5] All plots")
     
     choice = input("\nSelect plot to create (1-5): ")
@@ -366,48 +365,40 @@ def main():
         print("Invalid choice")
         return
     
-    # Ask for file paths
-    tipping_file = None
+    # Let user select files for each plot type as needed
+    parameter_sweep_file = None
     emissions_file = None
-    cluster_file = None
-    reduction_file = None
+    veg_growth_file = None
     
-    if choice in ['1', '5']:
-        tipping_file = input("\nEnter path to tipping point analysis file: ")
-        if not os.path.exists(tipping_file):
-            print(f"File not found: {tipping_file}")
-            tipping_file = None
-    
+    if choice in ['1', '4', '5']:
+        parameter_sweep_file = select_file('parameter_sweep')
+        
     if choice in ['2', '5']:
-        emissions_file = input("\nEnter path to emissions analysis file: ")
-        if not os.path.exists(emissions_file):
-            print(f"File not found: {emissions_file}")
-            emissions_file = None
-    
+        emissions_file = select_file('emissions')
+        
     if choice in ['3', '5']:
-        cluster_file = input("\nEnter path to cluster analysis file: ")
-        if not os.path.exists(cluster_file):
-            print(f"File not found: {cluster_file}")
-            cluster_file = None
+        veg_growth_file = select_file('veg_growth')
     
-    if choice in ['4', '5']:
-        reduction_file = input("\nEnter path to parameter sweep file with individual reductions: ")
-        if not os.path.exists(reduction_file):
-            print(f"File not found: {reduction_file}")
-            reduction_file = None
-    
-    # Create plots
-    if choice in ['1', '5'] and tipping_file:
-        plot_heatmap_alpha_beta(file_path=tipping_file)
+    # Create plots based on user selection and available files
+    if choice in ['1', '5'] and parameter_sweep_file:
+        plot_heatmap_alpha_beta(file_path=parameter_sweep_file)
+    elif choice == '1' and not parameter_sweep_file:
+        print("Cannot create heatmap: No parameter sweep file found")
     
     if choice in ['2', '5'] and emissions_file:
         plot_emissions_vs_veg_fraction(file_path=emissions_file)
+    elif choice == '2' and not emissions_file:
+        print("Cannot create emissions plot: No emissions analysis file found")
     
-    if choice in ['3', '5'] and cluster_file:
-        plot_growth_in_veg_population(file_path=cluster_file)
+    if choice in ['3', '5'] and veg_growth_file:
+        plot_growth_in_veg_population(file_path=veg_growth_file)
+    elif choice == '3' and not veg_growth_file:
+        print("Cannot create growth plot: No vegetarian growth analysis file found")
     
-    if choice in ['4', '5'] and reduction_file:
-        plot_individual_reductions_distribution(file_path=reduction_file)
+    if choice in ['4', '5'] and parameter_sweep_file:
+        plot_individual_reductions_distribution(file_path=parameter_sweep_file)
+    elif choice == '4' and not parameter_sweep_file:
+        print("Cannot create distribution plot: No parameter sweep file found")
 
 if __name__ == "__main__":
     main()
