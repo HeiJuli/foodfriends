@@ -27,14 +27,14 @@ DEFAULT_PARAMS = {
     "steps": 5000,
     "w_i": 5,
     "immune_n": 0.1,
-    "M": 10,
+    "M": 5,
     "veg_f": 0.3,
     "meat_f": 0.7,
     "n": 5,
     "v": 10,
     'topology': "CSF",
-    "alpha": 0.5,
-    "beta": 0.5
+    "alpha": 0.4,
+    "beta": 0.6
 }
 
 def ensure_output_dir():

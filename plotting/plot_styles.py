@@ -20,7 +20,6 @@ def set_publication_style():
     plt.rcdefaults()
     plt.rcParams.update({
         'font.size': 11,
-        'font.family': 'Arial',
         'axes.labelsize': 12,
         'axes.titlesize': 12,
         'xtick.labelsize': 10,
