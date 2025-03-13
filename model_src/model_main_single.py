@@ -54,8 +54,8 @@ class Agent():
         self.global_norm = 0.5
         self.reduction_out = 0
         # implement other distributions (pareto)
-        self.alpha = self.params["alpha"]
-        self.beta = self.params["beta"]
+        self.alpha = self.choose_alpha_beta(params["alpha"])
+        self.beta = self.choose_alpha_beta(params["beta"])
         self.diet_duration = 0  # Track how long agent maintains current diet
         self.diet_history = []  # Track diet changes
         self.last_change_time = 0  # Track when diet last changed
@@ -77,7 +77,18 @@ class Agent():
         return lookup[diet]
 
     
-
+    
+    def choose_alpha_beta(self, mean):
+        
+        a, b = 0, 1
+        val = truncnorm.rvs(a, b, loc=mean, scale=mean*0.2)
+        
+        return val
+        
+        
+        
+        
+        
     def prob_calc(self, other_agent):
         """
         Calculates probability of diet change based on pairwise comparison

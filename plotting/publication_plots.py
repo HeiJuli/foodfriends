@@ -279,15 +279,15 @@ def plot_tipping_point_heatmap(data=None, file_path=None, save=True):
     
     return ax
 
-def plot_3d_parameter_surface(data=None, file_path=None, save=True):
+def plot_3d_parameter_surface(data=None, file_path=None, save=True, initial_veg_value=0.2):
     """
-    Create 3D surface plot showing how alpha, beta and initial vegetarian fraction 
-    affect final vegetarian fraction
+    Create 3D surface plot showing how alpha and beta affect final vegetarian fraction
     
     Args:
-        data (DataFrame): DataFrame with alpha, beta, initial_veg_fraction/initial_veg_f and final_veg_fraction/final_veg_f
+        data (DataFrame): DataFrame with alpha, beta, initial_veg_f and final_veg_f
         file_path (str): Path to data file if data not provided
         save (bool): Whether to save the plot
+        initial_veg_value (float): The specific initial vegetarian fraction to show
     """
     # Set publication style
     set_publication_style()
@@ -314,36 +314,33 @@ def plot_3d_parameter_surface(data=None, file_path=None, save=True):
         print("Data must contain initial and final vegetarian fraction columns")
         return None
     
+    # Filter to the specific initial vegetarian fraction we want to display
+    # Find the closest value in the data if exact match doesn't exist
+    veg_values = sorted(data[init_veg_col].unique())
+    closest_veg = min(veg_values, key=lambda x: abs(x - initial_veg_value))
+    filtered_data = data[data[init_veg_col] == closest_veg]
+    
+    # Get unique values for alpha and beta
+    alpha_values = sorted(filtered_data['alpha'].unique())
+    beta_values = sorted(filtered_data['beta'].unique())
+    
+    # Create meshgrid for surface
+    alpha_grid, beta_grid = np.meshgrid(alpha_values, beta_values)
+    
+    # Create pivot table for final vegetarian fraction
+    pivot_table = filtered_data.pivot_table(
+        index='beta', columns='alpha', values=final_veg_col, aggfunc='mean'
+    )
+    
     # Create 3D figure
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
     
-    # Get unique values for each axis
-    alpha_values = sorted(data['alpha'].unique())
-    beta_values = sorted(data['beta'].unique())
-    veg_values = sorted(data[init_veg_col].unique())
-    
-    # Create meshgrid for surface
-    alpha_grid, beta_grid, veg_grid = np.meshgrid(alpha_values, beta_values, veg_values)
-    
-    # Prepare data for surface
-    final_veg = np.zeros_like(alpha_grid)
-    
-    # Populate the grid with final vegetarian fractions
-    for i, alpha in enumerate(alpha_values):
-        for j, beta in enumerate(beta_values):
-            for k, veg in enumerate(veg_values):
-                subset = data[(data['alpha'] == alpha) & 
-                              (data['beta'] == beta) & 
-                              (data[init_veg_col] == veg)]
-                if len(subset) > 0:
-                    final_veg[j, i, k] = subset[final_veg_col].mean()
-    
     # Create the 3D surface plot
     surf = ax.plot_surface(
-        alpha_grid[..., 0], 
-        beta_grid[..., 0], 
-        final_veg[..., 0],
+        alpha_grid, 
+        beta_grid, 
+        pivot_table.values,
         cmap=ECO_CMAP,
         edgecolor='none',
         alpha=0.8
@@ -357,7 +354,7 @@ def plot_3d_parameter_surface(data=None, file_path=None, save=True):
     ax.set_xlabel('Individual preference (α)')
     ax.set_ylabel('Social influence (β)')
     ax.set_zlabel('Final Vegetarian Fraction')
-    ax.set_title('3D Parameter Surface')
+    ax.set_title(f'3D Parameter Surface (Initial Veg. Fraction = {closest_veg:.1f})')
     
     # Set ticks to one decimal place
     ax.set_xticks(alpha_values)
@@ -370,7 +367,7 @@ def plot_3d_parameter_surface(data=None, file_path=None, save=True):
     # Save plot if requested
     if save:
         output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, '3d_parameter_surface.png')
+        output_file = os.path.join(output_dir, f'3d_parameter_surface_init_{closest_veg:.1f}.png')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {output_file}")
     
@@ -696,9 +693,10 @@ def main():
     emissions_file = None
     veg_growth_file = None
     tipping_point_file = None
+    three_d_param_file = None
     trajectory_file = None
     
-    if choice in ['1', '4', '5', '6', '8']:
+    if choice in ['1', '4', '5', '8']:
         parameter_sweep_file = select_file('parameter_sweep')
         
     if choice in ['2', '8']:
@@ -707,8 +705,11 @@ def main():
     if choice in ['3', '8']:
         veg_growth_file = select_file('veg_growth')
     
+    if choice in ['6', '8']:
+        three_d_param_file = select_file('3d_parameter_analysis')
+    
     if choice in ['7', '8']:
-        trajectory_file = parameter_sweep_file if parameter_sweep_file else select_file('parameter_sweep')
+        trajectory_file = select_file('trajectory_analysis')
     
     # Create plots based on user selection and available files
     if choice in ['1', '8'] and parameter_sweep_file:
@@ -736,15 +737,15 @@ def main():
     elif choice == '5' and not parameter_sweep_file:
         print("Cannot create tipping point heatmap: No parameter sweep file found")
         
-    if choice in ['6', '8'] and parameter_sweep_file:
-        plot_3d_parameter_surface(file_path=parameter_sweep_file)
-    elif choice == '6' and not parameter_sweep_file:
-        print("Cannot create 3D parameter surface: No parameter sweep file found")
+    if choice in ['6', '8'] and three_d_param_file:
+        plot_3d_parameter_surface(file_path=three_d_param_file)
+    elif choice == '6' and not three_d_param_file:
+        print("Cannot create 3D parameter surface: No 3D parameter analysis file found")
         
     if choice in ['7', '8'] and trajectory_file:
         plot_trajectory_grid(file_path=trajectory_file)
     elif choice == '7' and not trajectory_file:
-        print("Cannot create trajectory grid: No suitable file found")
+        print("Cannot create trajectory grid: No trajectory analysis file found")
 
 if __name__ == "__main__":
     main()
