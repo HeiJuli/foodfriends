@@ -249,6 +249,136 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
     
     return results_df
 
+def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, veg_fractions=None, runs_per_combo=3):
+    """
+    Run a 3D parameter analysis varying alpha, beta, and initial vegetarian fraction
+    
+    Args:
+        params (dict): Base model parameters
+        alpha_range (array): Array of alpha values to test
+        beta_range (array): Array of beta values to test
+        veg_fractions (array): Array of initial vegetarian fractions to test
+        runs_per_combo (int): Number of runs per parameter combination
+        
+    Returns:
+        pd.DataFrame: Results with parameter combinations and outcomes
+    """
+    params = DEFAULT_PARAMS.copy() if params is None else params
+    if alpha_range is None:
+        alpha_range = np.linspace(0.1, 0.9, 5)
+    if beta_range is None:
+        beta_range = np.linspace(0.1, 0.9, 5)
+    if veg_fractions is None:
+        veg_fractions = np.linspace(0.1, 0.9, 5)
+    
+    print(f"Running 3D parameter analysis with {len(alpha_range)}x{len(beta_range)}x{len(veg_fractions)} combinations...")
+    
+    results = []
+    total_runs = len(alpha_range) * len(beta_range) * len(veg_fractions) * runs_per_combo
+    run_count = 0
+    
+    for alpha in alpha_range:
+        for beta in beta_range:
+            for veg_f in veg_fractions:
+                # Update parameters
+                test_params = params.copy()
+                test_params["alpha"] = alpha
+                test_params["beta"] = beta
+                test_params["veg_f"] = veg_f
+                test_params["meat_f"] = 1.0 - veg_f
+                
+                for run in range(runs_per_combo):
+                    run_count += 1
+                    print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, veg_f={veg_f:.2f}, run {run+1}/{runs_per_combo}")
+                    
+                    # Run model
+                    model = model_main.Model(test_params)
+                    model.run()
+                    
+                    # Record results
+                    results.append({
+                        'alpha': alpha,
+                        'beta': beta,
+                        'initial_veg_f': veg_f,
+                        'final_veg_f': model.fraction_veg[-1],
+                        'change': model.fraction_veg[-1] - veg_f,
+                        'tipped': model.fraction_veg[-1] > (veg_f * 1.2),  # 20% increase threshold
+                        'final_CO2': model.system_C[-1]
+                    })
+    
+    results_df = pd.DataFrame(results)
+    
+    # Save results
+    ensure_output_dir()
+    date_str = date.today().strftime("%Y%m%d")
+    filename = f'3d_parameter_analysis_{date_str}.pkl'
+    results_df.to_pickle(f'../model_output/{filename}')
+    print(f"Results saved to ../model_output/{filename}")
+    
+    return results_df
+
+def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, runs_per_combo=3):
+    """
+    Run simulations and save full trajectories for different parameter combinations
+    
+    Args:
+        params (dict): Base model parameters
+        alpha_values (list): Alpha values to test
+        beta_values (list): Beta values to test
+        runs_per_combo (int): Number of runs per parameter combination
+        
+    Returns:
+        pd.DataFrame: Results with trajectory data
+    """
+    params = DEFAULT_PARAMS.copy() if params is None else params
+    if alpha_values is None:
+        alpha_values = [0.25, 0.5, 0.75]
+    if beta_values is None:
+        beta_values = [0.25, 0.5, 0.75]
+    
+    print(f"Running trajectory analysis with {len(alpha_values)}x{len(beta_values)} parameter combinations...")
+    
+    results = []
+    total_runs = len(alpha_values) * len(beta_values) * runs_per_combo
+    run_count = 0
+    
+    for alpha in alpha_values:
+        for beta in beta_values:
+            # Update parameters
+            test_params = params.copy()
+            test_params["alpha"] = alpha
+            test_params["beta"] = beta
+            test_params["steps"] = 5000  # Ensure enough steps for meaningful trajectories
+            
+            for run in range(runs_per_combo):
+                run_count += 1
+                print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, run {run+1}/{runs_per_combo}")
+                
+                # Run model
+                model = model_main.Model(test_params)
+                model.run()
+                
+                # Record results including full trajectories
+                results.append({
+                    'alpha': alpha,
+                    'beta': beta,
+                    'initial_veg_f': test_params["veg_f"],
+                    'final_veg_f': model.fraction_veg[-1],
+                    'fraction_veg_trajectory': model.fraction_veg,
+                    'system_C_trajectory': model.system_C,
+                    'run': run
+                })
+    
+    results_df = pd.DataFrame(results)
+    
+    # Save results
+    ensure_output_dir()
+    date_str = date.today().strftime("%Y%m%d")
+    filename = f'trajectory_analysis_{date_str}.pkl'
+    results_df.to_pickle(f'../model_output/{filename}')
+    print(f"Results saved to ../model_output/{filename}")
+    
+    return results_df
 def main():
     """Main function with simple menu for analysis selection - no parameter inputs"""
     print("===== Streamlined Dietary Contagion Model Analysis =====")
@@ -259,6 +389,8 @@ def main():
         print("[2] Tipping Point Analysis (alpha-beta heatmap)")
         print("[3] Vegetarian Growth Analysis")
         print("[4] Parameter Sweep (individual reductions)")
+        print("[5] 3D Parameter Analysis (alpha, beta, veg fraction)")
+        print("[6] Trajectory Analysis (for trajectory grid plots)")
         print("[0] Exit")
         
         choice = input("\nSelect option: ")
@@ -303,6 +435,32 @@ def main():
             timer(run_parameter_sweep, 
                  alpha_range=alpha_range, 
                  beta_range=beta_range,
+                 runs_per_combo=runs_per_combo)
+                 
+        elif choice == '5':
+            # Fixed parameters
+            alpha_range = np.linspace(0.1, 0.9, 4)
+            beta_range = np.linspace(0.1, 0.9, 4)
+            veg_fractions = np.linspace(0.1, 0.5, 3)
+            runs_per_combo = 2
+            print(f"Running 3D analysis with {len(alpha_range)}×{len(beta_range)}×{len(veg_fractions)} parameter combinations")
+            
+            timer(run_3d_parameter_analysis,
+                 alpha_range=alpha_range,
+                 beta_range=beta_range,
+                 veg_fractions=veg_fractions,
+                 runs_per_combo=runs_per_combo)
+                 
+        elif choice == '6':
+            # Fixed parameters
+            alpha_values = [0.25, 0.5, 0.75]
+            beta_values = [0.25, 0.5, 0.75]
+            runs_per_combo = 5
+            print(f"Running trajectory analysis with {len(alpha_values)}×{len(beta_values)} parameter combinations")
+            
+            timer(run_trajectory_analysis,
+                 alpha_values=alpha_values,
+                 beta_values=beta_values,
                  runs_per_combo=runs_per_combo)
             
         elif choice == '0':
