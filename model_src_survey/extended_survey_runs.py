@@ -14,12 +14,12 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import random
-import model_main_single as model_main
+import model_main_single_survey as model_main
 
 
 #%%
 
-def run_emissions_vs_vegetarian_fraction(base_params, num_runs=3, veg_fractions=np.linspace(0, 1, 20), survey_data= None):
+def run_emissions_vs_vegetarian_fraction(base_params, num_runs=3, veg_fractions=np.linspace(0, 1, 5), survey_data=None):
     """
     Run multiple simulations varying vegetarian fraction and collect final CO2 consumption data
     
@@ -46,8 +46,8 @@ def run_emissions_vs_vegetarian_fraction(base_params, num_runs=3, veg_fractions=
                 'veg_fraction': veg_f,
                 'final_CO2': model.system_C[-1],
                 'final_veg_fraction': model.fraction_veg[-1],
-                'alpha': params['alpha'],
-                'beta': params['beta'],
+                'alpha': survey_data["alpha"].loc[0],
+                'beta': survey_data["beta"].loc[0],
                 'topology': params['topology']
             })
     
@@ -55,7 +55,7 @@ def run_emissions_vs_vegetarian_fraction(base_params, num_runs=3, veg_fractions=
 
 def run_parameter_sensitivity(base_params, alpha_range=np.linspace(0, 1, 5), 
                               beta_range=np.linspace(0, 1, 5), 
-                              fixed_veg_f=0.2, steps=5000):
+                              fixed_veg_f=0.2, steps=5000, survey_data=None):
     """
     Run simulations to analyze parameter sensitivity for alpha and beta
     
@@ -80,7 +80,7 @@ def run_parameter_sensitivity(base_params, alpha_range=np.linspace(0, 1, 5),
             params["meat_f"] = 1.0 - fixed_veg_f
             params["steps"] = steps
             
-            model = model_main.Model(params)
+            model = model_main.Model(params, survey_data)
             model.run()
             
             # Check if tipping occurred - final veg fraction significantly higher than initial
