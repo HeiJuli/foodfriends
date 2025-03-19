@@ -83,18 +83,11 @@ def timer(func, *args, **kwargs):
     print(f"Runtime: {mins} mins {secs:.1f}s")
     return result
 
-def run_basic_model(params=None, survey_filepath=None):
+def run_basic_model(params=None, survey_data=None):
     """Run a single model simulation with given parameters"""
     params = params or DEFAULT_PARAMS.copy()
     
-    survey_data = None
-    if survey_filepath:
-        survey_data = load_survey_data(survey_filepath, ["nomem_encr","alpha", "beta", "theta", "diet"])
-        # Ensure we have exactly `N` respondents for `N` agents
-        if len(survey_data) < params["N"]:
-           raise ValueError(f"Survey data has only {len(survey_data)} respondents, but model expects {params['N']} agents.")
-
-    model = model_main.Model(params, survey_data=survey_data)
+    model = model_main.Model(params, survey_data)
     model.run()
     return model
 
@@ -115,15 +108,15 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None, survey_f
         veg_fractions = np.linspace(0, 1, 5)
     
     if survey_filepath:
-        survey_params = load_survey_data(survey_filepath, ["nomem_encr","alpha", "beta", "theta"])
-        params.update(survey_params)
+        survey_data = load_survey_data(survey_filepath, ["nomem_encr","alpha", "beta", "theta"])
     
     print(f"Running emissions analysis with {len(veg_fractions)} vegetarian fractions...")
     
     results_df = run_emissions_vs_vegetarian_fraction(
         params, 
         num_runs=num_runs, 
-        veg_fractions=veg_fractions
+        veg_fractions=veg_fractions,
+        survey_data=survey_data
     )
     
     # Save results
@@ -157,8 +150,7 @@ def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, v
         veg_fractions = [0.2]
     
     if survey_filepath:
-        survey_params = load_survey_data(survey_filepath, ["nomem_encr","diet","theta"])
-        params.update(survey_params)
+        survey_data = load_survey_data(survey_filepath, ["nomem_encr","diet","theta"])
     
     print(f"Running tipping point analysis with {len(alpha_range)}x{len(beta_range)} parameter combinations...")
     
@@ -171,7 +163,8 @@ def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, v
             params,
             alpha_range=alpha_range,
             beta_range=beta_range,
-            fixed_veg_f=veg_f
+            fixed_veg_f=veg_f,
+            survey_data=survey_data
         )
         
         results['initial_veg_f'] = veg_f
@@ -204,8 +197,7 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg_fraction=1,
     if veg_fractions is None:
         veg_fractions = np.linspace(0, max_veg_fraction, 10)
     if survey_filepath:
-        survey_params = load_survey_data(survey_filepath, ["nomem_encr","alpha", "beta", "theta"])
-        params.update(survey_params)
+        survey_data = load_survey_data(survey_filepath, ["nomem_encr","alpha", "beta", "theta"])
     
     # Filter fractions to respect max_veg_fraction
     veg_fractions = veg_fractions[veg_fractions <= max_veg_fraction]
@@ -222,12 +214,15 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg_fraction=1,
         test_params["veg_f"] = veg_f
         test_params["meat_f"] = 1 - veg_f
         
-        model = run_basic_model(test_params)
+        model = run_basic_model(test_params, survey_data)
         
         # Store initial and final vegetarian fractions
         results.append({
             'initial_veg_fraction': veg_f,
-            'final_veg_fraction': model.fraction_veg[-1]
+            'final_veg_fraction': model.fraction_veg[-1],
+            'alpha': survey_data["alpha"].loc[0],
+            'beta': survey_data["beta"].loc[0],
+            'theta': survey_data["theta"].loc[0],
         })
     
     # Convert to DataFrame
@@ -263,9 +258,8 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
         beta_range = np.linspace(0.1, 0.9, 5)
     
     if survey_filepath:
-        survey_params = load_survey_data(survey_filepath, ["nomem_encr","diet","theta"])
-        params.update(survey_params)
-    
+        survey_data = load_survey_data(survey_filepath, ["nomem_encr","diet","theta"])
+
     print(f"Running parameter sweep with {len(alpha_range)}x{len(beta_range)} combinations...")
     
     results = []
@@ -282,15 +276,15 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
                 run_count += 1
                 print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, run {run+1}/{runs_per_combo}")
                 
-                model = run_basic_model(run_params)
+                model = run_basic_model(run_params, survey_data)
                 
                 results.append({
                     'alpha': alpha,
                     'beta': beta,
                     'run': run,
                     'final_veg_fraction': model.fraction_veg[-1],
-                    'individual_reductions': model.get_attributes("reduction_out")
-                })
+                    'individual_reductions': model.get_attributes("reduction_out")},
+                )
     
     results_df = pd.DataFrame(results)
     
@@ -326,8 +320,7 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
         veg_fractions = np.linspace(0.1, 0.9, 5)
     
     if survey_filepath:
-        survey_params = load_survey_data(survey_filepath, ["nomem_encr","theta"])
-        params.update(survey_params)
+        survey_data = load_survey_data(survey_filepath, ["nomem_encr","theta"])
     
     print(f"Running 3D parameter analysis with {len(alpha_range)}x{len(beta_range)}x{len(veg_fractions)} combinations...")
     
@@ -350,7 +343,7 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
                     print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, veg_f={veg_f:.2f}, run {run+1}/{runs_per_combo}")
                     
                     # Run model
-                    model = model_main.Model(test_params)
+                    model = model_main.Model(test_params, survey_data)
                     model.run()
                     
                     # Record results
@@ -361,8 +354,8 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
                         'final_veg_f': model.fraction_veg[-1],
                         'change': model.fraction_veg[-1] - veg_f,
                         'tipped': model.fraction_veg[-1] > (veg_f * 1.2),  # 20% increase threshold
-                        'final_CO2': model.system_C[-1]
-                    })
+                        'final_CO2': model.system_C[-1]},
+                    )
     
     results_df = pd.DataFrame(results)
     
@@ -395,8 +388,7 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, ru
         beta_values = [0.25, 0.5, 0.75]
     
     if survey_filepath:
-        survey_params = load_survey_data(survey_filepath, ["diet","theta"])
-        params.update(survey_params)
+        survey_data = load_survey_data(survey_filepath, ["nomem_encr","diet","theta"])
     
     print(f"Running trajectory analysis with {len(alpha_values)}x{len(beta_values)} parameter combinations...")
     
@@ -417,7 +409,7 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, ru
                 print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, run {run+1}/{runs_per_combo}")
                 
                 # Run model
-                model = model_main.Model(test_params)
+                model = model_main.Model(test_params, survey_data)
                 model.run()
                 
                 # Record results including full trajectories
@@ -428,8 +420,8 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, ru
                     'final_veg_f': model.fraction_veg[-1],
                     'fraction_veg_trajectory': model.fraction_veg,
                     'system_C_trajectory': model.system_C,
-                    'run': run
-                })
+                    'run': run},
+                )
     
     results_df = pd.DataFrame(results)
     
