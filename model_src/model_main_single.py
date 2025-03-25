@@ -13,6 +13,7 @@ from scipy.stats import truncnorm
 import math
 import seaborn as sns
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # %% Preliminary settings
 #random.seed(30)
@@ -22,7 +23,7 @@ import matplotlib.pyplot as plt
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 300,
+          "N": 699,
           "erdos_p": 3,
           "steps":50000,
           "w_i": 5, #weight of the replicator function
@@ -32,33 +33,45 @@ params = {"veg_CO2": 1390,
           "meat_f": 0.7,  #meat eater fraciton
           "n": 5,
           "v": 10,
-          'topology': "BA", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.3, #self dissonance
-          "beta": 0.7 #social dissonance
-          
+          'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
+          "alpha": 0.35, #self dissonance
+          "beta": 0.65, #social dissonance
+          "agent_ini": "twin", #choose between "twin", "empirical", "synthetic" 
+          "survey_file": "../data/final_data_parameters.csv"
           }
 
 # %% Agent
 
 class Agent():
-
-    def __init__(self, i, params):
-
-        # types can be vegetarian or meat eater
+    
+    
+    def __init__(self, i, params, **kwargs):
+        
         self.params = params
-        self.diet = self.choose_diet(self.params)
+        # types can be vegetarian or meat eater
+        self.set_params(self.params, **kwargs)
         self.C = self.diet_emissions(self.diet, self.params)
         self.memory = []
         self.i = i
-        self.individual_norm = truncnorm.rvs(-1, 1)
         self.global_norm = 0.5
         self.reduction_out = 0
-        # implement other distributions (pareto)
-        self.alpha = self.choose_alpha_beta(params["alpha"])
-        self.beta = self.choose_alpha_beta(params["beta"])
         self.diet_duration = 0  # Track how long agent maintains current diet
         self.diet_history = []  # Track diet changes
         self.last_change_time = 0  # Track when diet last changed
+    
+    
+    def set_params(self, params, **kwargs):
+        
+        if params["agent_ini"] != "twin":
+            self.diet = self.choose_diet()
+            self.theta = truncnorm.rvs(-1, 1)
+            self.alpha = self.choose_alpha_beta(params["alpha"])
+            self.beta = self.choose_alpha_beta(params["beta"])
+        else:
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+                
+            
         
     def choose_diet(self, params):
         
@@ -78,8 +91,9 @@ class Agent():
 
     
     
-    def choose_alpha_beta(self, mean):
+    def choose_alpha_beta(self, mean, params):
         
+    
         a, b = 0, 1
         val = truncnorm.rvs(a, b, loc=mean, scale=mean*0.2)
         
@@ -113,15 +127,15 @@ class Agent():
             diet = "meat" if self.diet == "veg" else "veg"
         
         if diet == "veg":
-            return self.individual_norm
+            return self.theta
         else:
-            return -1*self.individual_norm
+            return -1*self.theta
     
     #uses the sigmoid function to calculate dissonance
    #     elif case == "sigmoid":
    #         current_diet = 1 if self.diet == "veg" else -1
    #         # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
-   #         return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.46
+   #         return (2/(1+math.exp(-1*(self.theta*current_diet)))-1)/0.46
 
 
         
@@ -250,7 +264,10 @@ class Agent():
 class Model():
     def __init__(self, params):
         
+
         self.params = params
+  
+            
         if params['topology'] == "complete":
             
             self.G1 = nx.complete_graph(params["N"])
@@ -272,9 +289,35 @@ class Model():
 
 
     def agent_ini(self, params):
-        # Ensure agents are created for each node specifically
-        self.agents = [Agent(node, params) for node in self.G1.nodes()]
         
+        
+        if params["agent_ini"] == "twin":
+            
+            self.survey_data = pd.read_csv(params["survey_file"])
+            assert len(self.survey_data) == params["N"], "number of nodes does not match number of survey participants"
+            
+            
+            self.agents=[]
+            for index, row in self.survey_data.iterrows():
+                agent = Agent(
+                    i=row["nomem_encr"],
+                    params=params, 
+                    alpha=row["alpha"],
+                    beta=row["beta"],
+                    theta=row["theta"],
+                    diet =row["diet"]
+                )
+                self.agents.append(agent)
+            print(f"Created {len(self.agents)} agents for {self.G1.number_of_nodes()} nodes")
+        
+        # elif params["agent_ini"] == "empirical":
+        #     # Ensure agents are created for each node specifically
+        #     self.agents = [Agent(node, params) for node in self.G1.nodes()]
+            
+        else:
+            # Ensure agents are created for each node specifically
+            self.agents = [Agent(node, params) for node in self.G1.nodes()]
+            
 
 
     def get_attribute(self, attribute):
@@ -317,6 +360,8 @@ class Model():
     
 
     def run(self):
+        
+        print(f"Starting model with agent initation mode: {params['agent_ini']}")
         self.agent_ini(self.params)
         self.record_fraction()
         
@@ -337,6 +382,7 @@ class Model():
 
 # %%
 if  __name__ ==  '__main__': 
+    
 	test_model = Model(params)
 
 	test_model.run()
