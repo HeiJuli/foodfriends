@@ -181,11 +181,33 @@ def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, v
     if veg_fractions is None:
         veg_fractions = [0.2]
     
-    # Handle survey data if in parameterized mode
+    # If in parameterized mode, include survey-derived parameters in the sweep
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        survey_params = extract_survey_parameters(survey_data)
-        params.update(survey_params)
+        
+        # Add survey-derived alpha and beta values to the parameter space
+        if 'alpha' in survey_data.columns:
+            survey_alpha = survey_data['alpha'].mean()
+            if survey_alpha not in alpha_range:
+                alpha_range = np.append(alpha_range, survey_alpha)
+                alpha_range = np.sort(alpha_range)
+                
+        if 'beta' in survey_data.columns:
+            survey_beta = survey_data['beta'].mean()
+            if survey_beta not in beta_range:
+                beta_range = np.append(beta_range, survey_beta)
+                beta_range = np.sort(beta_range)
+                
+        # For tipping point analysis, we might want to include the survey veg_fraction
+        if 'diet' in survey_data.columns and len(veg_fractions) > 0:
+            veg_count = (survey_data['diet'] == 'veg').sum()
+            total_count = len(survey_data)
+            survey_veg_f = veg_count / total_count
+            
+            if survey_veg_f not in veg_fractions:
+                veg_fractions = np.append(veg_fractions, survey_veg_f)
+                
+        print(f"Added survey-derived parameters to the sweep: α range now {len(alpha_range)} values, β range now {len(beta_range)} values")
     
     print(f"Running tipping point analysis with {len(alpha_range)}x{len(beta_range)} parameter combinations...")
     
@@ -231,11 +253,32 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg_fraction=0.
     if veg_fractions is None:
         veg_fractions = np.linspace(0.1, max_veg_fraction, 10)
     
-    # Handle survey data if in parameterized mode
+    # If in parameterized mode, include survey-derived veg_fraction in the analysis
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        survey_params = extract_survey_parameters(survey_data)
+        
+        # Extract theta, alpha and beta for the simulation parameters
+        survey_params = {}
+        if 'alpha' in survey_data.columns:
+            survey_params['alpha'] = survey_data['alpha'].mean()
+        if 'beta' in survey_data.columns:
+            survey_params['beta'] = survey_data['beta'].mean()
+        if 'theta' in survey_data.columns:
+            survey_params['theta'] = survey_data['theta'].mean()
+            
+        # Update sim parameters
         params.update(survey_params)
+        
+        # Add survey-derived vegetarian fraction to veg_fractions
+        if 'diet' in survey_data.columns:
+            veg_count = (survey_data['diet'] == 'veg').sum()
+            total_count = len(survey_data)
+            survey_veg_f = veg_count / total_count
+            
+            if survey_veg_f <= max_veg_fraction and survey_veg_f not in veg_fractions:
+                veg_fractions = np.append(veg_fractions, survey_veg_f)
+                veg_fractions = np.sort(veg_fractions)
+                print(f"Added survey vegetarian fraction ({survey_veg_f:.2f}) to analysis")
     
     # Filter fractions to respect max_veg_fraction
     veg_fractions = veg_fractions[veg_fractions <= max_veg_fraction]
@@ -292,11 +335,24 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
     if beta_range is None:
         beta_range = np.linspace(0.1, 0.9, 5)
     
-    # Handle survey data if in parameterized mode
+    # If in parameterized mode, include survey-derived parameters in the sweep
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        survey_params = extract_survey_parameters(survey_data)
-        params.update(survey_params)
+        
+        # Add survey-derived alpha and beta values to the parameter space
+        if 'alpha' in survey_data.columns:
+            survey_alpha = survey_data['alpha'].mean()
+            if survey_alpha not in alpha_range:
+                alpha_range = np.append(alpha_range, survey_alpha)
+                alpha_range = np.sort(alpha_range)
+                
+        if 'beta' in survey_data.columns:
+            survey_beta = survey_data['beta'].mean()
+            if survey_beta not in beta_range:
+                beta_range = np.append(beta_range, survey_beta)
+                beta_range = np.sort(beta_range)
+                
+        print(f"Added survey-derived parameters to the sweep: α range now {len(alpha_range)} values, β range now {len(beta_range)} values")
     
     print(f"Running parameter sweep with {len(alpha_range)}x{len(beta_range)} combinations...")
     
@@ -357,11 +413,34 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
     if veg_fractions is None:
         veg_fractions = np.linspace(0.1, 0.9, 5)
     
-    # Handle survey data if in parameterized mode
+    # If in parameterized mode, include survey-derived parameters in the sweep
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        survey_params = extract_survey_parameters(survey_data)
-        params.update(survey_params)
+        
+        # Add survey-derived alpha and beta values to the parameter space
+        if 'alpha' in survey_data.columns:
+            survey_alpha = survey_data['alpha'].mean()
+            if survey_alpha not in alpha_range:
+                alpha_range = np.append(alpha_range, survey_alpha)
+                alpha_range = np.sort(alpha_range)
+                
+        if 'beta' in survey_data.columns:
+            survey_beta = survey_data['beta'].mean()
+            if survey_beta not in beta_range:
+                beta_range = np.append(beta_range, survey_beta)
+                beta_range = np.sort(beta_range)
+        
+        # Add survey-derived vegetarian fraction to the parameter space
+        if 'diet' in survey_data.columns:
+            veg_count = (survey_data['diet'] == 'veg').sum()
+            total_count = len(survey_data)
+            survey_veg_f = veg_count / total_count
+            
+            if survey_veg_f not in veg_fractions:
+                veg_fractions = np.append(veg_fractions, survey_veg_f)
+                veg_fractions = np.sort(veg_fractions)
+                
+        print(f"Added survey-derived parameters to the sweep: α range now {len(alpha_range)} values, β range now {len(beta_range)} values, veg_f range now {len(veg_fractions)} values")
     
     print(f"Running 3D parameter analysis with {len(alpha_range)}x{len(beta_range)}x{len(veg_fractions)} combinations...")
     
@@ -428,11 +507,24 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, ru
     if beta_values is None:
         beta_values = [0.25, 0.5, 0.75]
     
-    # Handle survey data if in parameterized mode
+    # If in parameterized mode, include survey-derived parameters in the analysis
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        survey_params = extract_survey_parameters(survey_data)
-        params.update(survey_params)
+        
+        # Add survey-derived alpha and beta values to the parameter space
+        if 'alpha' in survey_data.columns:
+            survey_alpha = survey_data['alpha'].mean()
+            if survey_alpha not in alpha_values:
+                alpha_values = np.append(alpha_values, survey_alpha)
+                alpha_values = np.sort(alpha_values)
+                
+        if 'beta' in survey_data.columns:
+            survey_beta = survey_data['beta'].mean()
+            if survey_beta not in beta_values:
+                beta_values = np.append(beta_values, survey_beta)
+                beta_values = np.sort(beta_values)
+                
+        print(f"Added survey-derived parameters to the analysis: α values now {len(alpha_values)}, β values now {len(beta_values)}")
     
     print(f"Running trajectory analysis with {len(alpha_values)}x{len(beta_values)} parameter combinations...")
     
@@ -480,7 +572,7 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, ru
 
 def main():
     """Main function with simple menu for analysis selection - no parameter inputs"""
-    print("===== Dietary Contagion Model Analysis =====")
+    print("===== Streamlined Dietary Contagion Model Analysis =====")
     
     # Ask for agent initialization mode
     print("\nAgent Initialization Modes:")

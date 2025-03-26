@@ -329,7 +329,7 @@ def plot_3d_parameter_surface(data=None, file_path=None, save=True, initial_veg_
     
     # Create pivot table for final vegetarian fraction
     pivot_table = filtered_data.pivot_table(
-        index='beta', columns='alpha', values=final_veg_col, aggfunc='mean'
+        index='beta', columns='alpha', values=init_veg_col, aggfunc='mean'
     )
     
     # Create 3D figure
