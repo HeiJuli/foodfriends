@@ -172,7 +172,7 @@ def run_targeted_interventions(base_params, veg_fraction=0.2, steps=25000, num_i
             
             # Initialize model
             model = model_main.Model(params)
-            model.agent_ini(params)
+            model.agent_ini()
             
             # Create network metrics for targeted interventions
             G = model.G1
@@ -198,7 +198,7 @@ def run_targeted_interventions(base_params, veg_fraction=0.2, steps=25000, num_i
             # Convert selected nodes to vegetarians
             for idx in convert_indices:
                 model.agents[idx].diet = "veg"
-                model.agents[idx].C = model.agents[idx].diet_emissions("veg", params)
+                model.agents[idx].C = model.agents[idx].diet_emissions("veg")
             
             # Run the model
             model.record_fraction()  # Record initial state
@@ -209,7 +209,7 @@ def run_targeted_interventions(base_params, veg_fraction=0.2, steps=25000, num_i
                 i = np.random.choice(range(len(model.agents)))
 
                 # Update based on pairwise interaction
-                model.agents[i].step(model.G1, model.agents, params)
+                model.agents[i].step(model.G1, model.agents)
                 
                 # Record system state
                 model.system_C.append(model.get_attribute("C")/params["N"])
