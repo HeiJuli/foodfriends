@@ -25,7 +25,7 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps":50000,
+          "steps": 40000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.1,
           "M": 10, # memory length
@@ -44,13 +44,12 @@ params = {"veg_CO2": 1390,
 
 class Agent():
     
-    
     def __init__(self, i, params, **kwargs):
         
         self.params = params
         # types can be vegetarian or meat eater
-        self.set_params(self.params, **kwargs)
-        self.C = self.diet_emissions(self.diet, self.params)
+        self.set_params(**kwargs)
+        self.C = self.diet_emissions(self.diet)
         self.memory = []
         self.i = i
         self.global_norm = 0.5
@@ -60,10 +59,10 @@ class Agent():
         self.last_change_time = 0  # Track when diet last changed
     
     
-    def set_params(self, params, **kwargs):
+    def set_params(self, **kwargs):
         
-        if params["agent_ini"] != "twin":
-            self.diet = self.choose_diet(self.params)
+        if self.params["agent_ini"] != "twin":
+            self.diet = self.choose_diet()
             self.theta = truncnorm.rvs(-1, 1)
             self.alpha = self.choose_alpha_beta(self.params["alpha"])
             self.beta = self.choose_alpha_beta(self.params["beta"])
@@ -73,18 +72,17 @@ class Agent():
                 
             
         
-    def choose_diet(self, params):
+    def choose_diet(self):
         
         choices = ["veg",  "meat"] #"vegan",
         #TODO: implement determenistic way of initalising agent diets if required
         #currently this should work for networks N >> 1 
-        return np.random.choice(choices, p=[params["veg_f"], params["meat_f"]])
+        return np.random.choice(choices, p=[self.params["veg_f"], self.params["meat_f"]])
 
     
-    def diet_emissions(self, diet, params):
-
+    def diet_emissions(self, diet):
         veg, meat = list(map(lambda x: norm.rvs(loc=x, scale=0.1*x),
-                                list(map(params.get, ["veg_CO2", "meat_CO2"]))))
+                                list(map(self.params.get, ["veg_CO2", "meat_CO2"]))))
         lookup = {"veg": veg, "meat": meat}
 
         return lookup[diet]
@@ -92,15 +90,9 @@ class Agent():
     
     
     def choose_alpha_beta(self, mean):
-        
-    
         a, b = 0, 1
         val = truncnorm.rvs(a, b, loc=mean, scale=mean*0.2)
-        
         return val
-        
-        
-        
         
         
     def prob_calc(self, other_agent):
@@ -207,9 +199,9 @@ class Agent():
         # Calculate ratio based on single comparison
         if len(self.memory) == 0:
             return
-        mem_same = sum(1 for x in self.memory[-params["M"]:] if x == diet)
+        mem_same = sum(1 for x in self.memory[-self.params["M"]:] if x == diet)
         
-        ratio =  [mem_same/len(self.memory[-params["M"]:])][0]
+        ratio =  [mem_same/len(self.memory[-self.params["M"]:])][0]
 
         
         util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
@@ -217,14 +209,13 @@ class Agent():
         return util
     
     
-    def step(self, G, agents, params):
+    def step(self, G, agents):
         """
        Steps agent i forward one t
     
        Args:
            G (dic): an nx graph object
            agents (list): list of agents in G
-           params (dic): model parameters
        Returns:
            
         """
@@ -246,13 +237,13 @@ class Agent():
             
             # Update consumption based on influencer
             self.C = other_agent.C if other_agent.diet == self.diet else \
-                self.diet_emissions(self.diet, params)
+                self.diet_emissions(self.diet)
                 
             # If emissions reduced, attribute to influencing agent
             if self.diet == "veg":
                 self.reduction_tracker(old_C, other_agent)
         
-        self.C = self.diet_emissions(self.diet, self.params)
+        self.C = self.diet_emissions(self.diet)
         
       
         
@@ -288,35 +279,35 @@ class Model():
     
 
 
-    def agent_ini(self, params):
+    def agent_ini(self):
         
         
-        if params["agent_ini"] == "twin":
+        if self.params["agent_ini"] == "twin":
             
-            self.survey_data = pd.read_csv(params["survey_file"])
-            assert len(self.survey_data) == params["N"], "number of nodes does not match number of survey participants"
+            self.survey_data = pd.read_csv(self.params["survey_file"])
+            assert len(self.survey_data) == self.params["N"], "number of nodes does not match number of survey participants"
             
             
             self.agents=[]
             for index, row in self.survey_data.iterrows():
                 agent = Agent(
                     i=row["nomem_encr"],
-                    params=params, 
+                    params=self.params, 
                     alpha=row["alpha"],
                     beta=row["beta"],
                     theta=row["theta"],
-                    diet =row["diet"]
+                    diet=row["diet"]
                 )
                 self.agents.append(agent)
             print(f"Created {len(self.agents)} agents for {self.G1.number_of_nodes()} nodes")
         
-        # elif params["agent_ini"] == "empirical":
+        # elif self.params["agent_ini"] == "empirical":
         #     # Ensure agents are created for each node specifically
-        #     self.agents = [Agent(node, params) for node in self.G1.nodes()]
+        #     self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
             
         else:
             # Ensure agents are created for each node specifically
-            self.agents = [Agent(node, params) for node in self.G1.nodes()]
+            self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
             
 
 
@@ -361,8 +352,8 @@ class Model():
 
     def run(self):
         
-        print(f"Starting model with agent initation mode: {params['agent_ini']}")
-        self.agent_ini(self.params)
+        #print(f"Starting model with agent initation mode: {self.params['agent_ini']}")
+        self.agent_ini()
         self.record_fraction()
         
         time_array = list(range(self.params["steps"]))
@@ -371,7 +362,7 @@ class Model():
             i = np.random.choice(range(len(self.agents)))
             
             # Update based on pairwise interaction
-            self.agents[i].step(self.G1, self.agents, self.params)
+            self.agents[i].step(self.G1, self.agents)
             
             # Record system state
             self.system_C.append(self.get_attribute("C")/self.params["N"])
@@ -394,5 +385,3 @@ if  __name__ ==  '__main__':
 	plt.show()
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
-
-
