@@ -36,7 +36,7 @@ params = {"veg_CO2": 1390,
           'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
-          "agent_ini": "twin", #choose between "twin", "empirical", "synthetic" 
+          "agent_ini": "twin", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/final_data_parameters.csv"
           }
 
@@ -63,10 +63,10 @@ class Agent():
     def set_params(self, params, **kwargs):
         
         if params["agent_ini"] != "twin":
-            self.diet = self.choose_diet()
+            self.diet = self.choose_diet(self.params)
             self.theta = truncnorm.rvs(-1, 1)
-            self.alpha = self.choose_alpha_beta(params["alpha"])
-            self.beta = self.choose_alpha_beta(params["beta"])
+            self.alpha = self.choose_alpha_beta(self.params["alpha"])
+            self.beta = self.choose_alpha_beta(self.params["beta"])
         else:
             for key, value in kwargs.items():
                 setattr(self, key, value)
@@ -91,7 +91,7 @@ class Agent():
 
     
     
-    def choose_alpha_beta(self, mean, params):
+    def choose_alpha_beta(self, mean):
         
     
         a, b = 0, 1
