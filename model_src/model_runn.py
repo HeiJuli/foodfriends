@@ -34,8 +34,62 @@ DEFAULT_PARAMS = {
     "v": 10,
     'topology': "CSF",
     "alpha": 0.4,
-    "beta": 0.6
+    "beta": 0.6,
+    "agent_ini": "synthetic",  # Default to synthetic initialization
+    "survey_file": "../data/final_data_parameters.csv"
 }
+
+def load_survey_data(filepath, variables_to_include):
+    """
+    Load survey file and filter only the needed variables.
+    
+    Args:
+        filepath (str): Path to the survey CSV file.
+        variables_to_include (lists): List of variables to include
+        
+    Returns:
+        pd.DataFrame: Filtered survey data with only necessary columns.
+    """
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Survey data file not found: {filepath}")
+        
+    survey_data = pd.read_csv(filepath)
+    
+    print(f"Loaded survey data with {survey_data.shape[0]} respondents and {survey_data.shape[1]} attributes")
+    
+    # Select only required columns
+    filtered_data = survey_data[variables_to_include]
+    
+    return filtered_data
+
+def extract_survey_parameters(survey_data):
+    """
+    Extract statistical parameters from survey data for parameterized initialization.
+    
+    Args:
+        survey_data (DataFrame): Survey data with parameter columns
+        
+    Returns:
+        dict: Dictionary with parameter distributions
+    """
+    params = {}
+    
+    # Calculate means for parameters of interest
+    if 'alpha' in survey_data.columns:
+        params['alpha'] = survey_data['alpha'].mean()
+    if 'beta' in survey_data.columns:
+        params['beta'] = survey_data['beta'].mean()
+    if 'theta' in survey_data.columns:
+        params['theta'] = survey_data['theta'].mean()
+    
+    # Calculate diet distribution
+    if 'diet' in survey_data.columns:
+        veg_count = (survey_data['diet'] == 'veg').sum()
+        total_count = len(survey_data)
+        params['veg_f'] = veg_count / total_count
+        params['meat_f'] = 1 - params['veg_f']
+    
+    return params
 
 def ensure_output_dir():
     """Ensure model_output directory exists"""
@@ -55,6 +109,14 @@ def timer(func, *args, **kwargs):
 def run_basic_model(params=None):
     """Run a single model simulation with given parameters"""
     params = params or DEFAULT_PARAMS.copy()
+    
+    # Handle survey data if in parameterized mode
+    if params["agent_ini"] == "parameterized":
+        # For parameterized mode, extract statistical parameters from survey
+        survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        survey_params = extract_survey_parameters(survey_data)
+        params.update(survey_params)
+    
     model = model_main.Model(params)
     model.run()
     return model
@@ -65,7 +127,7 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None):
     
     Args:
         params (dict): Model parameters
-        num_runs (int): Number of runs per vegetarian fraction
+        num_runs (int): Number of runs per parameter combination
         veg_fractions (array): Array of vegetarian fractions to test
         
     Returns:
@@ -74,6 +136,12 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None):
     params = DEFAULT_PARAMS.copy() if params is None else params
     if veg_fractions is None:
         veg_fractions = np.linspace(0, 1, 20)
+    
+    # Handle survey data if in parameterized mode
+    if params["agent_ini"] == "parameterized":
+        survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        survey_params = extract_survey_parameters(survey_data)
+        params.update(survey_params)
     
     print(f"Running emissions analysis with {len(veg_fractions)} vegetarian fractions...")
     
@@ -112,6 +180,12 @@ def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, v
         beta_range = np.linspace(0.1, 0.9, 10)
     if veg_fractions is None:
         veg_fractions = [0.2]
+    
+    # Handle survey data if in parameterized mode
+    if params["agent_ini"] == "parameterized":
+        survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        survey_params = extract_survey_parameters(survey_data)
+        params.update(survey_params)
     
     print(f"Running tipping point analysis with {len(alpha_range)}x{len(beta_range)} parameter combinations...")
     
@@ -156,6 +230,12 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg_fraction=0.
     params = DEFAULT_PARAMS.copy() if params is None else params
     if veg_fractions is None:
         veg_fractions = np.linspace(0.1, max_veg_fraction, 10)
+    
+    # Handle survey data if in parameterized mode
+    if params["agent_ini"] == "parameterized":
+        survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        survey_params = extract_survey_parameters(survey_data)
+        params.update(survey_params)
     
     # Filter fractions to respect max_veg_fraction
     veg_fractions = veg_fractions[veg_fractions <= max_veg_fraction]
@@ -211,6 +291,12 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
         alpha_range = np.linspace(0.1, 0.9, 5)
     if beta_range is None:
         beta_range = np.linspace(0.1, 0.9, 5)
+    
+    # Handle survey data if in parameterized mode
+    if params["agent_ini"] == "parameterized":
+        survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        survey_params = extract_survey_parameters(survey_data)
+        params.update(survey_params)
     
     print(f"Running parameter sweep with {len(alpha_range)}x{len(beta_range)} combinations...")
     
@@ -270,6 +356,12 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
         beta_range = np.linspace(0.1, 0.9, 5)
     if veg_fractions is None:
         veg_fractions = np.linspace(0.1, 0.9, 5)
+    
+    # Handle survey data if in parameterized mode
+    if params["agent_ini"] == "parameterized":
+        survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        survey_params = extract_survey_parameters(survey_data)
+        params.update(survey_params)
     
     print(f"Running 3D parameter analysis with {len(alpha_range)}x{len(beta_range)}x{len(veg_fractions)} combinations...")
     
@@ -336,6 +428,12 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, ru
     if beta_values is None:
         beta_values = [0.25, 0.5, 0.75]
     
+    # Handle survey data if in parameterized mode
+    if params["agent_ini"] == "parameterized":
+        survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        survey_params = extract_survey_parameters(survey_data)
+        params.update(survey_params)
+    
     print(f"Running trajectory analysis with {len(alpha_values)}x{len(beta_values)} parameter combinations...")
     
     results = []
@@ -379,9 +477,36 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, ru
     print(f"Results saved to ../model_output/{filename}")
     
     return results_df
+
 def main():
     """Main function with simple menu for analysis selection - no parameter inputs"""
-    print("===== Streamlined Dietary Contagion Model Analysis =====")
+    print("===== Dietary Contagion Model Analysis =====")
+    
+    # Ask for agent initialization mode
+    print("\nAgent Initialization Modes:")
+    print("[1] Synthetic (random parameters)")
+    print("[2] Parameterized (use survey statistics)")
+    print("[3] Twin (1-to-1 with survey data)")
+    
+    init_choice = input("\nSelect initialization mode (1-3, default is 1): ")
+    
+    # Set agent initialization mode
+    agent_ini_mode = "synthetic"
+    if init_choice == '2':
+        agent_ini_mode = "parameterized"
+    elif init_choice == '3':
+        agent_ini_mode = "twin"
+        
+    # Update default parameters with chosen initialization mode
+    params = DEFAULT_PARAMS.copy()
+    params["agent_ini"] = agent_ini_mode
+    
+    # If using survey-based modes, check for survey file
+    if agent_ini_mode in ["parameterized", "twin"]:
+        survey_file = input(f"\nEnter survey file path (default: {params['survey_file']}): ")
+        if survey_file:
+            params["survey_file"] = survey_file
+        print(f"Using survey data from: {params['survey_file']}")
     
     while True:
         print("\nAnalysis Options:")
@@ -400,7 +525,7 @@ def main():
             veg_fractions = np.linspace(0, 1, 5)
             num_runs = 3
             print(f"Running with {len(veg_fractions)} vegetarian fractions, {num_runs} runs each")
-            timer(run_emissions_analysis, num_runs=num_runs, veg_fractions=veg_fractions)
+            timer(run_emissions_analysis, params=params, num_runs=num_runs, veg_fractions=veg_fractions)
             
         elif choice == '2':
             # Fixed parameters
@@ -411,6 +536,7 @@ def main():
             print(f"Initial vegetarian fraction: {veg_fractions[0]}")
             
             timer(run_tipping_point_analysis, 
+                 params=params,
                  alpha_range=alpha_range, 
                  beta_range=beta_range,
                  veg_fractions=veg_fractions)
@@ -422,6 +548,7 @@ def main():
             print(f"Running with vegetarian fractions from {veg_fractions[0]:.1f} to {veg_fractions[-1]:.1f}")
             
             timer(run_veg_growth_analysis, 
+                 params=params,
                  veg_fractions=veg_fractions,
                  max_veg_fraction=max_veg_fraction)
             
@@ -433,6 +560,7 @@ def main():
             print(f"Running {len(alpha_range)}×{len(beta_range)} parameter combinations, {runs_per_combo} runs each")
             
             timer(run_parameter_sweep, 
+                 params=params,
                  alpha_range=alpha_range, 
                  beta_range=beta_range,
                  runs_per_combo=runs_per_combo)
@@ -446,6 +574,7 @@ def main():
             print(f"Running 3D analysis with {len(alpha_range)}×{len(beta_range)}×{len(veg_fractions)} parameter combinations")
             
             timer(run_3d_parameter_analysis,
+                 params=params,
                  alpha_range=alpha_range,
                  beta_range=beta_range,
                  veg_fractions=veg_fractions,
@@ -459,6 +588,7 @@ def main():
             print(f"Running trajectory analysis with {len(alpha_values)}×{len(beta_values)} parameter combinations")
             
             timer(run_trajectory_analysis,
+                 params=params,
                  alpha_values=alpha_values,
                  beta_values=beta_values,
                  runs_per_combo=runs_per_combo)
