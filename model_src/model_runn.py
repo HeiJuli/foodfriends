@@ -22,9 +22,9 @@ from extended_model_runner import (
 DEFAULT_PARAMS = {
     "veg_CO2": 1390,
     "meat_CO2": 2054,
-    "N": 500,
+    "N": 1000,
     "erdos_p": 3,
-    "steps": 5000,
+    "steps": 45000,
     "w_i": 5,
     "immune_n": 0.1,
     "M": 5,
@@ -38,6 +38,33 @@ DEFAULT_PARAMS = {
     "agent_ini": "synthetic",  # Default to synthetic initialization
     "survey_file": "../data/final_data_parameters.csv"
 }
+
+def add_survey_params_to_analysis(survey_data, alpha_values=None, beta_values=None, veg_fractions=None):
+    """Add survey-derived parameters to analysis parameter spaces"""
+    # Add survey-derived alpha values
+    if alpha_values is not None and 'alpha' in survey_data.columns:
+        survey_alpha = survey_data['alpha'].mean()
+        if survey_alpha not in alpha_values:
+            alpha_values = np.append(alpha_values, survey_alpha)
+            alpha_values = np.sort(alpha_values)
+            
+    # Add survey-derived beta values
+    if beta_values is not None and 'beta' in survey_data.columns:
+        survey_beta = survey_data['beta'].mean()
+        if survey_beta not in beta_values:
+            beta_values = np.append(beta_values, survey_beta)
+            beta_values = np.sort(beta_values)
+    
+    # Add survey-derived vegetarian fraction
+    if veg_fractions is not None and 'diet' in survey_data.columns:
+        veg_count = (survey_data['diet'] == 'veg').sum()
+        survey_veg_f = veg_count / len(survey_data)
+        
+        if survey_veg_f not in veg_fractions:
+            veg_fractions = np.append(veg_fractions, survey_veg_f)
+            veg_fractions = np.sort(veg_fractions)
+    
+    return alpha_values, beta_values, veg_fractions
 
 def load_survey_data(filepath, variables_to_include):
     """
@@ -61,6 +88,7 @@ def load_survey_data(filepath, variables_to_include):
     filtered_data = survey_data[variables_to_include]
     
     return filtered_data
+
 
 def extract_survey_parameters(survey_data):
     """
@@ -489,79 +517,128 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
     return results_df
 
 def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, runs_per_combo=3):
-    """
-    Run simulations and save full trajectories for different parameter combinations
-    
-    Args:
-        params (dict): Base model parameters
-        alpha_values (list): Alpha values to test
-        beta_values (list): Beta values to test
-        runs_per_combo (int): Number of runs per parameter combination
-        
-    Returns:
-        pd.DataFrame: Results with trajectory data
-    """
+    """Run simulations and save full trajectories for different agent initialization modes"""
     params = DEFAULT_PARAMS.copy() if params is None else params
     if alpha_values is None:
         alpha_values = [0.25, 0.5, 0.75]
     if beta_values is None:
         beta_values = [0.25, 0.5, 0.75]
     
-    # If in parameterized mode, include survey-derived parameters in the analysis
-    if params["agent_ini"] == "parameterized":
-        survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        
-        # Add survey-derived alpha and beta values to the parameter space
-        if 'alpha' in survey_data.columns:
-            survey_alpha = survey_data['alpha'].mean()
-            if survey_alpha not in alpha_values:
-                alpha_values = np.append(alpha_values, survey_alpha)
-                alpha_values = np.sort(alpha_values)
-                
-        if 'beta' in survey_data.columns:
-            survey_beta = survey_data['beta'].mean()
-            if survey_beta not in beta_values:
-                beta_values = np.append(beta_values, survey_beta)
-                beta_values = np.sort(beta_values)
-                
-        print(f"Added survey-derived parameters to the analysis: α values now {len(alpha_values)}, β values now {len(beta_values)}")
+    all_results = []
     
-    print(f"Running trajectory analysis with {len(alpha_values)}x{len(beta_values)} parameter combinations...")
+    # 1. Run parameter sweep for "synthetic" mode
+    synthetic_params = params.copy()
+    synthetic_params["agent_ini"] = "synthetic"
     
-    results = []
+    print(f"Running parameter sweep for synthetic mode with {len(alpha_values)}x{len(beta_values)} parameter combinations...")
+    
     total_runs = len(alpha_values) * len(beta_values) * runs_per_combo
     run_count = 0
     
     for alpha in alpha_values:
         for beta in beta_values:
-            # Update parameters
-            test_params = params.copy()
+            test_params = synthetic_params.copy()
             test_params["alpha"] = alpha
             test_params["beta"] = beta
-            test_params["steps"] = 5000  # Ensure enough steps for meaningful trajectories
+            test_params["steps"] = 5000
             
             for run in range(runs_per_combo):
                 run_count += 1
-                print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, run {run+1}/{runs_per_combo}")
+                print(f"Synthetic run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, run {run+1}/{runs_per_combo}")
                 
-                # Run model
-                model = model_main.Model(test_params)
+                try:
+                    model = model_main.Model(test_params)
+                    model.run()
+                    
+                    all_results.append({
+                        'agent_ini': "synthetic",
+                        'alpha': alpha,
+                        'beta': beta,
+                        'initial_veg_f': test_params["veg_f"],
+                        'final_veg_f': model.fraction_veg[-1],
+                        'fraction_veg_trajectory': model.fraction_veg,
+                        'system_C_trajectory': model.system_C,
+                        'run': run,
+                        'parameter_set': f"α={alpha:.2f}, β={beta:.2f}"
+                    })
+                except Exception as e:
+                    print(f"Error in synthetic mode: {str(e)}")
+    
+    # 2. Run "parameterized" mode (single configuration with multiple runs)
+    try:
+        param_params = params.copy()
+        param_params["agent_ini"] = "parameterized"
+        
+        # Load survey data to extract means
+        survey_data = load_survey_data(param_params["survey_file"], 
+                                      ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        
+        if 'alpha' in survey_data.columns and 'beta' in survey_data.columns:
+            # Use survey means for alpha and beta
+            param_params["alpha"] = survey_data['alpha'].mean()
+            param_params["beta"] = survey_data['beta'].mean()
+            
+            print(f"Running parameterized mode with survey means: α={param_params['alpha']:.2f}, β={param_params['beta']:.2f}")
+            
+            for run in range(runs_per_combo):
+                print(f"Parameterized run {run+1}/{runs_per_combo}")
+                
+                model = model_main.Model(param_params)
                 model.run()
                 
-                # Record results including full trajectories
-                results.append({
-                    'alpha': alpha,
-                    'beta': beta,
-                    'initial_veg_f': test_params["veg_f"],
+                all_results.append({
+                    'agent_ini': "parameterized",
+                    'alpha': param_params['alpha'],
+                    'beta': param_params['beta'],
+                    'initial_veg_f': param_params["veg_f"],
                     'final_veg_f': model.fraction_veg[-1],
                     'fraction_veg_trajectory': model.fraction_veg,
                     'system_C_trajectory': model.system_C,
-                    'run': run
+                    'run': run,
+                    'parameter_set': "Survey Mean Parameters"
                 })
+    except Exception as e:
+        print(f"Error in parameterized mode: {str(e)}")
     
-    results_df = pd.DataFrame(results)
+    # 3. Run "twin" mode (single configuration with multiple runs)
+    try:
+        twin_params = params.copy()
+        twin_params["agent_ini"] = "twin"
+        
+        # Load survey data to check if it exists
+        survey_data = load_survey_data(twin_params["survey_file"], 
+                                      ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        
+        # Adjust network size to match survey data
+        twin_params["N"] = len(survey_data)
+        print(f"Running twin mode with {twin_params['N']} agents")
+        
+        for run in range(runs_per_combo):
+            print(f"Twin run {run+1}/{runs_per_combo}")
+            
+            model = model_main.Model(twin_params)
+            model.run()
+            
+            # For twin mode, we don't have a single alpha/beta, but we can calculate means
+            mean_alpha = np.mean([agent.alpha for agent in model.agents])
+            mean_beta = np.mean([agent.beta for agent in model.agents])
+            
+            all_results.append({
+                'agent_ini': "twin",
+                'alpha': mean_alpha,  # Average alpha for information only
+                'beta': mean_beta,    # Average beta for information only
+                'initial_veg_f': sum(agent.diet == "veg" for agent in model.agents) / len(model.agents),
+                'final_veg_f': model.fraction_veg[-1],
+                'fraction_veg_trajectory': model.fraction_veg,
+                'system_C_trajectory': model.system_C,
+                'run': run,
+                'parameter_set': "Survey Individual Parameters"
+            })
+    except Exception as e:
+        print(f"Error in twin mode: {str(e)}")
     
     # Save results
+    results_df = pd.DataFrame(all_results)
     ensure_output_dir()
     date_str = date.today().strftime("%Y%m%d")
     filename = f'trajectory_analysis_{date_str}.pkl'

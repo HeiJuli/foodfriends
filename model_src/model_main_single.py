@@ -25,15 +25,15 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 40000,
+          "steps": 50000,
           "w_i": 5, #weight of the replicator function
-          "immune_n": 0.1,
+          "immune_n": 0.3, #TODO: fix this
           "M": 10, # memory length
           "veg_f":0.3, #vegetarian fraction
           "meat_f": 0.7,  #meat eater fraciton
           "n": 5,
           "v": 10,
-          'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "CSF", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
           "agent_ini": "twin", #choose between "twin" "parameterized" or "synthetic" 

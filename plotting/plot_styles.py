@@ -20,11 +20,11 @@ def set_publication_style():
     plt.rcdefaults()
     plt.rcParams.update({
         'font.size': 11,
-        'axes.labelsize': 12,
-        'axes.titlesize': 12,
-        'xtick.labelsize': 10,
-        'ytick.labelsize': 10,
-        'legend.fontsize': 10,
+        'axes.labelsize': 8,
+        'axes.titlesize': 10,
+        'xtick.labelsize': 8,
+        'ytick.labelsize': 8,
+        'legend.fontsize': 8,
         'axes.linewidth': 1.5,
         'grid.linewidth': 0.5,
         'lines.linewidth': 1.8,

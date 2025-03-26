@@ -169,6 +169,190 @@ def plot_emissions_vs_veg_fraction(data=None, file_path=None, save=True):
     
     return plt.gca()
 
+def plot_3d_parameter_surface(data=None, file_path=None, save=True, plot_type='change', initial_veg_value=None):
+    """
+    Create 3D surface showing parameter effects on vegetarian fraction
+    
+    Args:
+        data (DataFrame): DataFrame with alpha, beta, initial_veg_f and final_veg_f
+        file_path (str): Path to data file if data not provided
+        save (bool): Whether to save the plot
+        plot_type (str): Type of plot to create:
+                        'change' - z-axis shows change in veg fraction
+                        'final' - z-axis shows final veg fraction
+        initial_veg_value (float): Specific initial vegetarian fraction to use for surface.
+                                  If None, creates surfaces for all available values.
+    """
+    # Set publication style
+    set_publication_style()
+    
+    # Load data if not provided
+    if data is None:
+        if file_path is None:
+            print("Either data or file_path must be provided")
+            return None
+        data = load_data_file(file_path)
+        if data is None:
+            return None
+            
+    # Check if we have the required columns
+    if not all(col in data.columns for col in ['alpha', 'beta']):
+        print("Data must contain 'alpha' and 'beta' columns")
+        return None
+        
+    # Get the vegetarian fraction columns
+    init_veg_col = 'initial_veg_fraction' if 'initial_veg_fraction' in data.columns else 'initial_veg_f'
+    final_veg_col = 'final_veg_fraction' if 'final_veg_fraction' in data.columns else 'final_veg_f'
+    
+    if init_veg_col not in data.columns or final_veg_col not in data.columns:
+        print("Data must contain initial and final vegetarian fraction columns")
+        return None
+    
+    # Calculate change in vegetarian fraction
+    data['change'] = data[final_veg_col] - data[init_veg_col]
+    
+    # Group by alpha, beta, and initial veg fraction to get average values
+    grouped_data = data.groupby(['alpha', 'beta', init_veg_col])[
+        [final_veg_col, 'change']].mean().reset_index()
+    
+    # Create 3D figure
+    fig = plt.figure(figsize=(12, 10))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Determine what to plot on z-axis based on plot_type
+    if plot_type == 'change':
+        z_col = 'change'
+        color_col = init_veg_col
+        z_label = 'Change in Vegetarian Fraction'
+        color_label = 'Initial Vegetarian Fraction'
+        title = 'Effect of Parameters on Change in Vegetarian Population'
+        # Use a diverging colormap for change (centered at 0)
+        plot_cmap = 'coolwarm'
+    else:  # 'final'
+        z_col = final_veg_col
+        color_col = init_veg_col
+        z_label = 'Final Vegetarian Fraction'
+        color_label = 'Initial Vegetarian Fraction'
+        title = 'Final Vegetarian Fraction by Parameter Combination'
+        # Use our eco-friendly colormap for final values
+        plot_cmap = ECO_CMAP
+    
+    # Choose what to visualize based on initial_veg_value parameter
+    if initial_veg_value is not None:
+        # Find closest initial vegetarian fraction in the data
+        veg_values = sorted(grouped_data[init_veg_col].unique())
+        closest_veg = min(veg_values, key=lambda x: abs(x - initial_veg_value))
+        
+        # Filter to this specific initial vegetarian fraction
+        surface_data = grouped_data[grouped_data[init_veg_col] == closest_veg]
+        
+        # Create pivot table for the surface
+        pivot = surface_data.pivot_table(index='beta', columns='alpha', values=z_col)
+        
+        # Create meshgrid for surface
+        alpha_vals = sorted(surface_data['alpha'].unique())
+        beta_vals = sorted(surface_data['beta'].unique())
+        alpha_grid, beta_grid = np.meshgrid(alpha_vals, beta_vals)
+        
+        # Create surface
+        surf = ax.plot_surface(
+            alpha_grid, beta_grid, pivot.values,
+            cmap=plot_cmap,
+            edgecolor='none',
+            alpha=0.8,
+            antialiased=True
+        )
+        
+        # Add colorbar for the surface
+        cbar = fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+        cbar.set_label(z_label)
+        
+        # Add title with initial vegetarian fraction
+        title = f"{title} (Initial Veg. Fraction = {closest_veg:.2f})"
+        
+    else:
+        # Create a surface for each initial vegetarian fraction
+        veg_values = sorted(grouped_data[init_veg_col].unique())
+        
+        # Create empty array for colorbar mappable
+        norm = plt.Normalize(grouped_data[color_col].min(), grouped_data[color_col].max())
+        sm = plt.cm.ScalarMappable(cmap=plot_cmap, norm=norm)
+        sm.set_array([])
+        
+        # Plot each surface with transparency
+        for veg_f in veg_values:
+            surface_data = grouped_data[grouped_data[init_veg_col] == veg_f]
+            
+            # Create pivot table for the surface
+            pivot = surface_data.pivot_table(index='beta', columns='alpha', values=z_col)
+            
+            # Create meshgrid for surface
+            alpha_vals = sorted(surface_data['alpha'].unique())
+            beta_vals = sorted(surface_data['beta'].unique())
+            alpha_grid, beta_grid = np.meshgrid(alpha_vals, beta_vals)
+            
+            # Create surface with color based on initial veg fraction
+            surf = ax.plot_surface(
+                alpha_grid, beta_grid, pivot.values,
+                color=plt.cm.viridis(norm(veg_f)),
+                edgecolor='none',
+                alpha=0.7,
+                antialiased=True,
+                label=f'Initial Veg = {veg_f:.2f}'
+            )
+        
+        # Add colorbar
+        cbar = fig.colorbar(sm, ax=ax, shrink=0.5, aspect=5)
+        cbar.set_label(color_label)
+    
+    # Add colorbar
+    cbar = fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
+    cbar.set_label(color_label)
+    
+    # Set labels
+    ax.set_xlabel('Individual preference (α)', labelpad=10)
+    ax.set_ylabel('Social influence (β)', labelpad=10)
+    ax.set_zlabel(z_label, labelpad=10)
+    ax.set_title(title)
+    
+    # Improve appearance
+    ax.view_init(elev=30, azim=45)
+    ax.grid(True, alpha=0.3)
+    
+    # Make panes transparent
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+    ax.xaxis.pane.set_edgecolor('w')
+    ax.yaxis.pane.set_edgecolor('w')
+    ax.zaxis.pane.set_edgecolor('w')
+    
+    plt.tight_layout()
+    
+    # Add a custom legend for multiple surfaces if needed
+    if initial_veg_value is None and len(veg_values) > 1:
+        # Create custom proxy artists for legend
+        legend_elements = []
+        for i, veg_f in enumerate(veg_values):
+            color = plt.cm.viridis(norm(veg_f))
+            legend_elements.append(
+                plt.Rectangle((0, 0), 1, 1, fc=color, ec="none", alpha=0.7,
+                             label=f'Initial Veg = {veg_f:.2f}')
+            )
+        
+        # Add legend outside the plot
+        ax.legend(handles=legend_elements, loc='upper left', 
+                 bbox_to_anchor=(1.05, 1), title="Initial Veg. Fraction")
+    
+    # Save plot if requested
+    if save:
+        output_dir = ensure_output_dir()
+        output_file = os.path.join(output_dir, f'3d_parameter_{plot_type}_surface.png')
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {output_file}")
+    
+    return ax
+
 def plot_tipping_point_heatmap(data=None, file_path=None, save=True):
     """
     Create heatmap showing parameter combinations leading to tipping points
@@ -279,112 +463,13 @@ def plot_tipping_point_heatmap(data=None, file_path=None, save=True):
     
     return ax
 
-def plot_3d_parameter_surface(data=None, file_path=None, save=True, initial_veg_value=0.2):
-    """
-    Create 3D surface plot showing how alpha and beta affect final vegetarian fraction
-    
-    Args:
-        data (DataFrame): DataFrame with alpha, beta, initial_veg_f and final_veg_f
-        file_path (str): Path to data file if data not provided
-        save (bool): Whether to save the plot
-        initial_veg_value (float): The specific initial vegetarian fraction to show
-    """
-    # Set publication style
-    set_publication_style()
-    
-    # Load data if not provided
-    if data is None:
-        if file_path is None:
-            print("Either data or file_path must be provided")
-            return None
-        data = load_data_file(file_path)
-        if data is None:
-            return None
-            
-    # Check if we have the required columns
-    if not all(col in data.columns for col in ['alpha', 'beta']):
-        print("Data must contain 'alpha' and 'beta' columns")
-        return None
-        
-    # Get the vegetarian fraction columns
-    init_veg_col = 'initial_veg_fraction' if 'initial_veg_fraction' in data.columns else 'initial_veg_f'
-    final_veg_col = 'final_veg_fraction' if 'final_veg_fraction' in data.columns else 'final_veg_f'
-    
-    if init_veg_col not in data.columns or final_veg_col not in data.columns:
-        print("Data must contain initial and final vegetarian fraction columns")
-        return None
-    
-    # Filter to the specific initial vegetarian fraction we want to display
-    # Find the closest value in the data if exact match doesn't exist
-    veg_values = sorted(data[init_veg_col].unique())
-    closest_veg = min(veg_values, key=lambda x: abs(x - initial_veg_value))
-    filtered_data = data[data[init_veg_col] == closest_veg]
-    
-    # Get unique values for alpha and beta
-    alpha_values = sorted(filtered_data['alpha'].unique())
-    beta_values = sorted(filtered_data['beta'].unique())
-    
-    # Create meshgrid for surface
-    alpha_grid, beta_grid = np.meshgrid(alpha_values, beta_values)
-    
-    # Create pivot table for final vegetarian fraction
-    pivot_table = filtered_data.pivot_table(
-        index='beta', columns='alpha', values=init_veg_col, aggfunc='mean'
-    )
-    
-    # Create 3D figure
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Create the 3D surface plot
-    surf = ax.plot_surface(
-        alpha_grid, 
-        beta_grid, 
-        pivot_table.values,
-        cmap=ECO_CMAP,
-        edgecolor='none',
-        alpha=0.8
-    )
-    
-    # Add colorbar
-    cbar = fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5)
-    cbar.set_label('Final Vegetarian Fraction')
-    
-    # Set labels
-    ax.set_xlabel('Individual preference (α)')
-    ax.set_ylabel('Social influence (β)')
-    ax.set_zlabel('Final Vegetarian Fraction')
-    ax.set_title(f'3D Parameter Surface (Initial Veg. Fraction = {closest_veg:.1f})')
-    
-    # Set ticks to one decimal place
-    ax.set_xticks(alpha_values)
-    ax.set_xticklabels([f"{v:.1f}" for v in alpha_values])
-    ax.set_yticks(beta_values)
-    ax.set_yticklabels([f"{v:.1f}" for v in beta_values])
-    
-    plt.tight_layout()
-    
-    # Save plot if requested
-    if save:
-        output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, f'3d_parameter_surface_init_{closest_veg:.1f}.png')
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {output_file}")
-    
-    return ax
+
 
 def plot_trajectory_grid(data=None, file_path=None, save=True):
-    """
-    Create a grid of trajectory plots for different parameter combinations
-    
-    Args:
-        data (DataFrame): DataFrame with system_C_trajectory and fraction_veg_trajectory
-        file_path (str): Path to data file if data not provided
-        save (bool): Whether to save the plot
-    """
+    """Create a grid of trajectory plots for different parameter combinations and agent initialization modes"""
     # Set publication style
     set_publication_style()
-    
+    linewidth = 0.8
     # Load data if not provided
     if data is None:
         if file_path is None:
@@ -399,77 +484,161 @@ def plot_trajectory_grid(data=None, file_path=None, save=True):
         print("Data must contain fraction_veg_trajectory column")
         return None
     
-    # Define parameter combinations to plot
-    # If alpha/beta are in the data, we'll use those
-    if 'alpha' in data.columns and 'beta' in data.columns:
-        param_combinations = [
-            {'alpha': 0.25, 'beta': 0.75},
-            {'alpha': 0.75, 'beta': 0.25},
-            {'alpha': 0.5, 'beta': 0.5},
-            {'alpha': 0.75, 'beta': 0.75}
-        ]
-    else:
-        # Fall back to simpler approach - just plot the first 4 trajectories
-        param_combinations = None
+    # Parameter combinations for synthetic mode
+    synthetic_parameters = [
+        {'alpha': 0.25, 'beta': 0.75},
+        {'alpha': 0.75, 'beta': 0.25},
+        {'alpha': 0.5, 'beta': 0.5},
+        {'alpha': 0.75, 'beta': 0.75}
+    ]
     
-    # Create figure with 2x2 grid
-    fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+    # Define colorblind-friendly base colors for each mode
+    synthetic_base = "#377eb8"  # Blue
+    parameterized_base = "#ff7f00"  # Orange
+    twin_base = "#984ea3"  # Purple
+    
+    # Function to create color variations (lighter/darker)
+    def create_color_variations(base_color, num_variations):
+        import matplotlib.colors as mcolors
+        base_rgb = mcolors.to_rgb(base_color)
+        colors = []
+        
+        for i in range(num_variations):
+            # Create variations by adjusting brightness
+            # Start from 70% brightness for good visibility
+            factor = 0.7 + (0.3 * i / max(1, num_variations-1))
+            # Ensure we don't exceed RGB limits
+            new_color = tuple(min(1.0, c * factor) for c in base_rgb)
+            colors.append(new_color)
+            
+        return colors
+    
+    # Create figure with 6 subplots (4 for synthetic, 1 for parameterized, 1 for twin)
+    fig, axs = plt.subplots(2, 3, figsize=(8.4, 5.6))
     axs = axs.flatten()
     
-    # If we have parameter combinations, select data accordingly
-    if param_combinations:
-        for i, params in enumerate(param_combinations):
-            if i >= 4:  # Only plot in the 2x2 grid
-                break
+    # 1. Plot synthetic mode parameter sweep (first 4 subplots)
+    for i, params in enumerate(synthetic_parameters):
+        if i >= 4:  # Just in case we have more than 4 parameter sets
+            break
+            
+        ax = axs[i]
+        
+        # Filter data for synthetic mode and this parameter combination
+        synthetic_data = data[data['agent_ini'] == 'synthetic']
+        alpha_tol = 0.05
+        beta_tol = 0.05
+        subset = synthetic_data[
+            (synthetic_data['alpha'] >= params['alpha'] - alpha_tol) & 
+            (synthetic_data['alpha'] <= params['alpha'] + alpha_tol) &
+            (synthetic_data['beta'] >= params['beta'] - beta_tol) & 
+            (synthetic_data['beta'] <= params['beta'] + beta_tol)
+        ]
+        
+        # Plot trajectories with different shades based on run index
+        if len(subset) > 0:
+            # Group by run index to assign consistent colors
+            run_groups = subset.groupby('run')
+            num_runs = len(run_groups)
+            
+            # Create color variations
+            colors = create_color_variations(synthetic_base, num_runs)
+            
+            for run_idx, (_, group) in enumerate(run_groups):
+                color = colors[run_idx % len(colors)]
                 
-            # Filter data for this parameter combination
-            # Allow some tolerance to find closest matches
-            alpha_tol = 0.05
-            beta_tol = 0.05
-            subset = data[
-                (data['alpha'] >= params['alpha'] - alpha_tol) & 
-                (data['alpha'] <= params['alpha'] + alpha_tol) &
-                (data['beta'] >= params['beta'] - beta_tol) & 
-                (data['beta'] <= params['beta'] + beta_tol)
-            ]
+                for _, row in group.iterrows():
+                    trajectory = row['fraction_veg_trajectory']
+                    if isinstance(trajectory, list) and len(trajectory) > 0:
+                        time_steps = np.arange(len(trajectory))
+                        ax.plot(time_steps, trajectory, color=color, linewidth=linewidth)
+                    
+        # Set title and labels
+        ax.set_title(f"Synthetic: α={params['alpha']:.2f}, β={params['beta']:.2f}")
+        ax.set_xlabel("Time Steps")
+        ax.set_ylabel("Vegetarian Fraction")
+        ax.set_ylim(0, 1)
+        apply_axis_style(ax)
+    
+    # 2. Plot parameterized mode (subplot 5)
+    ax = axs[4]
+    param_data = data[data['agent_ini'] == 'parameterized']
+    
+    if len(param_data) > 0:
+        # Group by run index for consistent coloring
+        run_groups = param_data.groupby('run')
+        num_runs = len(run_groups)
+        
+        # Create color variations
+        colors = create_color_variations(parameterized_base, num_runs)
+        
+        for run_idx, (_, group) in enumerate(run_groups):
+            color = colors[run_idx % len(colors)]
             
-            if len(subset) == 0:
-                print(f"No data found for α={params['alpha']}, β={params['beta']}")
-                continue
-            
-            # Plot all trajectories for this parameter combination
-            for _, row in subset.iterrows():
+            for _, row in group.iterrows():
                 trajectory = row['fraction_veg_trajectory']
                 if isinstance(trajectory, list) and len(trajectory) > 0:
                     time_steps = np.arange(len(trajectory))
-                    axs[i].plot(time_steps, trajectory, color='black', alpha=0.5, linewidth=0.8)
-            
-            # Set title and labels
-            axs[i].set_title(f"α={params['alpha']:.2f}, β={params['beta']:.2f}")
-            axs[i].set_xlabel("Time Steps")
-            axs[i].set_ylabel("Vegetarian Fraction")
-            axs[i].set_ylim(0, 1)
-            
-            # Apply style
-            apply_axis_style(axs[i])
-    else:
-        # Just plot the first 4 trajectories
-        for i in range(min(4, len(data))):
-            trajectory = data.iloc[i]['fraction_veg_trajectory']
-            if isinstance(trajectory, list) and len(trajectory) > 0:
-                time_steps = np.arange(len(trajectory))
-                axs[i].plot(time_steps, trajectory, color='black', linewidth=1.2)
+                    ax.plot(time_steps, trajectory, color=color, linewidth=linewidth)
                 
-            # Set title and labels
-            axs[i].set_title(f"Trajectory {i+1}")
-            axs[i].set_xlabel("Time Steps")
-            axs[i].set_ylabel("Vegetarian Fraction")
-            axs[i].set_ylim(0, 1)
-            
-            # Apply style
-            apply_axis_style(axs[i])
+        # Get alpha/beta values for title (use first row since all should be same)
+        if len(param_data) > 0:
+            alpha = param_data.iloc[0]['alpha']
+            beta = param_data.iloc[0]['beta']
+            ax.set_title(f"Parameterized: α={alpha:.2f}, β={beta:.2f}")
+        else:
+            ax.set_title("Parameterized (no data)")
+    else:
+        ax.set_title("Parameterized (no data)")
+        
+    ax.set_xlabel("Time Steps")
+    ax.set_ylabel("Vegetarian Fraction")
+    ax.set_ylim(0, 1)
+    apply_axis_style(ax)
     
+    # 3. Plot twin mode (subplot 6)
+    ax = axs[5]
+    twin_data = data[data['agent_ini'] == 'twin']
+    
+    
+    if len(twin_data) > 0:
+        # Group by run index for consistent coloring
+        run_groups = twin_data.groupby('run')
+        num_runs = len(run_groups)
+        
+        # Create color variations
+        colors = create_color_variations(twin_base, num_runs)
+        
+        for run_idx, (_, group) in enumerate(run_groups):
+            color = colors[run_idx % len(colors)]
+            
+            for _, row in group.iterrows():
+                trajectory = row['fraction_veg_trajectory']
+                if isinstance(trajectory, list) and len(trajectory) > 0:
+                    time_steps = np.arange(len(trajectory))
+                    ax.plot(time_steps, trajectory, color=color, linewidth=linewidth)
+                
+        ax.set_title("Twin: Survey Individual Parameters")
+    else:
+        ax.set_title("Twin (no data)")
+        
+    ax.set_xlabel("Time Steps")
+    ax.set_ylabel("Vegetarian Fraction")
+    ax.set_ylim(0, 1)
+    apply_axis_style(ax)
+    
+    # Add a legend showing the different modes
+    synthetic_patch = plt.Line2D([0], [0], color=synthetic_base, linewidth=linewidth, label='Synthetic')
+    param_patch = plt.Line2D([0], [0], color=parameterized_base, linewidth=linewidth, label='Parameterized')
+    twin_patch = plt.Line2D([0], [0], color=twin_base, linewidth=linewidth, label='Twin')
+    
+    # Position the legend lower
+    fig.legend(handles=[synthetic_patch, param_patch, twin_patch], 
+               loc='lower center', ncol=3, bbox_to_anchor=(0.5, 0.005))
+    
+    #plt.suptitle('Vegetarian Fraction Trajectories by Agent Initialization Mode', fontsize=16)
     plt.tight_layout()
+    plt.subplots_adjust(top=0.92, bottom=0.14)  # More space at bottom for legend
     
     # Save plot if requested
     if save:
@@ -479,73 +648,6 @@ def plot_trajectory_grid(data=None, file_path=None, save=True):
         print(f"Plot saved to {output_file}")
     
     return fig
-def plot_growth_in_veg_population(data=None, file_path=None, save=True):
-    """
-    Create standalone plot showing growth in vegetarian population
-    
-    Args:
-        data (DataFrame): DataFrame with initial_veg_fraction and final_veg_fraction columns
-        file_path (str): Path to data file if data not provided
-        save (bool): Whether to save the plot
-    """
-    # Set publication style
-    set_publication_style()
-    
-    # Load data if not provided
-    if data is None:
-        if file_path is None:
-            print("Either data or file_path must be provided")
-            return None
-        data = load_data_file(file_path)
-        if data is None:
-            return None
-    
-    # Create figure
-    plt.figure(figsize=(8, 6))
-    
-    # Extract data - handle different column naming conventions
-    x_values = data.get('initial_veg_fraction', data.get('initial_veg_f'))
-    y_values = data.get('final_veg_fraction', data.get('final_veg_f'))
-    
-    if x_values is None or y_values is None:
-        print("Data must contain initial_veg_fraction/initial_veg_f and final_veg_fraction/final_veg_f columns")
-        return None
-    
-    # Create scatter plot
-    scatter = plt.scatter(
-        x_values, 
-        y_values,
-        s=70, 
-        alpha=0.8,
-        color=COLORS['vegetation'],
-        edgecolor='white',
-        linewidth=1.0
-    )
-    
-    # Plot y=x reference line
-    plt.plot([0, 1], [0, 1], 'k--', alpha=0.5, label='No Change')
-    
-    # Format plot
-    plt.xlabel('Initial Vegetarian Fraction', fontsize=12)
-    plt.ylabel('Final Vegetarian Fraction', fontsize=12)
-    plt.title('Growth in Vegetarian Population', fontsize=14)
-    plt.xlim(0, 1)
-    plt.ylim(0, 1)
-    plt.legend()
-    
-    # Apply style to axis
-    apply_axis_style(plt.gca())
-    
-    plt.tight_layout()
-    
-    # Save plot if requested
-    if save:
-        output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'growth_in_veg_population.png')
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {output_file}")
-    
-    return plt.gca()
 
 def plot_individual_reductions_distribution(data=None, file_path=None, save=True):
     """
