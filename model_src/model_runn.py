@@ -22,14 +22,14 @@ from extended_model_runner import (
 DEFAULT_PARAMS = {
     "veg_CO2": 1390,
     "meat_CO2": 2054,
-    "N": 1000,
+    "N": 800,
     "erdos_p": 3,
-    "steps": 45000,
+    "steps": 35000,
     "w_i": 5,
     "immune_n": 0.1,
     "M": 5,
-    "veg_f": 0.3,
-    "meat_f": 0.7,
+    "veg_f": 0.2,
+    "meat_f": 0.8,
     "n": 5,
     "v": 10,
     'topology': "CSF",
@@ -39,32 +39,22 @@ DEFAULT_PARAMS = {
     "survey_file": "../data/final_data_parameters.csv"
 }
 
-def add_survey_params_to_analysis(survey_data, alpha_values=None, beta_values=None, veg_fractions=None):
-    """Add survey-derived parameters to analysis parameter spaces"""
-    # Add survey-derived alpha values
-    if alpha_values is not None and 'alpha' in survey_data.columns:
-        survey_alpha = survey_data['alpha'].mean()
-        if survey_alpha not in alpha_values:
-            alpha_values = np.append(alpha_values, survey_alpha)
-            alpha_values = np.sort(alpha_values)
-            
-    # Add survey-derived beta values
-    if beta_values is not None and 'beta' in survey_data.columns:
-        survey_beta = survey_data['beta'].mean()
-        if survey_beta not in beta_values:
-            beta_values = np.append(beta_values, survey_beta)
-            beta_values = np.sort(beta_values)
-    
-    # Add survey-derived vegetarian fraction
-    if veg_fractions is not None and 'diet' in survey_data.columns:
-        veg_count = (survey_data['diet'] == 'veg').sum()
-        survey_veg_f = veg_count / len(survey_data)
-        
-        if survey_veg_f not in veg_fractions:
-            veg_fractions = np.append(veg_fractions, survey_veg_f)
-            veg_fractions = np.sort(veg_fractions)
-    
-    return alpha_values, beta_values, veg_fractions
+def add_survey_params_to_analysis(data, a=None, b=None, t=None, v=None, mv=None):
+    """Add survey params to analysis parameter spaces"""
+    if a is not None and 'alpha' in data.columns:
+        sa = data['alpha'].mean()
+        if sa not in a: a = np.sort(np.append(a, sa))
+    if b is not None and 'beta' in data.columns:
+        sb = data['beta'].mean()
+        if sb not in b: b = np.sort(np.append(b, sb))
+    if t is not None and 'theta' in data.columns:
+        st = data['theta'].mean()
+        if st not in t: t = np.sort(np.append(t, st))
+    if v is not None and 'diet' in data.columns:
+        sv = (data['diet'] == 'veg').sum() / len(data)
+        if (mv is None or sv <= mv) and sv not in v:
+            v = np.sort(np.append(v, sv))
+    return a, b, t, v
 
 def load_survey_data(filepath, variables_to_include):
     """
@@ -88,7 +78,6 @@ def load_survey_data(filepath, variables_to_include):
     filtered_data = survey_data[variables_to_include]
     
     return filtered_data
-
 
 def extract_survey_parameters(survey_data):
     """
@@ -168,8 +157,13 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None):
     # Handle survey data if in parameterized mode
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        
+        # Extract parameters for simulation
         survey_params = extract_survey_parameters(survey_data)
         params.update(survey_params)
+        
+        # Add survey vegetarian fraction to the analysis
+        _, _, _, veg_fractions = add_survey_params_to_analysis(survey_data, v=veg_fractions)
     
     print(f"Running emissions analysis with {len(veg_fractions)} vegetarian fractions...")
     
@@ -213,29 +207,13 @@ def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, v
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
         
-        # Add survey-derived alpha and beta values to the parameter space
-        if 'alpha' in survey_data.columns:
-            survey_alpha = survey_data['alpha'].mean()
-            if survey_alpha not in alpha_range:
-                alpha_range = np.append(alpha_range, survey_alpha)
-                alpha_range = np.sort(alpha_range)
-                
-        if 'beta' in survey_data.columns:
-            survey_beta = survey_data['beta'].mean()
-            if survey_beta not in beta_range:
-                beta_range = np.append(beta_range, survey_beta)
-                beta_range = np.sort(beta_range)
-                
-        # For tipping point analysis, we might want to include the survey veg_fraction
-        if 'diet' in survey_data.columns and len(veg_fractions) > 0:
-            veg_count = (survey_data['diet'] == 'veg').sum()
-            total_count = len(survey_data)
-            survey_veg_f = veg_count / total_count
-            
-            if survey_veg_f not in veg_fractions:
-                veg_fractions = np.append(veg_fractions, survey_veg_f)
-                
-        print(f"Added survey-derived parameters to the sweep: α range now {len(alpha_range)} values, β range now {len(beta_range)} values")
+        # Add survey parameters to the analysis ranges
+        alpha_range, beta_range, _, veg_fractions = add_survey_params_to_analysis(
+            survey_data, 
+            a=alpha_range, 
+            b=beta_range, 
+            v=veg_fractions
+        )
     
     print(f"Running tipping point analysis with {len(alpha_range)}x{len(beta_range)} parameter combinations...")
     
@@ -297,16 +275,12 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg_fraction=0.
         # Update sim parameters
         params.update(survey_params)
         
-        # Add survey-derived vegetarian fraction to veg_fractions
-        if 'diet' in survey_data.columns:
-            veg_count = (survey_data['diet'] == 'veg').sum()
-            total_count = len(survey_data)
-            survey_veg_f = veg_count / total_count
-            
-            if survey_veg_f <= max_veg_fraction and survey_veg_f not in veg_fractions:
-                veg_fractions = np.append(veg_fractions, survey_veg_f)
-                veg_fractions = np.sort(veg_fractions)
-                print(f"Added survey vegetarian fraction ({survey_veg_f:.2f}) to analysis")
+        # Add survey vegetarian fraction to the analysis
+        _, _, _, veg_fractions = add_survey_params_to_analysis(
+            survey_data, 
+            v=veg_fractions,
+            mv=max_veg_fraction
+        )
     
     # Filter fractions to respect max_veg_fraction
     veg_fractions = veg_fractions[veg_fractions <= max_veg_fraction]
@@ -343,7 +317,6 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg_fraction=0.
     
     return results_df
 
-
 def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per_combo=3):
     """
     Run parameter sweep focusing on individual reductions attribution
@@ -367,20 +340,12 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
         
-        # Add survey-derived alpha and beta values to the parameter space
-        if 'alpha' in survey_data.columns:
-            survey_alpha = survey_data['alpha'].mean()
-            if survey_alpha not in alpha_range:
-                alpha_range = np.append(alpha_range, survey_alpha)
-                alpha_range = np.sort(alpha_range)
-                
-        if 'beta' in survey_data.columns:
-            survey_beta = survey_data['beta'].mean()
-            if survey_beta not in beta_range:
-                beta_range = np.append(beta_range, survey_beta)
-                beta_range = np.sort(beta_range)
-                
-        print(f"Added survey-derived parameters to the sweep: α range now {len(alpha_range)} values, β range now {len(beta_range)} values")
+        # Add survey parameters to the analysis ranges
+        alpha_range, beta_range, _, _ = add_survey_params_to_analysis(
+            survey_data, 
+            a=alpha_range, 
+            b=beta_range
+        )
     
     print(f"Running parameter sweep with {len(alpha_range)}x{len(beta_range)} combinations...")
     
@@ -445,30 +410,13 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
         
-        # Add survey-derived alpha and beta values to the parameter space
-        if 'alpha' in survey_data.columns:
-            survey_alpha = survey_data['alpha'].mean()
-            if survey_alpha not in alpha_range:
-                alpha_range = np.append(alpha_range, survey_alpha)
-                alpha_range = np.sort(alpha_range)
-                
-        if 'beta' in survey_data.columns:
-            survey_beta = survey_data['beta'].mean()
-            if survey_beta not in beta_range:
-                beta_range = np.append(beta_range, survey_beta)
-                beta_range = np.sort(beta_range)
-        
-        # Add survey-derived vegetarian fraction to the parameter space
-        if 'diet' in survey_data.columns:
-            veg_count = (survey_data['diet'] == 'veg').sum()
-            total_count = len(survey_data)
-            survey_veg_f = veg_count / total_count
-            
-            if survey_veg_f not in veg_fractions:
-                veg_fractions = np.append(veg_fractions, survey_veg_f)
-                veg_fractions = np.sort(veg_fractions)
-                
-        print(f"Added survey-derived parameters to the sweep: α range now {len(alpha_range)} values, β range now {len(beta_range)} values, veg_f range now {len(veg_fractions)} values")
+        # Add survey parameters to the analysis ranges
+        alpha_range, beta_range, veg_fractions = add_survey_params_to_analysis(
+            survey_data, 
+            a=alpha_range, 
+            b=beta_range,
+            v=veg_fractions
+        )
     
     print(f"Running 3D parameter analysis with {len(alpha_range)}x{len(beta_range)}x{len(veg_fractions)} combinations...")
     
@@ -516,136 +464,90 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
     
     return results_df
 
-def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, runs_per_combo=3):
-    """Run simulations and save full trajectories for different agent initialization modes"""
-    params = DEFAULT_PARAMS.copy() if params is None else params
-    if alpha_values is None:
-        alpha_values = [0.25, 0.5, 0.75]
-    if beta_values is None:
-        beta_values = [0.25, 0.5, 0.75]
+def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, theta_values=None, runs_per_combo=3):
+    """Run simulations and save trajectories for different agent modes"""
+    p = DEFAULT_PARAMS.copy() if params is None else params.copy()
+    a = [0.25, 0.5, 0.75] if alpha_values is None else alpha_values
+    b = [0.25, 0.5, 0.75] if beta_values is None else beta_values
+    t = [-0.5, 0, 0.5] if theta_values is None else theta_values  # Default theta values
+    r = []
     
-    all_results = []
+    # Load survey data once if needed
+    sd = None
+    if any(m in [p.get("agent_ini"), "parameterized", "twin"] for m in ["parameterized", "twin"]):
+        sd = load_survey_data(p["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
+        sm = {'alpha': sd['alpha'].mean(), 'beta': sd['beta'].mean(), 'theta': sd['theta'].mean()}
     
-    # 1. Run parameter sweep for "synthetic" mode
-    synthetic_params = params.copy()
-    synthetic_params["agent_ini"] = "synthetic"
+    # 1. Synthetic mode
+    syn = p.copy()
+    syn["agent_ini"] = "synthetic"
+    total_combos = len(a) * len(b) * len(t)
+    combo_count = 0
+    print(f"Running synthetic mode: {total_combos} parameter combinations * {runs_per_combo} runs each")
+    for ax in a:
+        for bx in b:
+            for tx in t:  # Added loop for theta values
+                combo_count += 1
+                print(f"Synthetic combo {combo_count}/{total_combos}: α={ax:.2f}, β={bx:.2f}, θ={tx:.2f}")
+                syn.update({"alpha": ax, "beta": bx, "theta": tx})
+                for i in range(runs_per_combo):
+                    try:
+                        m = model_main.Model(syn)
+                        m.run()
+                        r.append({
+                            'agent_ini': "synthetic", 'alpha': ax, 'beta': bx, 'theta': tx,
+                            'initial_veg_f': syn["veg_f"], 'final_veg_f': m.fraction_veg[-1],
+                            'fraction_veg_trajectory': m.fraction_veg, 'system_C_trajectory': m.system_C,
+                            'run': i, 'parameter_set': f"α={ax:.2f}, β={bx:.2f}, θ={tx:.2f}"
+                        })
+                    except Exception as e: print(f"Error in synthetic run: {e}")
     
-    print(f"Running parameter sweep for synthetic mode with {len(alpha_values)}x{len(beta_values)} parameter combinations...")
-    
-    total_runs = len(alpha_values) * len(beta_values) * runs_per_combo
-    run_count = 0
-    
-    for alpha in alpha_values:
-        for beta in beta_values:
-            test_params = synthetic_params.copy()
-            test_params["alpha"] = alpha
-            test_params["beta"] = beta
-            test_params["steps"] = 5000
-            
-            for run in range(runs_per_combo):
-                run_count += 1
-                print(f"Synthetic run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, run {run+1}/{runs_per_combo}")
-                
-                try:
-                    model = model_main.Model(test_params)
-                    model.run()
-                    
-                    all_results.append({
-                        'agent_ini': "synthetic",
-                        'alpha': alpha,
-                        'beta': beta,
-                        'initial_veg_f': test_params["veg_f"],
-                        'final_veg_f': model.fraction_veg[-1],
-                        'fraction_veg_trajectory': model.fraction_veg,
-                        'system_C_trajectory': model.system_C,
-                        'run': run,
-                        'parameter_set': f"α={alpha:.2f}, β={beta:.2f}"
-                    })
-                except Exception as e:
-                    print(f"Error in synthetic mode: {str(e)}")
-    
-    # 2. Run "parameterized" mode (single configuration with multiple runs)
-    try:
-        param_params = params.copy()
-        param_params["agent_ini"] = "parameterized"
-        
-        # Load survey data to extract means
-        survey_data = load_survey_data(param_params["survey_file"], 
-                                      ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        
-        if 'alpha' in survey_data.columns and 'beta' in survey_data.columns:
-            # Use survey means for alpha and beta
-            param_params["alpha"] = survey_data['alpha'].mean()
-            param_params["beta"] = survey_data['beta'].mean()
-            
-            print(f"Running parameterized mode with survey means: α={param_params['alpha']:.2f}, β={param_params['beta']:.2f}")
-            
-            for run in range(runs_per_combo):
-                print(f"Parameterized run {run+1}/{runs_per_combo}")
-                
-                model = model_main.Model(param_params)
-                model.run()
-                
-                all_results.append({
-                    'agent_ini': "parameterized",
-                    'alpha': param_params['alpha'],
-                    'beta': param_params['beta'],
-                    'initial_veg_f': param_params["veg_f"],
-                    'final_veg_f': model.fraction_veg[-1],
-                    'fraction_veg_trajectory': model.fraction_veg,
-                    'system_C_trajectory': model.system_C,
-                    'run': run,
+    # 2+3. Survey-based modes
+    if sd is not None:
+        # Parameterized mode
+        print(f"Running parameterized mode: {runs_per_combo} runs with survey means")
+        par = p.copy()
+        par.update({"agent_ini": "parameterized", **sm})
+        for i in range(runs_per_combo):
+            print(f"Parameterized run {i+1}/{runs_per_combo}")
+            try:
+                m = model_main.Model(par)
+                m.run()
+                r.append({
+                    'agent_ini': "parameterized", **sm, 'initial_veg_f': par["veg_f"], 
+                    'final_veg_f': m.fraction_veg[-1], 'fraction_veg_trajectory': m.fraction_veg,
+                    'system_C_trajectory': m.system_C, 'run': i, 
                     'parameter_set': "Survey Mean Parameters"
                 })
-    except Exception as e:
-        print(f"Error in parameterized mode: {str(e)}")
-    
-    # 3. Run "twin" mode (single configuration with multiple runs)
-    try:
-        twin_params = params.copy()
-        twin_params["agent_ini"] = "twin"
+            except Exception as e: print(f"Error in parameterized run: {e}")
         
-        # Load survey data to check if it exists
-        survey_data = load_survey_data(twin_params["survey_file"], 
-                                      ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        
-        # Adjust network size to match survey data
-        twin_params["N"] = len(survey_data)
-        print(f"Running twin mode with {twin_params['N']} agents")
-        
-        for run in range(runs_per_combo):
-            print(f"Twin run {run+1}/{runs_per_combo}")
-            
-            model = model_main.Model(twin_params)
-            model.run()
-            
-            # For twin mode, we don't have a single alpha/beta, but we can calculate means
-            mean_alpha = np.mean([agent.alpha for agent in model.agents])
-            mean_beta = np.mean([agent.beta for agent in model.agents])
-            
-            all_results.append({
-                'agent_ini': "twin",
-                'alpha': mean_alpha,  # Average alpha for information only
-                'beta': mean_beta,    # Average beta for information only
-                'initial_veg_f': sum(agent.diet == "veg" for agent in model.agents) / len(model.agents),
-                'final_veg_f': model.fraction_veg[-1],
-                'fraction_veg_trajectory': model.fraction_veg,
-                'system_C_trajectory': model.system_C,
-                'run': run,
-                'parameter_set': "Survey Individual Parameters"
-            })
-    except Exception as e:
-        print(f"Error in twin mode: {str(e)}")
+        # Twin mode
+        print(f"Running twin mode: {runs_per_combo} runs with individual parameters from {len(sd)} survey respondents")
+        twn = p.copy()
+        twn.update({"agent_ini": "twin", "N": len(sd)})
+        for i in range(runs_per_combo):
+            print(f"Twin run {i+1}/{runs_per_combo}")
+            try:
+                m = model_main.Model(twn)
+                m.run()
+                agent_means = {k: np.mean([getattr(ag, k) for ag in m.agents]) for k in ['alpha', 'beta', 'theta']}
+                r.append({
+                    'agent_ini': "twin", **agent_means,
+                    'initial_veg_f': sum(ag.diet=="veg" for ag in m.agents)/len(m.agents),
+                    'final_veg_f': m.fraction_veg[-1],
+                    'fraction_veg_trajectory': m.fraction_veg,
+                    'system_C_trajectory': m.system_C,
+                    'run': i, 'parameter_set': "Survey Individual Parameters"
+                })
+            except Exception as e: print(f"Error in twin run: {e}")
     
     # Save results
-    results_df = pd.DataFrame(all_results)
+    df = pd.DataFrame(r)
     ensure_output_dir()
-    date_str = date.today().strftime("%Y%m%d")
-    filename = f'trajectory_analysis_{date_str}.pkl'
-    results_df.to_pickle(f'../model_output/{filename}')
-    print(f"Results saved to ../model_output/{filename}")
-    
-    return results_df
+    fn = f'trajectory_analysis_{date.today().strftime("%Y%m%d")}.pkl'
+    df.to_pickle(f'../model_output/{fn}')
+    print(f"Saved {len(r)} trajectories to ../model_output/{fn}")
+    return df
 
 def main():
     """Main function with simple menu for analysis selection - no parameter inputs"""
