@@ -27,15 +27,16 @@ params = {"veg_CO2": 1390,
           "erdos_p": 3,
           "steps": 50000,
           "w_i": 5, #weight of the replicator function
-          "immune_n": 0.3, #TODO: fix this
+          "immune_n": 0.10, #TODO: fix this
           "M": 10, # memory length
           "veg_f":0.3, #vegetarian fraction
           "meat_f": 0.7,  #meat eater fraciton
           "n": 5,
           "v": 10,
-          'topology': "CSF", #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
+          "theta": 0, #intrinsic preference (- is for mean, * for vego)
           "agent_ini": "twin", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/final_data_parameters.csv"
           }
@@ -57,13 +58,14 @@ class Agent():
         self.diet_duration = 0  # Track how long agent maintains current diet
         self.diet_history = []  # Track diet changes
         self.last_change_time = 0  # Track when diet last changed
+        self.immune = False
     
     
     def set_params(self, **kwargs):
         
         if self.params["agent_ini"] != "twin":
             self.diet = self.choose_diet()
-            self.theta = truncnorm.rvs(-1, 1)
+            self.theta = truncnorm.rvs(-1, 1, loc=self.params["theta"])
             self.alpha = self.choose_alpha_beta(self.params["alpha"])
             self.beta = self.choose_alpha_beta(self.params["beta"])
         else:
@@ -231,7 +233,7 @@ class Agent():
         # Calculate probability of switching based on pairwise comparison
         prob_switch = self.prob_calc(other_agent)
         
-        if self.flip(prob_switch):
+        if not self.immune and self.flip(prob_switch):
             old_C = self.C
             self.diet = "meat" if self.diet == "veg" else "veg"
             
@@ -300,16 +302,18 @@ class Model():
                 )
                 self.agents.append(agent)
             print(f"Created {len(self.agents)} agents for {self.G1.number_of_nodes()} nodes")
-        
-        # elif self.params["agent_ini"] == "empirical":
-        #     # Ensure agents are created for each node specifically
-        #     self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
+            
+            
             
         else:
             # Ensure agents are created for each node specifically
             self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
             
-
+        
+        n_immune = int(self.params["immune_n"] * len(self.agents))
+        immune_idx = np.random.choice(len(self.agents), n_immune, replace=False)
+        for i in immune_idx:
+            self.agents[i].immune = True
 
     def get_attribute(self, attribute):
         """
