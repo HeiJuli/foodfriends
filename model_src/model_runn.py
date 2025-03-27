@@ -28,8 +28,8 @@ DEFAULT_PARAMS = {
     "w_i": 5,
     "immune_n": 0.1,
     "M": 5,
-    "veg_f": 0.2,
-    "meat_f": 0.8,
+    "veg_f": 0.15,
+    "meat_f": 0.85,
     "n": 5,
     "v": 10,
     'topology': "CSF",
@@ -476,7 +476,13 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, th
     sd = None
     if any(m in [p.get("agent_ini"), "parameterized", "twin"] for m in ["parameterized", "twin"]):
         sd = load_survey_data(p["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
-        sm = {'alpha': sd['alpha'].mean(), 'beta': sd['beta'].mean(), 'theta': sd['theta'].mean()}
+        
+        veg_f, meat_f = extract_survey_parameters(sd)["veg_f"], extract_survey_parameters(sd)["meat_f"]
+        
+        sm = {'alpha': sd['alpha'].mean(), 'beta': sd['beta'].mean(), 'theta': sd['theta'].mean(), \
+              "veg_f": veg_f, "meat_f": meat_f}
+            
+
     
     # 1. Synthetic mode
     syn = p.copy()

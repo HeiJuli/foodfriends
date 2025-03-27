@@ -28,6 +28,23 @@ from plot_styles import (
     ECO_DIV_CMAP
 )
 
+ # Function to create color variations (lighter/darker)
+def create_color_variations(base_color, num_variations):
+    import matplotlib.colors as mcolors
+    base_rgb = mcolors.to_rgb(base_color)
+    colors = []
+    
+    for i in range(num_variations):
+        # Create variations by adjusting brightness
+        # Start from 70% brightness for good visibility
+        factor = 0.7 + (0.3 * i / max(1, num_variations-1))
+        # Ensure we don't exceed RGB limits
+        new_color = tuple(min(1.0, c * factor) for c in base_rgb)
+        colors.append(new_color)
+        
+    return colors
+    
+
 def ensure_output_dir():
     """Ensure visualizations output directory exists"""
     output_dir = '../visualisations_output'
@@ -464,12 +481,12 @@ def plot_tipping_point_heatmap(data=None, file_path=None, save=True):
     return ax
 
 
-
-def plot_trajectory_grid(data=None, file_path=None, save=True):
-    """Create a grid of trajectory plots for different parameter combinations and agent initialization modes"""
+def plot_trajectory_param_twin(data=None, file_path=None, save=True):
+    """Create side-by-side plot of parameterized and twin modes"""
     # Set publication style
     set_publication_style()
     linewidth = 0.8
+    
     # Load data if not provided
     if data is None:
         if file_path is None:
@@ -484,84 +501,15 @@ def plot_trajectory_grid(data=None, file_path=None, save=True):
         print("Data must contain fraction_veg_trajectory column")
         return None
     
-    # Parameter combinations for synthetic mode
-    synthetic_parameters = [
-        {'alpha': 0.25, 'beta': 0.75},
-        {'alpha': 0.75, 'beta': 0.25},
-        {'alpha': 0.5, 'beta': 0.5},
-        {'alpha': 0.75, 'beta': 0.75}
-    ]
-    
-    # Define colorblind-friendly base colors for each mode
-    synthetic_base = "#377eb8"  # Blue
+    # Define colorblind-friendly base colors
     parameterized_base = "#ff7f00"  # Orange
     twin_base = "#984ea3"  # Purple
     
-    # Function to create color variations (lighter/darker)
-    def create_color_variations(base_color, num_variations):
-        import matplotlib.colors as mcolors
-        base_rgb = mcolors.to_rgb(base_color)
-        colors = []
-        
-        for i in range(num_variations):
-            # Create variations by adjusting brightness
-            # Start from 70% brightness for good visibility
-            factor = 0.7 + (0.3 * i / max(1, num_variations-1))
-            # Ensure we don't exceed RGB limits
-            new_color = tuple(min(1.0, c * factor) for c in base_rgb)
-            colors.append(new_color)
-            
-        return colors
+    # Create figure with 2 subplots (1 for parameterized, 1 for twin)
+    fig, axs = plt.subplots(1, 2, figsize=(8, 4))
     
-    # Create figure with 6 subplots (4 for synthetic, 1 for parameterized, 1 for twin)
-    fig, axs = plt.subplots(2, 3, figsize=(8.4, 5.6))
-    axs = axs.flatten()
-    
-    # 1. Plot synthetic mode parameter sweep (first 4 subplots)
-    for i, params in enumerate(synthetic_parameters):
-        if i >= 4:  # Just in case we have more than 4 parameter sets
-            break
-            
-        ax = axs[i]
-        
-        # Filter data for synthetic mode and this parameter combination
-        synthetic_data = data[data['agent_ini'] == 'synthetic']
-        alpha_tol = 0.05
-        beta_tol = 0.05
-        subset = synthetic_data[
-            (synthetic_data['alpha'] >= params['alpha'] - alpha_tol) & 
-            (synthetic_data['alpha'] <= params['alpha'] + alpha_tol) &
-            (synthetic_data['beta'] >= params['beta'] - beta_tol) & 
-            (synthetic_data['beta'] <= params['beta'] + beta_tol)
-        ]
-        
-        # Plot trajectories with different shades based on run index
-        if len(subset) > 0:
-            # Group by run index to assign consistent colors
-            run_groups = subset.groupby('run')
-            num_runs = len(run_groups)
-            
-            # Create color variations
-            colors = create_color_variations(synthetic_base, num_runs)
-            
-            for run_idx, (_, group) in enumerate(run_groups):
-                color = colors[run_idx % len(colors)]
-                
-                for _, row in group.iterrows():
-                    trajectory = row['fraction_veg_trajectory']
-                    if isinstance(trajectory, list) and len(trajectory) > 0:
-                        time_steps = np.arange(len(trajectory))
-                        ax.plot(time_steps, trajectory, color=color, linewidth=linewidth)
-                    
-        # Set title and labels
-        ax.set_title(f"Synthetic: α={params['alpha']:.2f}, β={params['beta']:.2f}")
-        ax.set_xlabel("Time Steps")
-        ax.set_ylabel("Vegetarian Fraction")
-        ax.set_ylim(0, 1)
-        apply_axis_style(ax)
-    
-    # 2. Plot parameterized mode (subplot 5)
-    ax = axs[4]
+    # 1. Plot parameterized mode
+    ax = axs[0]
     param_data = data[data['agent_ini'] == 'parameterized']
     
     if len(param_data) > 0:
@@ -581,13 +529,14 @@ def plot_trajectory_grid(data=None, file_path=None, save=True):
                     time_steps = np.arange(len(trajectory))
                     ax.plot(time_steps, trajectory, color=color, linewidth=linewidth)
                 
-        # Get alpha/beta values for title (use first row since all should be same)
+        # Get parameter values for title
         if len(param_data) > 0:
             alpha = param_data.iloc[0]['alpha']
             beta = param_data.iloc[0]['beta']
-            ax.set_title(f"Parameterized: α={alpha:.2f}, β={beta:.2f}")
+            theta = param_data.iloc[0]['theta'] if 'theta' in param_data.columns else 0
+            ax.set_title(f"Parameterized: α={alpha:.2f}, β={beta:.2f}, θ={theta:.2f}")
         else:
-            ax.set_title("Parameterized (no data)")
+            ax.set_title("Parameterized")
     else:
         ax.set_title("Parameterized (no data)")
         
@@ -596,10 +545,9 @@ def plot_trajectory_grid(data=None, file_path=None, save=True):
     ax.set_ylim(0, 1)
     apply_axis_style(ax)
     
-    # 3. Plot twin mode (subplot 6)
-    ax = axs[5]
+    # 2. Plot twin mode
+    ax = axs[1]
     twin_data = data[data['agent_ini'] == 'twin']
-    
     
     if len(twin_data) > 0:
         # Group by run index for consistent coloring
@@ -628,26 +576,161 @@ def plot_trajectory_grid(data=None, file_path=None, save=True):
     apply_axis_style(ax)
     
     # Add a legend showing the different modes
-    synthetic_patch = plt.Line2D([0], [0], color=synthetic_base, linewidth=linewidth, label='Synthetic')
-    param_patch = plt.Line2D([0], [0], color=parameterized_base, linewidth=linewidth, label='Parameterized')
-    twin_patch = plt.Line2D([0], [0], color=twin_base, linewidth=linewidth, label='Twin')
+    param_patch = plt.Line2D([0], [0], color=parameterized_base, linewidth=linewidth+1, label='Parameterized')
+    twin_patch = plt.Line2D([0], [0], color=twin_base, linewidth=linewidth+1, label='Twin')
     
-    # Position the legend lower
-    fig.legend(handles=[synthetic_patch, param_patch, twin_patch], 
-               loc='lower center', ncol=3, bbox_to_anchor=(0.5, 0.005))
+    fig.legend(handles=[param_patch, twin_patch], 
+               loc='lower center', ncol=2, bbox_to_anchor=(0.5, -0.05))
     
-    #plt.suptitle('Vegetarian Fraction Trajectories by Agent Initialization Mode', fontsize=16)
     plt.tight_layout()
-    plt.subplots_adjust(top=0.92, bottom=0.14)  # More space at bottom for legend
+    plt.subplots_adjust(bottom=0.2)  # More space at bottom for legend
     
     # Save plot if requested
     if save:
         output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'trajectory_grid.png')
+        output_file = os.path.join(output_dir, 'param_twin_trajectories.png')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {output_file}")
     
     return fig
+
+def plot_trajectory_synthetic(data=None, file_path=None, save=True):
+    """Create grid of trajectory plots for synthetic mode with theta parameter"""
+    # Set publication style
+    set_publication_style()
+    linewidth = 0.8
+    
+    # Load data if not provided
+    if data is None:
+        if file_path is None:
+            print("Either data or file_path must be provided")
+            return None
+        data = load_data_file(file_path)
+        if data is None:
+            return None
+    
+    # Filter for synthetic mode only
+    synthetic_data = data[data['agent_ini'] == 'synthetic']
+    
+    if len(synthetic_data) == 0:
+        print("No synthetic data found")
+        return None
+    
+    # Get unique parameter values
+    theta_values = sorted(synthetic_data['theta'].unique())
+    alpha_values = sorted(synthetic_data['alpha'].unique())
+    beta_values = sorted(synthetic_data['beta'].unique())
+    
+    # Determine grid size based on theta values
+    n_theta = len(theta_values)
+    n_plots_per_theta = min(4, len(alpha_values) * len(beta_values))  # Limit to 4 plots per theta
+    
+    # Select which alpha-beta combinations to show
+    # For simplicity, we'll just take the first n_plots_per_theta combinations
+    ab_combinations = []
+    for a in alpha_values:
+        for b in beta_values:
+            ab_combinations.append((a, b))
+            if len(ab_combinations) >= n_plots_per_theta:
+                break
+        if len(ab_combinations) >= n_plots_per_theta:
+            break
+    
+    # Create figure with rows for each theta and columns for each alpha-beta combination
+    fig, axs = plt.subplots(n_theta, n_plots_per_theta, figsize=(3*n_plots_per_theta, 3*n_theta))
+    
+    # Make axs a 2D array even if it's 1D
+    if n_theta == 1 and n_plots_per_theta == 1:
+        axs = np.array([[axs]])
+    elif n_theta == 1:
+        axs = np.array([axs])
+    elif n_plots_per_theta == 1:
+        axs = np.array([[ax] for ax in axs])
+    
+    # Define color for synthetic mode
+    synthetic_base = "#377eb8"  # Blue
+    
+    # Plot each combination
+    for t_idx, theta in enumerate(theta_values):
+        for ab_idx, (alpha, beta) in enumerate(ab_combinations):
+            if ab_idx >= n_plots_per_theta:
+                continue
+                
+            ax = axs[t_idx, ab_idx]
+            
+            # Filter data for this parameter combination
+            alpha_tol = 0.05
+            beta_tol = 0.05
+            theta_tol = 0.05
+            subset = synthetic_data[
+                (synthetic_data['alpha'] >= alpha - alpha_tol) & 
+                (synthetic_data['alpha'] <= alpha + alpha_tol) &
+                (synthetic_data['beta'] >= beta - beta_tol) & 
+                (synthetic_data['beta'] <= beta + beta_tol) &
+                (synthetic_data['theta'] >= theta - theta_tol) &
+                (synthetic_data['theta'] <= theta + theta_tol)
+            ]
+            
+            # Plot trajectories with different shades based on run index
+            if len(subset) > 0:
+                # Group by run index to assign consistent colors
+                run_groups = subset.groupby('run')
+                num_runs = len(run_groups)
+                
+                # Create color variations
+                colors = create_color_variations(synthetic_base, num_runs)
+                
+                for run_idx, (_, group) in enumerate(run_groups):
+                    color = colors[run_idx % len(colors)]
+                    
+                    for _, row in group.iterrows():
+                        trajectory = row['fraction_veg_trajectory']
+                        if isinstance(trajectory, list) and len(trajectory) > 0:
+                            time_steps = np.arange(len(trajectory))
+                            ax.plot(time_steps, trajectory, color=color, linewidth=linewidth)
+            
+            # Set title and labels
+            ax.set_title(f"α={alpha:.2f}, β={beta:.2f}, θ={theta:.2f}")
+            
+            # Only add x-label for bottom row
+            if t_idx == len(theta_values) - 1:
+                ax.set_xlabel("Time Steps")
+            
+            # Only add y-label for leftmost column
+            if ab_idx == 0:
+                ax.set_ylabel("Vegetarian Fraction")
+                
+            ax.set_ylim(0, 1)
+            apply_axis_style(ax)
+    
+    plt.tight_layout()
+    
+    # Save plot if requested
+    if save:
+        output_dir = ensure_output_dir()
+        output_file = os.path.join(output_dir, 'synthetic_trajectories.png')
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
+        print(f"Plot saved to {output_file}")
+    
+    return fig
+
+
+def plot_trajectory_grid(data=None, file_path=None, save=True):
+    """Create separate plots for different agent initialization modes"""
+    # Load data if not provided
+    if data is None:
+        if file_path is None:
+            print("Either data or file_path must be provided")
+            return None
+        data = load_data_file(file_path)
+        if data is None:
+            return None
+    
+    # Create separate plots
+    fig_param_twin = plot_trajectory_param_twin(data, save=save)
+    fig_synthetic = plot_trajectory_synthetic(data, save=save)
+    
+    return (fig_param_twin, fig_synthetic)
 
 def plot_individual_reductions_distribution(data=None, file_path=None, save=True):
     """
