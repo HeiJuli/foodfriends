@@ -29,15 +29,15 @@ params = {"veg_CO2": 1390,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10, #TODO: fix this
           "M": 10, # memory length
-          "veg_f":0.3, #vegetarian fraction
-          "meat_f": 0.7,  #meat eater fraciton
+          "veg_f":0.5, #vegetarian fraction
+          "meat_f": 0.5,  #meat eater fraciton
           "n": 5,
           "v": 10,
           'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
-          "theta": 0, #intrinsic preference (- is for mean, * for vego)
-          "agent_ini": "twin", #choose between "twin" "parameterized" or "synthetic" 
+          "theta": 0, #intrinsic preference (- is for meat, + for vego)
+          "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/final_data_parameters.csv"
           }
 

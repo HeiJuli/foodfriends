@@ -22,7 +22,7 @@ from extended_model_runner import (
 DEFAULT_PARAMS = {
     "veg_CO2": 1390,
     "meat_CO2": 2054,
-    "N": 800,
+    "N": 300,
     "erdos_p": 3,
     "steps": 35000,
     "w_i": 5,
@@ -182,7 +182,7 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None):
     
     return results_df
 
-def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, veg_fractions=None):
+def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, theta_range=None, veg_fractions=None):
     """
     Run parameter sensitivity analysis to find tipping points
     
@@ -190,6 +190,7 @@ def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, v
         params (dict): Model parameters
         alpha_range (array): Array of alpha values
         beta_range (array): Array of beta values
+        theta_range (array): Array of theta values
         veg_fractions (array): Array of initial vegetarian fractions
         
     Returns:
@@ -200,6 +201,8 @@ def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, v
         alpha_range = np.linspace(0.1, 0.9, 10)
     if beta_range is None:
         beta_range = np.linspace(0.1, 0.9, 10)
+    if theta_range is None:
+        theta_range = [-0.5, 0, 0.5]
     if veg_fractions is None:
         veg_fractions = [0.2]
     
@@ -215,22 +218,28 @@ def run_tipping_point_analysis(params=None, alpha_range=None, beta_range=None, v
             v=veg_fractions
         )
     
-    print(f"Running tipping point analysis with {len(alpha_range)}x{len(beta_range)} parameter combinations...")
+    print(f"Running tipping point analysis with {len(alpha_range)}x{len(beta_range)}x{len(theta_range)} parameter combinations...")
     
     all_results = []
     
     for veg_f in veg_fractions:
         print(f"Testing initial vegetarian fraction: {veg_f}")
         
-        results = run_parameter_sensitivity(
-            params,
-            alpha_range=alpha_range,
-            beta_range=beta_range,
-            fixed_veg_f=veg_f
-        )
-        
-        results['initial_veg_f'] = veg_f
-        all_results.append(results)
+        for theta in theta_range:
+            print(f"  Testing theta value: {theta}")
+            theta_params = params.copy()
+            theta_params["theta"] = theta
+            
+            results = run_parameter_sensitivity(
+                theta_params,
+                alpha_range=alpha_range,
+                beta_range=beta_range,
+                fixed_veg_f=veg_f
+            )
+            
+            results['initial_veg_f'] = veg_f
+            results['theta'] = theta
+            all_results.append(results)
     
     combined_df = pd.concat(all_results)
     
@@ -317,7 +326,7 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg_fraction=0.
     
     return results_df
 
-def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per_combo=3):
+def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, theta_range=None, runs_per_combo=3):
     """
     Run parameter sweep focusing on individual reductions attribution
     
@@ -325,6 +334,7 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
         params (dict): Model parameters
         alpha_range (array): Array of alpha values
         beta_range (array): Array of beta values
+        theta_range (array): Array of theta values
         runs_per_combo (int): Number of runs per parameter combination
         
     Returns:
@@ -335,6 +345,8 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
         alpha_range = np.linspace(0.1, 0.9, 5)
     if beta_range is None:
         beta_range = np.linspace(0.1, 0.9, 5)
+    if theta_range is None:
+        theta_range = [-0.5, 0, 0.5]
     
     # If in parameterized mode, include survey-derived parameters in the sweep
     if params["agent_ini"] == "parameterized":
@@ -347,31 +359,34 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
             b=beta_range
         )
     
-    print(f"Running parameter sweep with {len(alpha_range)}x{len(beta_range)} combinations...")
+    print(f"Running parameter sweep with {len(alpha_range)}x{len(beta_range)}x{len(theta_range)} combinations...")
     
     results = []
-    total_runs = len(alpha_range) * len(beta_range) * runs_per_combo
+    total_runs = len(alpha_range) * len(beta_range) * len(theta_range) * runs_per_combo
     run_count = 0
     
     for alpha in alpha_range:
         for beta in beta_range:
-            run_params = params.copy()
-            run_params["alpha"] = alpha
-            run_params["beta"] = beta
-            
-            for run in range(runs_per_combo):
-                run_count += 1
-                print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, run {run+1}/{runs_per_combo}")
+            for theta in theta_range:
+                run_params = params.copy()
+                run_params["alpha"] = alpha
+                run_params["beta"] = beta
+                run_params["theta"] = theta
                 
-                model = run_basic_model(run_params)
-                
-                results.append({
-                    'alpha': alpha,
-                    'beta': beta,
-                    'run': run,
-                    'final_veg_fraction': model.fraction_veg[-1],
-                    'individual_reductions': model.get_attributes("reduction_out")
-                })
+                for run in range(runs_per_combo):
+                    run_count += 1
+                    print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, θ={theta:.2f}, run {run+1}/{runs_per_combo}")
+                    
+                    model = run_basic_model(run_params)
+                    
+                    results.append({
+                        'alpha': alpha,
+                        'beta': beta,
+                        'theta': theta,
+                        'run': run,
+                        'final_veg_fraction': model.fraction_veg[-1],
+                        'individual_reductions': model.get_attributes("reduction_out")
+                    })
     
     results_df = pd.DataFrame(results)
     
@@ -384,14 +399,15 @@ def run_parameter_sweep(params=None, alpha_range=None, beta_range=None, runs_per
     
     return results_df
 
-def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, veg_fractions=None, runs_per_combo=3):
+def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, theta_range=None, veg_fractions=None, runs_per_combo=3):
     """
-    Run a 3D parameter analysis varying alpha, beta, and initial vegetarian fraction
+    Run a 3D parameter analysis varying alpha, beta, theta, and initial vegetarian fraction
     
     Args:
         params (dict): Base model parameters
         alpha_range (array): Array of alpha values to test
         beta_range (array): Array of beta values to test
+        theta_range (array): Array of theta values to test
         veg_fractions (array): Array of initial vegetarian fractions to test
         runs_per_combo (int): Number of runs per parameter combination
         
@@ -403,6 +419,8 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
         alpha_range = np.linspace(0.1, 0.9, 5)
     if beta_range is None:
         beta_range = np.linspace(0.1, 0.9, 5)
+    if theta_range is None:
+        theta_range = [-0.5, 0, 0.5]
     if veg_fractions is None:
         veg_fractions = np.linspace(0.1, 0.9, 5)
     
@@ -411,47 +429,50 @@ def run_3d_parameter_analysis(params=None, alpha_range=None, beta_range=None, ve
         survey_data = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
         
         # Add survey parameters to the analysis ranges
-        alpha_range, beta_range, veg_fractions = add_survey_params_to_analysis(
+        alpha_range, beta_range, _, veg_fractions = add_survey_params_to_analysis(
             survey_data, 
             a=alpha_range, 
-            b=beta_range,
+            b=beta_range, 
             v=veg_fractions
         )
     
-    print(f"Running 3D parameter analysis with {len(alpha_range)}x{len(beta_range)}x{len(veg_fractions)} combinations...")
+    print(f"Running 3D parameter analysis with {len(alpha_range)}x{len(beta_range)}x{len(theta_range)}x{len(veg_fractions)} combinations...")
     
     results = []
-    total_runs = len(alpha_range) * len(beta_range) * len(veg_fractions) * runs_per_combo
+    total_runs = len(alpha_range) * len(beta_range) * len(theta_range) * len(veg_fractions) * runs_per_combo
     run_count = 0
     
     for alpha in alpha_range:
         for beta in beta_range:
-            for veg_f in veg_fractions:
-                # Update parameters
-                test_params = params.copy()
-                test_params["alpha"] = alpha
-                test_params["beta"] = beta
-                test_params["veg_f"] = veg_f
-                test_params["meat_f"] = 1.0 - veg_f
-                
-                for run in range(runs_per_combo):
-                    run_count += 1
-                    print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, veg_f={veg_f:.2f}, run {run+1}/{runs_per_combo}")
+            for theta in theta_range:
+                for veg_f in veg_fractions:
+                    # Update parameters
+                    test_params = params.copy()
+                    test_params["alpha"] = alpha
+                    test_params["beta"] = beta
+                    test_params["theta"] = theta
+                    test_params["veg_f"] = veg_f
+                    test_params["meat_f"] = 1.0 - veg_f
                     
-                    # Run model
-                    model = model_main.Model(test_params)
-                    model.run()
-                    
-                    # Record results
-                    results.append({
-                        'alpha': alpha,
-                        'beta': beta,
-                        'initial_veg_f': veg_f,
-                        'final_veg_f': model.fraction_veg[-1],
-                        'change': model.fraction_veg[-1] - veg_f,
-                        'tipped': model.fraction_veg[-1] > (veg_f * 1.2),  # 20% increase threshold
-                        'final_CO2': model.system_C[-1]
-                    })
+                    for run in range(runs_per_combo):
+                        run_count += 1
+                        print(f"Run {run_count}/{total_runs}: α={alpha:.2f}, β={beta:.2f}, θ={theta:.2f}, veg_f={veg_f:.2f}, run {run+1}/{runs_per_combo}")
+                        
+                        # Run model
+                        model = model_main.Model(test_params)
+                        model.run()
+                        
+                        # Record results
+                        results.append({
+                            'alpha': alpha,
+                            'beta': beta,
+                            'theta': theta,
+                            'initial_veg_f': veg_f,
+                            'final_veg_f': model.fraction_veg[-1],
+                            'change': model.fraction_veg[-1] - veg_f,
+                            'tipped': model.fraction_veg[-1] > (veg_f * 1.2),  # 20% increase threshold
+                            'final_CO2': model.system_C[-1]
+                        })
     
     results_df = pd.DataFrame(results)
     
