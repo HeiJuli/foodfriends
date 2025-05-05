@@ -96,8 +96,10 @@ def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[
         print("No specified theta values found in data")
         return None
     
-    # Create figure with subplots
-    fig, axes = plt.subplots(1, len(theta_values), figsize=(6*len(theta_values), 6), sharey=True)
+    # Create figure with subplots using GridSpec for more control
+    fig = plt.figure(figsize=(6*len(theta_values)+1, 6))
+    gs = fig.add_gridspec(1, len(theta_values), width_ratios=[1]*len(theta_values))
+    axes = [fig.add_subplot(gs[0, i]) for i in range(len(theta_values))]
     
     # Ensure axes is always an array, even with one subplot
     if len(theta_values) == 1:
@@ -144,27 +146,35 @@ def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[
             cbar_kws={'label': 'Final Vegetarian Fraction'} if i == len(theta_values)-1 else None
         )
         
+        # Set subplot title with theta value
+        ax.set_title(f'θ = {theta:.1f}', fontsize=12)
+        
         # Format tick labels to one decimal place
         ax.set_xticks(np.arange(len(alpha_values)) + 0.5)
-        ax.set_xticklabels([f"{v:.1f}" for v in alpha_values], rotation=0)
+        # Explicitly round to 1 decimal place
+        ax.set_xticklabels([f"{round(v, 1):.1f}" for v in alpha_values], rotation=0)
         
         # For y ticks, we need to handle the reversed order
-        if i == 0:  # Only set y-ticks on first subplot
-            ax.set_yticks(np.arange(len(beta_values)) + 0.5)
-            ax.set_yticklabels([f"{v:.1f}" for v in beta_values], rotation=0)  # Already in reverse order
+        # Set y ticks for all subplots explicitly for consistent formatting
+        ax.set_yticks(np.arange(len(beta_values)) + 0.5)
+        # Explicitly round to 1 decimal place before formatting
+        rounded_labels = [f"{round(v, 1):.1f}" for v in beta_values]
+        ax.set_yticklabels(rounded_labels, rotation=0)
         
-        # Set labels
-        ax.set_xlabel('Individual preference (α)', fontsize=12)
-        if i == 0:
+        if i == 0:  # Only set y-axis label on first subplot
             ax.set_ylabel('Social influence (β)', fontsize=12)
+        else:
+            ax.set_ylabel('')  # Remove y label for other plots
         
-        # Add theta value as text annotation
-        ax.text(0.5, 0.95, f'θ = {theta:.1f}', 
-               transform=ax.transAxes, 
-               ha='center', va='top',
-               fontsize=12, fontweight='normal')
+        # Set x label for all plots
+        ax.set_xlabel('Individual preference (α)', fontsize=12)
     
-    plt.tight_layout()
+    # Adjust layout with custom parameters for better spacing
+    plt.tight_layout(pad=1.8)
+    
+    # Set equal heights for all subplots
+    for ax in axes:
+        ax.set_box_aspect(1)
     
     # Save plot if requested
     if save:
@@ -174,7 +184,6 @@ def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[
         print(f"Plot saved to {output_file}")
     
     return fig
-
 def plot_emissions_vs_veg_fraction(data=None, file_path=None, save=True):
     """
     Create scatter plot of final CO2 consumption vs vegetarian fraction
@@ -471,8 +480,8 @@ def plot_tipping_point_heatmap(data=None, file_path=None, save=True, theta_value
         # Define tipping as change greater than 20%
         data['tipped'] = data['change'] > 0.2
     
-    # Create figure with subplots
-    fig, axes = plt.subplots(1, len(theta_values), figsize=(6*len(theta_values), 6), sharey=True)
+    # Create figure with subplots - make the figure a bit wider to accommodate colorbar 
+    fig, axes = plt.subplots(1, len(theta_values), figsize=(6*len(theta_values)+1, 6), sharey=True)
     
     # Ensure axes is always an array, even with one subplot
     if len(theta_values) == 1:
@@ -510,15 +519,6 @@ def plot_tipping_point_heatmap(data=None, file_path=None, save=True, theta_value
             columns=pd.CategoricalIndex(pivot_data['alpha'], categories=alpha_values)
         )
         
-        # Do the same for tipped data
-        tipped_data = theta_data.groupby(['alpha', 'beta'])['tipped'].mean().reset_index()
-        pivot_tipped = pd.pivot_table(
-            tipped_data,
-            values='tipped', 
-            index=pd.CategoricalIndex(tipped_data['beta'], categories=beta_values),
-            columns=pd.CategoricalIndex(tipped_data['alpha'], categories=alpha_values)
-        ).astype(int)
-        
         # Plot heatmap on the corresponding subplot
         ax = axes[i]
         sns.heatmap(
@@ -532,35 +532,35 @@ def plot_tipping_point_heatmap(data=None, file_path=None, save=True, theta_value
             cbar_kws={'label': 'Change in Vegetarian Fraction'} if i == len(theta_values)-1 else None
         )
         
-        # Add contour lines to highlight tipping point boundaries
-        # For this to work with the reversed y-axis, we need to adjust the contour data
-        ax.contour(
-            np.arange(len(alpha_values)) + 0.5, 
-            np.arange(len(beta_values)) + 0.5,
-            pivot_tipped.values, 
-            levels=[0.5], 
-            colors=COLORS['neutral'],
-            linewidths=2
-        )
+        # Set subplot title with theta value
+        ax.set_title(f'θ = {theta:.1f}', fontsize=12)
         
         # Set labels
         ax.set_xlabel('Individual preference (α)', fontsize=12)
         if i == 0:
             ax.set_ylabel('Social influence (β)', fontsize=12)
-        
-        # Add theta value as text annotation
-        ax.text(0.5, 0.95, f'θ = {theta:.1f}', 
-               transform=ax.transAxes, 
-               ha='center', va='top',
-               fontsize=12, fontweight='normal')
+        else:
+            ax.set_ylabel('')  # Remove y label for other plots
         
         # Format tick labels to one decimal place
         ax.set_xticks(np.arange(len(alpha_values)) + 0.5)
         ax.set_xticklabels([f"{v:.1f}" for v in alpha_values], rotation=0)
         
-        if i == 0:  # Only set y-ticks on first subplot
-            ax.set_yticks(np.arange(len(beta_values)) + 0.5)
-            ax.set_yticklabels([f"{v:.1f}" for v in beta_values], rotation=0)  # Already in reverse order
+        # Set y ticks for all subplots for consistent formatting
+        ax.set_yticks(np.arange(len(beta_values)) + 0.5)
+        # Explicitly round to 1 decimal place
+        rounded_labels = [f"{round(v, 1):.1f}" for v in beta_values]
+        ax.set_yticklabels(rounded_labels, rotation=0)
+        
+        # Add black border to the plot
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color('black')
+            spine.set_linewidth(1.0)
+            
+        # Make sure all axes share the y-axis
+        if i > 0:
+            ax.sharey(axes[0])
     
     plt.tight_layout()
     
