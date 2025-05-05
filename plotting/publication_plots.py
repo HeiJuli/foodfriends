@@ -61,14 +61,15 @@ def load_data_file(file_path):
         print(f"Error loading file: {e}")
         return None
 
-def plot_heatmap_alpha_beta(data=None, file_path=None, save=True):
+def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[-0.5, 0, 0.5]):
     """
-    Create heatmap showing how alpha and beta affect system metrics using parameter sweep data
+    Create heatmap showing how alpha and beta affect system metrics for different theta values
     
     Args:
-        data (DataFrame): DataFrame with alpha, beta columns
+        data (DataFrame): DataFrame with alpha, beta, theta columns
         file_path (str): Path to data file if data not provided
         save (bool): Whether to save the plot
+        theta_values (list): List of theta values to plot
     """
     # Set publication style
     set_publication_style()
@@ -82,55 +83,94 @@ def plot_heatmap_alpha_beta(data=None, file_path=None, save=True):
         if data is None:
             return None
     
-    # Ensure alpha, beta columns exist
+    # Ensure alpha, beta, theta columns exist
     if 'alpha' not in data.columns or 'beta' not in data.columns:
         print("Data must contain alpha and beta columns")
         return None
     
-    # Create figure
-    plt.figure(figsize=(8, 6))
+    # Check if theta column exists, if not, assume theta=0 for all
+    if 'theta' not in data.columns:
+        print("Warning: No theta column found, assuming theta=0 for all data")
+        data['theta'] = 0
+        theta_values = [0]
     
-    # Create pivot table for heatmap - average final_veg_fraction by alpha and beta
-    pivot_data = data.groupby(['alpha', 'beta'])['final_veg_fraction'].mean().reset_index()
-    pivot_table = pivot_data.pivot(index='beta', columns='alpha', values='final_veg_fraction')
+    # Filter theta values that exist in the data
+    available_thetas = sorted(data['theta'].unique())
+    theta_values = [t for t in theta_values if t in available_thetas]
     
-    # Plot heatmap
-    ax = sns.heatmap(
-        pivot_table, 
-        cmap=ECO_CMAP, 
-        cbar_kws={'label': 'Final Vegetarian Fraction'}
-    )
+    if not theta_values:
+        print("No specified theta values found in data")
+        return None
     
-    # Round tick labels to one decimal place
-    alpha_values = sorted(data['alpha'].unique())
-    beta_values = sorted(data['beta'].unique())
+    # Create figure with subplots
+    fig, axes = plt.subplots(1, len(theta_values), figsize=(6*len(theta_values), 6), sharey=True)
     
-    plt.xticks(
-        np.arange(len(alpha_values)) + 0.5, 
-        [f"{v:.1f}" for v in alpha_values], 
-        rotation=0
-    )
-    plt.yticks(
-        np.arange(len(beta_values)) + 0.5, 
-        [f"{v:.1f}" for v in beta_values], 
-        rotation=0
-    )
+    # Ensure axes is always an array, even with one subplot
+    if len(theta_values) == 1:
+        axes = [axes]
     
-    # Set labels and title
-    plt.xlabel('Individual preference weight (α)', fontsize=12)
-    plt.ylabel('Social influence weight (β)', fontsize=12)
-    plt.title('Parameter Effect on Growth in Vegetarian Population', fontsize=14)
+    # Store vmin/vmax across all heatmaps for consistent colorbar
+    vmin, vmax = float('inf'), float('-inf')
+    for theta in theta_values:
+        theta_data = data[data['theta'] == theta]
+        pivot_data = theta_data.groupby(['alpha', 'beta'])['final_veg_fraction'].mean().reset_index()
+        if not pivot_data.empty:
+            curr_min = pivot_data['final_veg_fraction'].min()
+            curr_max = pivot_data['final_veg_fraction'].max()
+            vmin = min(vmin, curr_min)
+            vmax = max(vmax, curr_max)
+    
+    # Create a heatmap for each theta value
+    for i, theta in enumerate(theta_values):
+        # Filter data for this theta value
+        theta_data = data[data['theta'] == theta]
+        
+        # Create pivot table for heatmap
+        pivot_data = theta_data.groupby(['alpha', 'beta'])['final_veg_fraction'].mean().reset_index()
+        pivot_table = pivot_data.pivot(index='beta', columns='alpha', values='final_veg_fraction')
+        
+        # Plot heatmap on the corresponding subplot
+        ax = axes[i]
+        sns.heatmap(
+            pivot_table, 
+            cmap=ECO_CMAP,
+            ax=ax,
+            vmin=vmin,
+            vmax=vmax,
+            cbar=(i == len(theta_values)-1),  # Only add colorbar to last plot
+            cbar_kws={'label': 'Final Vegetarian Fraction'} if i == len(theta_values)-1 else None
+        )
+        
+        # Round tick labels to one decimal place
+        alpha_values = sorted(theta_data['alpha'].unique())
+        beta_values = sorted(theta_data['beta'].unique())
+        
+        ax.set_xticks(np.arange(len(alpha_values)) + 0.5)
+        ax.set_xticklabels([f"{v:.1f}" for v in alpha_values], rotation=0)
+        
+        if i == 0:  # Only set y-ticks on first subplot
+            ax.set_yticks(np.arange(len(beta_values)) + 0.5)
+            ax.set_yticklabels([f"{v:.1f}" for v in beta_values], rotation=0)
+        
+        # Set labels and title
+        ax.set_xlabel('Individual preference (α)', fontsize=12)
+        if i == 0:
+            ax.set_ylabel('Social influence (β)', fontsize=12)
+        ax.set_title(f'θ = {theta:.1f}', fontsize=14)
+    
+    # Add a super title
+    plt.suptitle('Parameter Effect on Growth in Vegetarian Population', fontsize=16, y=1.05)
     
     plt.tight_layout()
     
     # Save plot if requested
     if save:
         output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'heatmap_alpha_beta.png')
+        output_file = os.path.join(output_dir, 'heatmap_alpha_beta_theta.png')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {output_file}")
     
-    return ax
+    return fig
 
 def plot_emissions_vs_veg_fraction(data=None, file_path=None, save=True):
     """
@@ -580,15 +620,15 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
     twin_patch = plt.Line2D([0], [0], color=twin_base, linewidth=linewidth+1, label='Twin')
     
     fig.legend(handles=[param_patch, twin_patch], 
-               loc='lower center', ncol=2, bbox_to_anchor=(0.5, -0.05))
+               loc='lower center', ncol=2, bbox_to_anchor=(0.5, -0.03))
     
     plt.tight_layout()
-    plt.subplots_adjust(bottom=0.2)  # More space at bottom for legend
+    plt.subplots_adjust(bottom=0.16)  # More space at bottom for legend
     
     # Save plot if requested
     if save:
         output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'param_twin_trajectories.png')
+        output_file = os.path.join(output_dir, 'param_twin_trajectories.pdf')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {output_file}")
     
@@ -708,7 +748,7 @@ def plot_trajectory_synthetic(data=None, file_path=None, save=True):
     # Save plot if requested
     if save:
         output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'synthetic_trajectories.png')
+        output_file = os.path.join(output_dir, 'synthetic_trajectories.pdf')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {output_file}")
     
@@ -801,7 +841,7 @@ def plot_individual_reductions_distribution(data=None, file_path=None, save=True
     # Save plot if requested
     if save:
         output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'individual_reductions_distribution.png')
+        output_file = os.path.join(output_dir, 'individual_reductions_distribution.pdf')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         
         
