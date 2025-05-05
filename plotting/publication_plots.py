@@ -64,12 +64,6 @@ def load_data_file(file_path):
 def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[-0.5, 0, 0.5]):
     """
     Create heatmap showing how alpha and beta affect system metrics for different theta values
-    
-    Args:
-        data (DataFrame): DataFrame with alpha, beta, theta columns
-        file_path (str): Path to data file if data not provided
-        save (bool): Whether to save the plot
-        theta_values (list): List of theta values to plot
     """
     # Set publication style
     set_publication_style()
@@ -125,9 +119,18 @@ def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[
         # Filter data for this theta value
         theta_data = data[data['theta'] == theta]
         
-        # Create pivot table for heatmap
+        # Create pivot table for heatmap with sorted beta values (descending order for y-axis reversal)
         pivot_data = theta_data.groupby(['alpha', 'beta'])['final_veg_fraction'].mean().reset_index()
-        pivot_table = pivot_data.pivot(index='beta', columns='alpha', values='final_veg_fraction')
+        beta_values = sorted(theta_data['beta'].unique(), reverse=True)  # Sort in descending order
+        alpha_values = sorted(theta_data['alpha'].unique())
+        
+        # Create pivot table with explicitly ordered indices
+        pivot_table = pd.pivot_table(
+            pivot_data,
+            values='final_veg_fraction',
+            index=pd.CategoricalIndex(pivot_data['beta'], categories=beta_values),
+            columns=pd.CategoricalIndex(pivot_data['alpha'], categories=alpha_values)
+        )
         
         # Plot heatmap on the corresponding subplot
         ax = axes[i]
@@ -141,25 +144,25 @@ def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[
             cbar_kws={'label': 'Final Vegetarian Fraction'} if i == len(theta_values)-1 else None
         )
         
-        # Round tick labels to one decimal place
-        alpha_values = sorted(theta_data['alpha'].unique())
-        beta_values = sorted(theta_data['beta'].unique())
-        
+        # Format tick labels to one decimal place
         ax.set_xticks(np.arange(len(alpha_values)) + 0.5)
         ax.set_xticklabels([f"{v:.1f}" for v in alpha_values], rotation=0)
         
+        # For y ticks, we need to handle the reversed order
         if i == 0:  # Only set y-ticks on first subplot
             ax.set_yticks(np.arange(len(beta_values)) + 0.5)
-            ax.set_yticklabels([f"{v:.1f}" for v in beta_values], rotation=0)
+            ax.set_yticklabels([f"{v:.1f}" for v in beta_values], rotation=0)  # Already in reverse order
         
-        # Set labels and title
+        # Set labels
         ax.set_xlabel('Individual preference (α)', fontsize=12)
         if i == 0:
             ax.set_ylabel('Social influence (β)', fontsize=12)
-        ax.set_title(f'θ = {theta:.1f}', fontsize=14)
-    
-    # Add a super title
-    plt.suptitle('Parameter Effect on Growth in Vegetarian Population', fontsize=16, y=1.05)
+        
+        # Add theta value as text annotation
+        ax.text(0.5, 0.95, f'θ = {theta:.1f}', 
+               transform=ax.transAxes, 
+               ha='center', va='top',
+               fontsize=12, fontweight='normal')
     
     plt.tight_layout()
     
@@ -410,15 +413,9 @@ def plot_3d_parameter_surface(data=None, file_path=None, save=True, plot_type='c
     
     return ax
 
-def plot_tipping_point_heatmap(data=None, file_path=None, save=True):
+def plot_tipping_point_heatmap(data=None, file_path=None, save=True, theta_values=[-0.5, 0, 0.5]):
     """
-    Create heatmap showing parameter combinations leading to tipping points
-    (significant changes in vegetarian fraction)
-    
-    Args:
-        data (DataFrame): DataFrame with alpha, beta and change columns
-        file_path (str): Path to data file if data not provided
-        save (bool): Whether to save the plot
+    Create heatmap showing parameter combinations leading to tipping points for different theta values
     """
     # Set publication style
     set_publication_style()
@@ -437,89 +434,144 @@ def plot_tipping_point_heatmap(data=None, file_path=None, save=True):
         print("Data must contain alpha and beta columns")
         return None
     
-    # Create change column if not exist - difference between final and initial vegetarian fraction
+    # Check if theta column exists, if not, assume theta=0 for all
+    if 'theta' not in data.columns:
+        print("Warning: No theta column found, assuming theta=0 for all data")
+        data['theta'] = 0
+        theta_values = [0]
+    
+    # Filter theta values that exist in the data
+    available_thetas = sorted(data['theta'].unique())
+    theta_values = [t for t in theta_values if t in available_thetas]
+    
+    if not theta_values:
+        print("No specified theta values found in data")
+        return None
+    
+    # Create change column if not exist
     if 'change' not in data.columns:
         if 'final_veg_fraction' in data.columns and 'initial_veg_fraction' in data.columns:
             data['change'] = data['final_veg_fraction'] - data['initial_veg_fraction']
         elif 'final_veg_f' in data.columns and 'initial_veg_f' in data.columns:
             data['change'] = data['final_veg_f'] - data['initial_veg_f']
         else:
-            # If we have final but not initial, we can calculate change if we know the fixed initial value
+            # Try to infer change if possible
             if 'final_veg_fraction' in data.columns:
-                # Try to infer a fixed initial vegetarian fraction
                 if 'fixed_veg_f' in data.columns:
                     data['change'] = data['final_veg_fraction'] - data['fixed_veg_f']
                 else:
-                    # Estimate initial veg fraction based on typical values
-                    data['change'] = data['final_veg_fraction'] - 0.2  # Assuming 20% initial
+                    # Estimate initial veg fraction
+                    data['change'] = data['final_veg_fraction'] - 0.2
             else:
                 print("Data must contain columns to calculate change in vegetarian fraction")
                 return None
     
-    # Create tipped column if not exist - binary indicator of whether a tipping point occurred
+    # Create tipped column if not exist
     if 'tipped' not in data.columns:
         # Define tipping as change greater than 20%
         data['tipped'] = data['change'] > 0.2
     
-    # Create figure
-    plt.figure(figsize=(8, 6))
+    # Create figure with subplots
+    fig, axes = plt.subplots(1, len(theta_values), figsize=(6*len(theta_values), 6), sharey=True)
     
-    # Create pivot tables for the heatmap
-    pivot_table = data.pivot_table(index='beta', columns='alpha', values='change')
+    # Ensure axes is always an array, even with one subplot
+    if len(theta_values) == 1:
+        axes = [axes]
     
-    # Use the diverging colormap from plot_styles for our heatmap
-    # This is ideal since our data has a meaningful zero point (no change)
+    # Store vmin/vmax across all heatmaps for consistent colorbar
+    vmin, vmax = float('inf'), float('-inf')
+    for theta in theta_values:
+        theta_data = data[data['theta'] == theta]
+        if not theta_data.empty:
+            curr_min = theta_data['change'].min()
+            curr_max = theta_data['change'].max()
+            vmin = min(vmin, curr_min)
+            vmax = max(vmax, curr_max)
     
-    # Plot heatmap
-    ax = sns.heatmap(
-        pivot_table, 
-        cmap=ECO_DIV_CMAP,  # Use our custom diverging colormap
-        center=0, 
-        cbar_kws={'label': 'Change in Vegetarian Fraction'}
-    )
+    # Center colormap at 0
+    vabs = max(abs(vmin), abs(vmax))
+    vmin, vmax = -vabs, vabs
     
-    # Add contour lines to highlight tipping point boundaries
-    pivot_tipped = data.pivot_table(index='beta', columns='alpha', values='tipped').astype(int)
-    CS = plt.contour(
-        np.arange(len(pivot_table.columns)) + 0.5, 
-        np.arange(len(pivot_table.index)) + 0.5,
-        pivot_tipped.values, 
-        levels=[0.5], 
-        colors=COLORS['neutral'],  # Use our neutral color for contours
-        linewidths=2
-    )
-    
-    # Set labels and title
-    plt.xlabel('Individual preference weight (α)', fontsize=12)
-    plt.ylabel('Social influence weight (β)', fontsize=12)
-    plt.title('Parameter Combinations Leading to Tipping Points', fontsize=14)
-    
-    # Round tick labels to one decimal place
-    alpha_values = sorted(data['alpha'].unique())
-    beta_values = sorted(data['beta'].unique())
-    
-    plt.xticks(
-        np.arange(len(alpha_values)) + 0.5, 
-        [f"{v:.1f}" for v in alpha_values], 
-        rotation=0
-    )
-    plt.yticks(
-        np.arange(len(beta_values)) + 0.5, 
-        [f"{v:.1f}" for v in beta_values], 
-        rotation=0
-    )
+    # Create a heatmap for each theta value
+    for i, theta in enumerate(theta_values):
+        # Filter data for this theta value
+        theta_data = data[data['theta'] == theta]
+        
+        # Get sorted parameter values
+        alpha_values = sorted(theta_data['alpha'].unique())
+        beta_values = sorted(theta_data['beta'].unique(), reverse=True)  # Sort in descending order
+        
+        # Create pivot tables with explicitly ordered indices
+        pivot_data = theta_data.groupby(['alpha', 'beta'])['change'].mean().reset_index()
+        pivot_table = pd.pivot_table(
+            pivot_data,
+            values='change',
+            index=pd.CategoricalIndex(pivot_data['beta'], categories=beta_values),
+            columns=pd.CategoricalIndex(pivot_data['alpha'], categories=alpha_values)
+        )
+        
+        # Do the same for tipped data
+        tipped_data = theta_data.groupby(['alpha', 'beta'])['tipped'].mean().reset_index()
+        pivot_tipped = pd.pivot_table(
+            tipped_data,
+            values='tipped', 
+            index=pd.CategoricalIndex(tipped_data['beta'], categories=beta_values),
+            columns=pd.CategoricalIndex(tipped_data['alpha'], categories=alpha_values)
+        ).astype(int)
+        
+        # Plot heatmap on the corresponding subplot
+        ax = axes[i]
+        sns.heatmap(
+            pivot_table, 
+            cmap=ECO_DIV_CMAP,
+            ax=ax,
+            center=0,
+            vmin=vmin,
+            vmax=vmax,
+            cbar=(i == len(theta_values)-1),  # Only add colorbar to last plot
+            cbar_kws={'label': 'Change in Vegetarian Fraction'} if i == len(theta_values)-1 else None
+        )
+        
+        # Add contour lines to highlight tipping point boundaries
+        # For this to work with the reversed y-axis, we need to adjust the contour data
+        ax.contour(
+            np.arange(len(alpha_values)) + 0.5, 
+            np.arange(len(beta_values)) + 0.5,
+            pivot_tipped.values, 
+            levels=[0.5], 
+            colors=COLORS['neutral'],
+            linewidths=2
+        )
+        
+        # Set labels
+        ax.set_xlabel('Individual preference (α)', fontsize=12)
+        if i == 0:
+            ax.set_ylabel('Social influence (β)', fontsize=12)
+        
+        # Add theta value as text annotation
+        ax.text(0.5, 0.95, f'θ = {theta:.1f}', 
+               transform=ax.transAxes, 
+               ha='center', va='top',
+               fontsize=12, fontweight='normal')
+        
+        # Format tick labels to one decimal place
+        ax.set_xticks(np.arange(len(alpha_values)) + 0.5)
+        ax.set_xticklabels([f"{v:.1f}" for v in alpha_values], rotation=0)
+        
+        if i == 0:  # Only set y-ticks on first subplot
+            ax.set_yticks(np.arange(len(beta_values)) + 0.5)
+            ax.set_yticklabels([f"{v:.1f}" for v in beta_values], rotation=0)  # Already in reverse order
     
     plt.tight_layout()
     
     # Save plot if requested
     if save:
         output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'tipping_point_heatmap.png')
+        output_file = os.path.join(output_dir, 'tipping_point_heatmap_theta.png')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"Plot saved to {output_file}")
     
-    return ax
-
+    return fig
 
 def plot_trajectory_param_twin(data=None, file_path=None, save=True):
     """Create side-by-side plot of parameterized and twin modes"""
