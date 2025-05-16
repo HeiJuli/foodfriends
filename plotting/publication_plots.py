@@ -28,6 +28,10 @@ from plot_styles import (
     ECO_DIV_CMAP
 )
 
+
+#%% Helper Functions
+
+
  # Function to create color variations (lighter/darker)
 def create_color_variations(base_color, num_variations):
     import matplotlib.colors as mcolors
@@ -61,129 +65,290 @@ def load_data_file(file_path):
         print(f"Error loading file: {e}")
         return None
 
-def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[-0.5, 0, 0.5]):
-    """
-    Create heatmap showing how alpha and beta affect system metrics for different theta values
-    """
-    # Set publication style
-    set_publication_style()
-    
-    # Load data if not provided
+
+def _prep_data(data, file_path, theta_values):
+    """Prepare data for heatmap plotting"""
     if data is None:
-        if file_path is None:
-            print("Either data or file_path must be provided")
-            return None
+        if file_path is None: return None
         data = load_data_file(file_path)
-        if data is None:
-            return None
+        if data is None: return None
     
-    # Ensure alpha, beta, theta columns exist
+    # Check required columns
     if 'alpha' not in data.columns or 'beta' not in data.columns:
         print("Data must contain alpha and beta columns")
         return None
     
-    # Check if theta column exists, if not, assume theta=0 for all
+    # Handle theta column
     if 'theta' not in data.columns:
         print("Warning: No theta column found, assuming theta=0 for all data")
         data['theta'] = 0
         theta_values = [0]
     
-    # Filter theta values that exist in the data
+    # Filter available theta values
     available_thetas = sorted(data['theta'].unique())
     theta_values = [t for t in theta_values if t in available_thetas]
-    
     if not theta_values:
         print("No specified theta values found in data")
         return None
     
-    # Create figure with subplots using GridSpec for more control
+    return data, theta_values
+
+def _get_veg_columns(data):
+    """Find vegetarian fraction column names in dataframe and create derived columns"""
+    # Find column names for initial and final vegetarian fractions
+    init_col = next((c for c in ['initial_veg_f', 'initial_veg_fraction', 'veg_f'] 
+                    if c in data.columns), None)
+    final_col = next((c for c in ['final_veg_f', 'final_veg_fraction'] 
+                     if c in data.columns), None)
+    
+    # Handle case where both columns exist
+    if init_col and final_col:
+        # Create change column
+        if 'change' not in data.columns:
+            data['change'] = data[final_col] - data[init_col]
+            print(f"Created 'change' column from {final_col} - {init_col}")
+        
+        # Create tipped column
+        if 'tipped' not in data.columns:
+            data['tipped'] = data['change'] > 0.2
+            print(f"Created 'tipped' column (change > 0.2)")
+    
+    # Handle case where only final column exists
+    elif final_col and not init_col:
+        print(f"Warning: Initial vegetarian fraction column not found, using default value of 0.2")
+        data['change'] = data[final_col] - 0.2
+        data['tipped'] = data[final_col] > 0.4  # 0.2 + 0.2
+    
+    return init_col, final_col, data
+def _create_heatmap(ax, pivot_table, alpha_vals, beta_vals, cmap, vmin, vmax, 
+                   center=None, show_cbar=False, cbar_label=None):
+    """Create a single heatmap on the given axis"""
+    sns.heatmap(
+        pivot_table, 
+        cmap=cmap,
+        ax=ax,
+        vmin=vmin,
+        vmax=vmax,
+        center=center,
+        cbar=show_cbar,
+        cbar_kws={'label': cbar_label} if show_cbar else None
+    )
+    
+    # Format tick labels
+    ax.set_xticks(np.arange(len(alpha_vals)) + 0.5)
+    ax.set_xticklabels([f"{round(v, 1):.1f}" for v in alpha_vals], rotation=0)
+    
+    ax.set_yticks(np.arange(len(beta_vals)) + 0.5)
+    ax.set_yticklabels([f"{round(v, 1):.1f}" for v in beta_vals], rotation=0)
+
+
+#%% Main plotting functions
+
+
+
+def plot_heatmap_alpha_beta(data=None, file_path=None, save=True, theta_values=[-0.5, 0, 0.5], 
+                          aggregate_veg_fractions=True):
+    """Create heatmap of alpha and beta effects, optionally aggregated across veg fractions"""
+    # Set publication style and prepare data
+    set_publication_style()
+    result = _prep_data(data, file_path, theta_values)
+    if result is None: return None
+    data, theta_values = result
+    
+    init_col, final_col, data = _get_veg_columns(data)
+    if not final_col:
+        print("Error: No final vegetarian fraction column found in data")
+        return None
+        
+    can_aggregate = aggregate_veg_fractions and init_col and final_col
+    value_col = final_col  # Default column to plot
+    
+    # Create figure with subplots
     fig = plt.figure(figsize=(6*len(theta_values)+1, 6))
     gs = fig.add_gridspec(1, len(theta_values), width_ratios=[1]*len(theta_values))
     axes = [fig.add_subplot(gs[0, i]) for i in range(len(theta_values))]
+    if len(theta_values) == 1: axes = [axes]
     
-    # Ensure axes is always an array, even with one subplot
-    if len(theta_values) == 1:
-        axes = [axes]
-    
-    # Store vmin/vmax across all heatmaps for consistent colorbar
+    # Calculate vmin/vmax for consistent colorbar
     vmin, vmax = float('inf'), float('-inf')
     for theta in theta_values:
         theta_data = data[data['theta'] == theta]
-        pivot_data = theta_data.groupby(['alpha', 'beta'])['final_veg_fraction'].mean().reset_index()
-        if not pivot_data.empty:
-            curr_min = pivot_data['final_veg_fraction'].min()
-            curr_max = pivot_data['final_veg_fraction'].max()
-            vmin = min(vmin, curr_min)
-            vmax = max(vmax, curr_max)
+        if not theta_data.empty:
+            if can_aggregate:
+                agg = theta_data.groupby(['alpha', 'beta'])[value_col].mean()
+            else:
+                agg = theta_data.groupby(['alpha', 'beta'])[value_col].mean()
+            
+            if not agg.empty:
+                vmin = min(vmin, agg.min())
+                vmax = max(vmax, agg.max())
     
-    # Create a heatmap for each theta value
+    # Create heatmaps for each theta value
     for i, theta in enumerate(theta_values):
-        # Filter data for this theta value
         theta_data = data[data['theta'] == theta]
         
-        # Create pivot table for heatmap with sorted beta values (descending order for y-axis reversal)
-        pivot_data = theta_data.groupby(['alpha', 'beta'])['final_veg_fraction'].mean().reset_index()
-        beta_values = sorted(theta_data['beta'].unique(), reverse=True)  # Sort in descending order
-        alpha_values = sorted(theta_data['alpha'].unique())
+        # Aggregate data if requested
+        if can_aggregate:
+            agg = theta_data.groupby(['alpha', 'beta']).agg({value_col: ['mean', 'std']})
+            agg.columns = ['final_veg_mean', 'final_veg_std']
+            agg = agg.reset_index()
+            pivot_data = agg
+            plot_col = 'final_veg_mean'
+        else:
+            pivot_data = theta_data.groupby(['alpha', 'beta'])[value_col].mean().reset_index()
+            plot_col = value_col
         
-        # Create pivot table with explicitly ordered indices
+        # Get parameter values and create pivot table
+        beta_vals = sorted(pivot_data['beta'].unique(), reverse=True)
+        alpha_vals = sorted(pivot_data['alpha'].unique())
+        
         pivot_table = pd.pivot_table(
             pivot_data,
-            values='final_veg_fraction',
-            index=pd.CategoricalIndex(pivot_data['beta'], categories=beta_values),
-            columns=pd.CategoricalIndex(pivot_data['alpha'], categories=alpha_values)
+            values=plot_col,
+            index=pd.CategoricalIndex(pivot_data['beta'], categories=beta_vals),
+            columns=pd.CategoricalIndex(pivot_data['alpha'], categories=alpha_vals)
         )
         
-        # Plot heatmap on the corresponding subplot
-        ax = axes[i]
-        sns.heatmap(
-            pivot_table, 
-            cmap=ECO_CMAP,
-            ax=ax,
-            vmin=vmin,
-            vmax=vmax,
-            cbar=(i == len(theta_values)-1),  # Only add colorbar to last plot
-            cbar_kws={'label': 'Final Vegetarian Fraction'} if i == len(theta_values)-1 else None
+        # Create heatmap
+        cbar_label = 'Final Vegetarian Fraction (Mean)' if can_aggregate else 'Final Vegetarian Fraction'
+        _create_heatmap(
+            axes[i], pivot_table, alpha_vals, beta_vals, ECO_CMAP, vmin, vmax,
+            show_cbar=(i == len(theta_values)-1), cbar_label=cbar_label
         )
         
-        # Set subplot title with theta value
-        ax.set_title(f'θ = {theta:.1f}', fontsize=12)
-        
-        # Format tick labels to one decimal place
-        ax.set_xticks(np.arange(len(alpha_values)) + 0.5)
-        # Explicitly round to 1 decimal place
-        ax.set_xticklabels([f"{round(v, 1):.1f}" for v in alpha_values], rotation=0)
-        
-        # For y ticks, we need to handle the reversed order
-        # Set y ticks for all subplots explicitly for consistent formatting
-        ax.set_yticks(np.arange(len(beta_values)) + 0.5)
-        # Explicitly round to 1 decimal place before formatting
-        rounded_labels = [f"{round(v, 1):.1f}" for v in beta_values]
-        ax.set_yticklabels(rounded_labels, rotation=0)
-        
-        if i == 0:  # Only set y-axis label on first subplot
-            ax.set_ylabel('Social influence (β)', fontsize=12)
+        # Set labels
+        title = f'θ = {theta:.1f}'
+        if can_aggregate: title += ' (Aggregated)'
+        axes[i].set_title(title, fontsize=12)
+        axes[i].set_xlabel('Individual preference (α)', fontsize=12)
+        if i == 0:
+            axes[i].set_ylabel('Social influence (β)', fontsize=12)
         else:
-            ax.set_ylabel('')  # Remove y label for other plots
-        
-        # Set x label for all plots
-        ax.set_xlabel('Individual preference (α)', fontsize=12)
+            axes[i].set_ylabel('')
     
-    # Adjust layout with custom parameters for better spacing
     plt.tight_layout(pad=1.8)
-    
-    # Set equal heights for all subplots
-    for ax in axes:
-        ax.set_box_aspect(1)
     
     # Save plot if requested
     if save:
         output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'heatmap_alpha_beta_theta.png')
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {output_file}")
+        suffix = 'aggregated' if can_aggregate else 'theta'
+        plt.savefig(f'{output_dir}/heatmap_alpha_beta_{suffix}.pdf', dpi=300, bbox_inches='tight')
     
     return fig
+
+
+
+def plot_tipping_point_heatmap(data=None, file_path=None, save=True, theta_values=[-0.5, 0, 0.5], 
+                              aggregate_veg_fractions=True):
+    """Create tipping point heatmap, optionally aggregated across veg fractions"""
+    # Set publication style and prepare data
+    set_publication_style()
+    result = _prep_data(data, file_path, theta_values)
+    if result is None: return None
+    data, theta_values = result
+    
+    # Get vegetarian fraction columns and create change column if possible
+    init_col, final_col, data = _get_veg_columns(data)
+    
+    # Check if we can create a tipping point plot
+    if 'change' not in data.columns:
+        if final_col:
+            print(f"Warning: 'change' column couldn't be created. Using '{final_col}' instead.")
+            data['change'] = data[final_col]  # Use final value as fallback
+        else:
+            print("Error: Neither 'change' nor final vegetarian fraction columns found in data")
+            return None
+    
+    can_aggregate = aggregate_veg_fractions and init_col
+    
+    # Create figure with subplots
+    fig, axes = plt.subplots(1, len(theta_values), figsize=(6*len(theta_values)+1, 6), sharey=True)
+    if len(theta_values) == 1: axes = [axes]
+    
+    # Calculate vmin/vmax for consistent colorbar
+    vmin, vmax = float('inf'), float('-inf')
+    for theta in theta_values:
+        theta_data = data[data['theta'] == theta]
+        if not theta_data.empty:
+            if can_aggregate:
+                agg = theta_data.groupby(['alpha', 'beta'])['change'].mean()
+            else:
+                agg = theta_data.groupby(['alpha', 'beta'])['change'].mean()
+            
+            if not agg.empty:
+                vmin = min(vmin, agg.min())
+                vmax = max(vmax, agg.max())
+    
+    # Center colormap at 0
+    vabs = max(abs(vmin), abs(vmax))
+    vmin, vmax = -vabs, vabs
+    
+    # Create a heatmap for each theta value
+    for i, theta in enumerate(theta_values):
+        theta_data = data[data['theta'] == theta]
+        
+        # Process data based on aggregation setting
+        if can_aggregate and 'tipped' in data.columns:
+            agg = theta_data.groupby(['alpha', 'beta']).agg({
+                'change': ['mean', 'std'],
+                'tipped': ['mean']
+            })
+            agg.columns = ['change_mean', 'change_std', 'tipping_prob']
+            agg = agg.reset_index()
+            pivot_data = agg
+            change_col = 'change_mean'
+        else:
+            pivot_data = theta_data.groupby(['alpha', 'beta'])['change'].mean().reset_index()
+            change_col = 'change'
+        
+        # Get parameter values and create pivot table
+        alpha_vals = sorted(pivot_data['alpha'].unique())
+        beta_vals = sorted(pivot_data['beta'].unique(), reverse=True)
+        
+        pivot_table = pd.pivot_table(
+            pivot_data,
+            values=change_col,
+            index=pd.CategoricalIndex(pivot_data['beta'], categories=beta_vals),
+            columns=pd.CategoricalIndex(pivot_data['alpha'], categories=alpha_vals)
+        )
+        
+        # Create heatmap
+        cbar_label = 'Change in Vegetarian Fraction (Mean)' if can_aggregate else 'Change in Vegetarian Fraction'
+        _create_heatmap(
+            axes[i], pivot_table, alpha_vals, beta_vals, ECO_DIV_CMAP, vmin, vmax,
+            center=0, show_cbar=(i == len(theta_values)-1), cbar_label=cbar_label
+        )
+        
+        # Set labels
+        title = f'θ = {theta:.1f}'
+        if can_aggregate: title += ' (Aggregated)'
+        axes[i].set_title(title, fontsize=12)
+        axes[i].set_xlabel('Individual preference (α)', fontsize=12)
+        if i == 0:
+            axes[i].set_ylabel('Social influence (β)', fontsize=12)
+        else:
+            axes[i].set_ylabel('')
+        
+        # Add black border to the plot
+        for spine in axes[i].spines.values():
+            spine.set_visible(True)
+            spine.set_color('black')
+            spine.set_linewidth(1.0)
+            
+        # Make sure all axes share the y-axis
+        if i > 0: axes[i].sharey(axes[0])
+    
+    
+    plt.tight_layout()
+    
+    # Save plot if requested
+    if save:
+        output_dir = ensure_output_dir()
+        suffix = 'aggregated' if can_aggregate else 'theta'
+        plt.savefig(f'{output_dir}/tipping_point_heatmap_{suffix}.pdf', dpi=300, bbox_inches='tight')
+    
+    return fig
+
 def plot_emissions_vs_veg_fraction(data=None, file_path=None, save=True):
     """
     Create scatter plot of final CO2 consumption vs vegetarian fraction
@@ -422,156 +587,7 @@ def plot_3d_parameter_surface(data=None, file_path=None, save=True, plot_type='c
     
     return ax
 
-def plot_tipping_point_heatmap(data=None, file_path=None, save=True, theta_values=[-0.5, 0, 0.5]):
-    """
-    Create heatmap showing parameter combinations leading to tipping points for different theta values
-    """
-    # Set publication style
-    set_publication_style()
-    
-    # Load data if not provided
-    if data is None:
-        if file_path is None:
-            print("Either data or file_path must be provided")
-            return None
-        data = load_data_file(file_path)
-        if data is None:
-            return None
-    
-    # Ensure alpha, beta columns exist
-    if 'alpha' not in data.columns or 'beta' not in data.columns:
-        print("Data must contain alpha and beta columns")
-        return None
-    
-    # Check if theta column exists, if not, assume theta=0 for all
-    if 'theta' not in data.columns:
-        print("Warning: No theta column found, assuming theta=0 for all data")
-        data['theta'] = 0
-        theta_values = [0]
-    
-    # Filter theta values that exist in the data
-    available_thetas = sorted(data['theta'].unique())
-    theta_values = [t for t in theta_values if t in available_thetas]
-    
-    if not theta_values:
-        print("No specified theta values found in data")
-        return None
-    
-    # Create change column if not exist
-    if 'change' not in data.columns:
-        if 'final_veg_fraction' in data.columns and 'initial_veg_fraction' in data.columns:
-            data['change'] = data['final_veg_fraction'] - data['initial_veg_fraction']
-        elif 'final_veg_f' in data.columns and 'initial_veg_f' in data.columns:
-            data['change'] = data['final_veg_f'] - data['initial_veg_f']
-        else:
-            # Try to infer change if possible
-            if 'final_veg_fraction' in data.columns:
-                if 'fixed_veg_f' in data.columns:
-                    data['change'] = data['final_veg_fraction'] - data['fixed_veg_f']
-                else:
-                    # Estimate initial veg fraction
-                    data['change'] = data['final_veg_fraction'] - 0.2
-            else:
-                print("Data must contain columns to calculate change in vegetarian fraction")
-                return None
-    
-    # Create tipped column if not exist
-    if 'tipped' not in data.columns:
-        # Define tipping as change greater than 20%
-        data['tipped'] = data['change'] > 0.2
-    
-    # Create figure with subplots - make the figure a bit wider to accommodate colorbar 
-    fig, axes = plt.subplots(1, len(theta_values), figsize=(6*len(theta_values)+1, 6), sharey=True)
-    
-    # Ensure axes is always an array, even with one subplot
-    if len(theta_values) == 1:
-        axes = [axes]
-    
-    # Store vmin/vmax across all heatmaps for consistent colorbar
-    vmin, vmax = float('inf'), float('-inf')
-    for theta in theta_values:
-        theta_data = data[data['theta'] == theta]
-        if not theta_data.empty:
-            curr_min = theta_data['change'].min()
-            curr_max = theta_data['change'].max()
-            vmin = min(vmin, curr_min)
-            vmax = max(vmax, curr_max)
-    
-    # Center colormap at 0
-    vabs = max(abs(vmin), abs(vmax))
-    vmin, vmax = -vabs, vabs
-    
-    # Create a heatmap for each theta value
-    for i, theta in enumerate(theta_values):
-        # Filter data for this theta value
-        theta_data = data[data['theta'] == theta]
-        
-        # Get sorted parameter values
-        alpha_values = sorted(theta_data['alpha'].unique())
-        beta_values = sorted(theta_data['beta'].unique(), reverse=True)  # Sort in descending order
-        
-        # Create pivot tables with explicitly ordered indices
-        pivot_data = theta_data.groupby(['alpha', 'beta'])['change'].mean().reset_index()
-        pivot_table = pd.pivot_table(
-            pivot_data,
-            values='change',
-            index=pd.CategoricalIndex(pivot_data['beta'], categories=beta_values),
-            columns=pd.CategoricalIndex(pivot_data['alpha'], categories=alpha_values)
-        )
-        
-        # Plot heatmap on the corresponding subplot
-        ax = axes[i]
-        sns.heatmap(
-            pivot_table, 
-            cmap=ECO_DIV_CMAP,
-            ax=ax,
-            center=0,
-            vmin=vmin,
-            vmax=vmax,
-            cbar=(i == len(theta_values)-1),  # Only add colorbar to last plot
-            cbar_kws={'label': 'Change in Vegetarian Fraction'} if i == len(theta_values)-1 else None
-        )
-        
-        # Set subplot title with theta value
-        ax.set_title(f'θ = {theta:.1f}', fontsize=12)
-        
-        # Set labels
-        ax.set_xlabel('Individual preference (α)', fontsize=12)
-        if i == 0:
-            ax.set_ylabel('Social influence (β)', fontsize=12)
-        else:
-            ax.set_ylabel('')  # Remove y label for other plots
-        
-        # Format tick labels to one decimal place
-        ax.set_xticks(np.arange(len(alpha_values)) + 0.5)
-        ax.set_xticklabels([f"{v:.1f}" for v in alpha_values], rotation=0)
-        
-        # Set y ticks for all subplots for consistent formatting
-        ax.set_yticks(np.arange(len(beta_values)) + 0.5)
-        # Explicitly round to 1 decimal place
-        rounded_labels = [f"{round(v, 1):.1f}" for v in beta_values]
-        ax.set_yticklabels(rounded_labels, rotation=0)
-        
-        # Add black border to the plot
-        for spine in ax.spines.values():
-            spine.set_visible(True)
-            spine.set_color('black')
-            spine.set_linewidth(1.0)
-            
-        # Make sure all axes share the y-axis
-        if i > 0:
-            ax.sharey(axes[0])
-    
-    plt.tight_layout()
-    
-    # Save plot if requested
-    if save:
-        output_dir = ensure_output_dir()
-        output_file = os.path.join(output_dir, 'tipping_point_heatmap_theta.png')
-        plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        print(f"Plot saved to {output_file}")
-    
-    return fig
+
 
 def plot_trajectory_param_twin(data=None, file_path=None, save=True):
     """Create side-by-side plot of parameterized and twin modes"""
@@ -825,15 +841,7 @@ def plot_trajectory_grid(data=None, file_path=None, save=True):
     return (fig_param_twin, fig_synthetic)
 
 def plot_individual_reductions_distribution(data=None, file_path=None, save=True):
-    """
-    Create distribution plot of individual emission reductions
-    
-    Args:
-        data (DataFrame): DataFrame with individual_reductions column
-        file_path (str): Path to data file if data not provided
-        save (bool): Whether to save the plot
-    """
-    # Set publication style
+    """Create distribution plot of individual emission reductions"""
     set_publication_style()
     
     # Load data if not provided
@@ -845,12 +853,7 @@ def plot_individual_reductions_distribution(data=None, file_path=None, save=True
         if data is None:
             return None
     
-    # Extract individual reductions
-    if 'individual_reductions' not in data.columns:
-        print("Data must contain individual_reductions column")
-        return None
-    
-    # Flatten the list of individual reductions
+    # Extract and flatten individual reductions
     reductions = []
     for _, row in data.iterrows():
         if isinstance(row['individual_reductions'], list):
@@ -860,33 +863,46 @@ def plot_individual_reductions_distribution(data=None, file_path=None, save=True
     
     reductions = np.array(reductions)
     
-    # Create figure with two subplots
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    # Calculate statistics before truncation
+    max_value = np.max(reductions)
+    percentile_99 = np.percentile(reductions, 99)
     
-    # Histogram
-    sns.histplot(
-        reductions,
-        bins=30,
-        color=COLORS['secondary'],
-        ax=ax1,
-        kde=True
-    )
-    ax1.set_xlabel('Emissions Reduction Attributed [kg CO₂]', fontsize=12)
-    ax1.set_ylabel('Frequency', fontsize=12)
-    ax1.set_title('Distribution of Individual Emission Reductions', fontsize=14)
-    apply_axis_style(ax1)
+    # Truncate data to 99th percentile
+    truncated_data = reductions[reductions <= percentile_99]
     
-    # ECDF
-    sns.ecdfplot(
-        reductions,
-        color=COLORS['primary'],
-        linewidth=2,
-        ax=ax2
-    )
-    ax2.set_xlabel('Emissions Reduction Attributed [kg CO₂]', fontsize=12)
-    ax2.set_ylabel('Cumulative Probability', fontsize=12)
-    ax2.set_title('Empirical CDF of Emission Reductions', fontsize=14)
-    apply_axis_style(ax2)
+    # Create figure
+    fig, ax = plt.figure(figsize=(8, 5)), plt.gca()
+    
+    # Create explicit bin edges starting at exactly 0
+    bin_edges = np.linspace(0, percentile_99, 31)  # 31 edges = 30 bins
+    
+    # Plot histogram with explicit bins
+    ax.hist(truncated_data, bins=bin_edges, color=COLORS['secondary'], alpha=0.7, 
+            edgecolor='white', linewidth=0.5)
+    
+    # Add KDE with lower scaling
+    from scipy.stats import gaussian_kde
+    kde = gaussian_kde(truncated_data, bw_method=0.1)
+    x_kde = np.linspace(0, percentile_99, 1000)
+    
+    # Scale KDE to 80% of our y limit to ensure it stays within bounds
+    max_hist_height = min(ax.get_ylim()[1], 20000)
+    y_kde = kde(x_kde) * (0.8 * max_hist_height / kde(kde.dataset.min()))
+    
+    ax.plot(x_kde, y_kde, color='#e29578', linewidth=2.5)
+    
+    # Set y-axis limit AFTER plotting both histogram and KDE
+    ax.set_ylim(0, 20000)
+    
+    # Annotation about truncation
+    ax.annotate(f"Data truncated at 99th percentile ({percentile_99:.0f} kg CO₂)\nMax value: {max_value:.0f} kg CO₂", 
+                xy=(0.95, 0.95), xycoords='axes fraction',
+                ha='right', va='top', fontsize=8,
+                bbox=dict(boxstyle='round', fc='white', alpha=0.8))
+    
+    ax.set_xlabel('Emissions Reduction Attributed [kg CO₂]', fontsize=12)
+    ax.set_ylabel('Frequency', fontsize=12)
+    apply_axis_style(ax)
     
     plt.tight_layout()
     
@@ -895,9 +911,9 @@ def plot_individual_reductions_distribution(data=None, file_path=None, save=True
         output_dir = ensure_output_dir()
         output_file = os.path.join(output_dir, 'individual_reductions_distribution.pdf')
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
-        
-        
-
+        print(f"Plot saved to {output_file}")
+    
+    return fig
 
 
 def select_file(pattern):
@@ -973,7 +989,15 @@ def main():
     three_d_param_file = None
     trajectory_file = None
     
-    if choice in ['1', '4', '5', '8']:
+    # Load 3D parameter file for plots that need aggregation across vegetarian fractions
+    if choice in ['1', '5', '6', '8']:
+        print("\nLoading 3D parameter file for plots that need multiple vegetarian fractions:")
+        three_d_param_file = select_file('3d_parameter_analysis')
+        if three_d_param_file is None:
+            print("Warning: 3D parameter file not found. Falling back to parameter_sweep file.")
+    
+    # Load parameter sweep file for plots that don't need aggregation
+    if (choice in ['1', '4', '5', '8'] and three_d_param_file is None) or choice in ['4', '8']:
         parameter_sweep_file = select_file('parameter_sweep')
         
     if choice in ['2', '8']:
@@ -982,17 +1006,19 @@ def main():
     if choice in ['3', '8']:
         veg_growth_file = select_file('veg_growth')
     
-    if choice in ['6', '8']:
-        three_d_param_file = select_file('3d_parameter_analysis')
-    
     if choice in ['7', '8']:
         trajectory_file = select_file('trajectory_analysis')
     
     # Create plots based on user selection and available files
-    if choice in ['1', '8'] and parameter_sweep_file:
-        plot_heatmap_alpha_beta(file_path=parameter_sweep_file)
-    elif choice == '1' and not parameter_sweep_file:
-        print("Cannot create heatmap: No parameter sweep file found")
+    if choice in ['1', '8']:
+        if three_d_param_file:
+            print("\nCreating heatmap with aggregation across vegetarian fractions...")
+            plot_heatmap_alpha_beta(file_path=three_d_param_file, aggregate_veg_fractions=True)
+        elif parameter_sweep_file:
+            print("\nCreating heatmap without aggregation (single vegetarian fraction)...")
+            plot_heatmap_alpha_beta(file_path=parameter_sweep_file, aggregate_veg_fractions=False)
+        else:
+            print("Cannot create heatmap: No suitable data file found")
     
     if choice in ['2', '8'] and emissions_file:
         plot_emissions_vs_veg_fraction(file_path=emissions_file)
@@ -1009,10 +1035,15 @@ def main():
     elif choice == '4' and not parameter_sweep_file:
         print("Cannot create distribution plot: No parameter sweep file found")
         
-    if choice in ['5', '8'] and parameter_sweep_file:
-        plot_tipping_point_heatmap(file_path=parameter_sweep_file)
-    elif choice == '5' and not parameter_sweep_file:
-        print("Cannot create tipping point heatmap: No parameter sweep file found")
+    if choice in ['5', '8']:
+        if three_d_param_file:
+            print("\nCreating tipping point heatmap with aggregation across vegetarian fractions...")
+            plot_tipping_point_heatmap(file_path=three_d_param_file, aggregate_veg_fractions=True)
+        elif parameter_sweep_file:
+            print("\nCreating tipping point heatmap without aggregation (single vegetarian fraction)...")
+            plot_tipping_point_heatmap(file_path=parameter_sweep_file, aggregate_veg_fractions=False)
+        else:
+            print("Cannot create tipping point heatmap: No suitable data file found")
         
     if choice in ['6', '8'] and three_d_param_file:
         plot_3d_parameter_surface(file_path=three_d_param_file)
@@ -1023,6 +1054,7 @@ def main():
         plot_trajectory_grid(file_path=trajectory_file)
     elif choice == '7' and not trajectory_file:
         print("Cannot create trajectory grid: No trajectory analysis file found")
-
-if __name__ == "__main__":
+        
+if  __name__ ==  '__main__': 
+    
     main()
