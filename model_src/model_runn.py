@@ -188,7 +188,7 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None,
                 'run': i, 'parameter_set': "Survey Mean Parameters"
             })
         
-        # Twin
+        # Twin mode with snapshots
         twn = p.copy()
         twn.update({"agent_ini": "twin", "N": len(sd)})
         for i in range(runs_per_combo):
@@ -200,10 +200,21 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None,
                 'initial_veg_f': sum(ag.diet=="veg" for ag in m.agents)/len(m.agents),
                 'final_veg_f': m.fraction_veg[-1],
                 'fraction_veg_trajectory': m.fraction_veg, 'system_C_trajectory': m.system_C,
+                'snapshots': m.snapshots if hasattr(m, 'snapshots') else None,
                 'run': i, 'parameter_set': "Survey Individual Parameters"
             })
     
     df = pd.DataFrame(r)
+    
+    # Find median twin trajectory for network plots
+    twin_data = df[df['agent_ini'] == 'twin']
+    if len(twin_data) > 0:
+        final_veg = twin_data['final_veg_f'].values
+        median_idx = twin_data.index[np.argmin(np.abs(final_veg - np.median(final_veg)))]
+        df['is_median_twin'] = False
+        df.loc[median_idx, 'is_median_twin'] = True
+        print(f"Twin median trajectory: run {df.loc[median_idx, 'run']} with final_veg_f = {df.loc[median_idx, 'final_veg_f']:.3f}")
+    
     ensure_output_dir()
     filename = f'../model_output/trajectory_analysis_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
@@ -246,6 +257,7 @@ def main():
                   veg_fractions=np.linspace(0.1, 0.6, 5))
         elif choice == '4':
             timer(run_trajectory_analysis, params=params, runs_per_combo=5)
+    
         elif choice == '0':
             break
         else:

@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import networkx as nx
 from matplotlib.colors import LinearSegmentedColormap
 from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMAP, ECO_DIV_CMAP
 
@@ -27,6 +28,8 @@ def create_color_variations(base_color, n):
     base_rgb = mcolors.to_rgb(base_color)
     return [tuple(min(1.0, c * (0.7 + 0.3 * i / max(1, n-1))) for c in base_rgb) for i in range(n)]
 
+
+#%%
 def plot_heatmap(data=None, file_path=None, value_type='final', theta_values=[-0.5, 0, 0.5], save=True):
     """Unified heatmap plotting for final values or change values"""
     set_publication_style()
@@ -119,6 +122,115 @@ def plot_heatmap(data=None, file_path=None, value_type='final', theta_values=[-0
     
     return fig
 
+#%%
+def plot_network_agency_evolution(data=None, file_path=None, save=True):
+    """4-panel plot: network snapshots + reduction distribution"""
+    set_publication_style()
+    
+    if data is None:
+        data = load_data(file_path)
+        if data is None: return None
+    
+    # Get median twin trajectory
+    median_row = data[data['is_median_twin']].iloc[0]
+    snapshots = median_row['snapshots']
+    
+    # Get final reductions and identify top 3
+    final_reductions = np.array(snapshots['final']['reductions'])
+    top3_idx = np.argsort(final_reductions)[-3:]
+    top3_values = final_reductions[top3_idx]
+    
+    # Create figure
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.flatten()
+    
+    # Network layout (use same layout for all panels)
+    G = snapshots['final']['graph']
+    pos = nx.spring_layout(G, seed=42, k=1, iterations=50)
+    
+    # Time points for snapshots
+    time_points = sorted([t for t in snapshots.keys() if isinstance(t, int)])
+    
+    # Panels 1-3: Network snapshots
+    for i, t in enumerate(time_points):
+        ax = axes[i]
+        snap = snapshots[t]
+        
+        # Node colors: veg=green, meat=red
+        node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
+        
+        # Draw network
+        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.2, width=0.5)
+        nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
+                              node_size=60, alpha=0.8)
+        
+        # For panels 2&3, highlight top 3 and add labels
+        if i > 0:  # Skip first panel
+            reductions = np.array(snap['reductions'])
+            current_top3 = np.argsort(reductions)[-3:]
+            
+            # Highlight top 3 with larger gold nodes
+            if len(current_top3) > 0:
+                top3_pos = {node: pos[node] for node in current_top3 if node in pos}
+                nx.draw_networkx_nodes(G, top3_pos, ax=ax, node_color='#f4a261',
+                                     node_size=120, alpha=0.9, edgecolors='black', linewidths=1)
+                
+                # Add reduction labels
+                for node in current_top3:
+                    if node in pos and reductions[node] > 0:
+                        x, y = pos[node]
+                        ax.annotate(f'{reductions[node]:.0f}', (x, y), 
+                                  xytext=(8, 8), textcoords='offset points',
+                                  fontsize=8, fontweight='bold',
+                                  bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
+        
+        ax.set_title(f'Time {t/1000:.0f}k steps' if isinstance(t, int) else 'Initial')
+        ax.set_aspect('equal')
+        ax.axis('off')
+    
+    # Panel 4: Distribution
+    ax = axes[3]
+    
+    # Remove zero reductions for cleaner distribution
+    nonzero_reductions = final_reductions[final_reductions > 0]
+    
+    if len(nonzero_reductions) > 0:
+        # Histogram
+        n, bins, patches = ax.hist(nonzero_reductions, bins=20, color=COLORS['secondary'], 
+                                  alpha=0.7, edgecolor='white', linewidth=0.5)
+        
+        # Mark top 3 positions
+        for i, (idx, val) in enumerate(zip(top3_idx, top3_values)):
+            if val > 0:
+                ax.axvline(val, color='#f4a261', linewidth=2, alpha=0.9)
+                ax.text(val, max(n)*0.8 - i*max(n)*0.1, f'#{i+1}', 
+                       rotation=90, fontweight='bold', fontsize=10,
+                       bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
+    
+    ax.set_xlabel('Emissions Reduction Attributed [kg CO₂]')
+    ax.set_ylabel('Number of Agents')
+    ax.set_title('Final Reduction Distribution')
+    apply_axis_style(ax)
+    
+    # Legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='#2a9d8f', label='Vegetarian'),
+        Patch(facecolor='#e76f51', label='Meat Eater'),
+        Patch(facecolor='#f4a261', label='Top 3 Reducers')
+    ]
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.02), ncol=3)
+    
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.1)
+    
+    if save:
+        output_dir = ensure_output_dir()
+        plt.savefig(f'{output_dir}/network_agency_evolution.pdf', dpi=300, bbox_inches='tight')
+        print("Saved network_agency_evolution.pdf")
+    
+    return fig
+#%%
 def plot_emissions_vs_veg_fraction(data=None, file_path=None, save=True):
     set_publication_style()
     
@@ -142,7 +254,7 @@ def plot_emissions_vs_veg_fraction(data=None, file_path=None, save=True):
         print("Saved emissions_vs_veg_fraction.pdf")
     
     return plt.gca()
-
+#%%
 def plot_veg_growth(data=None, file_path=None, save=True):
     set_publication_style()
     
@@ -168,7 +280,7 @@ def plot_veg_growth(data=None, file_path=None, save=True):
         print("Saved veg_growth.pdf")
     
     return plt.gca()
-
+#%%
 def plot_individual_reductions_distribution(data=None, file_path=None, save=True):
     set_publication_style()
     
@@ -215,7 +327,7 @@ def plot_individual_reductions_distribution(data=None, file_path=None, save=True
         print("Saved individual_reductions_distribution.pdf")
     
     return plt.gca()
-
+#%%
 def plot_trajectory_param_twin(data=None, file_path=None, save=True):
     set_publication_style()
     
@@ -262,7 +374,7 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
         print("Saved param_twin_trajectories.pdf")
     
     return fig
-
+#%%
 def select_file(pattern):
     import glob
     from datetime import datetime
@@ -296,6 +408,7 @@ def main():
         print("[4] Vegetarian Growth Analysis")
         print("[5] Individual Reductions Distribution")
         print("[6] Parameter vs Twin Trajectories")
+        print("[7] Network Agency Evolution")
         print("[0] Exit")
         
         choice = input("Select: ")
@@ -318,6 +431,14 @@ def main():
         elif choice == '6':
             file_path = select_file('trajectory_analysis')
             if file_path: plot_trajectory_param_twin(file_path=file_path)
+        elif choice == '7':
+            file_path = select_file('trajectory_analysis')
+            if file_path: 
+                data = load_data(file_path)
+                if data is not None and 'is_median_twin' in data.columns:
+                    plot_network_agency_evolution(file_path=file_path)
+                else:
+                    print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
         elif choice == '0':
             break
         else:
