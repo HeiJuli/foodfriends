@@ -259,7 +259,8 @@ class Model():
         
 
         self.params = params
-  
+        self.snapshots = {}  # Store network snapshots
+        self.snapshot_times = [int(params["steps"] * r) for r in [0.15, 0.5, 0.85]]
             
         if params['topology'] == "complete":
             
@@ -279,7 +280,7 @@ class Model():
         self.fraction_veg.append(fraction_veg)
 
     
-
+    
 
     def agent_ini(self):
         
@@ -353,14 +354,26 @@ class Model():
                        for i in range(len(self.agents))]
         return attribute_l
     
-
+    def record_snapshot(self, t):
+        """Record network state and agent attributes at time t"""
+        if t in self.snapshot_times or t == "final":
+            self.snapshots[t] = {
+                'diets': self.get_attributes("diet"),
+                'reductions': self.get_attributes("reduction_out"),
+                'graph': self.G1.copy(),
+                'veg_fraction': self.fraction_veg[-1]
+            }
+        
+        
     def run(self):
         
         #print(f"Starting model with agent initation mode: {self.params['agent_ini']}")
         self.agent_ini()
         self.record_fraction()
+        self.record_snapshot(0)
         
         time_array = list(range(self.params["steps"]))
+        
         for t in time_array:
             # Select random agent
             i = np.random.choice(range(len(self.agents)))
@@ -371,9 +384,12 @@ class Model():
             # Record system state
             self.system_C.append(self.get_attribute("C")/self.params["N"])
             self.record_fraction()
+            self.record_snapshot(t)
+            
+            # Final snapshot
+            self.record_snapshot('final')
+        
     
-    
-
 
 # %%
 if  __name__ ==  '__main__': 
