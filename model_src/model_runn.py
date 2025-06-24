@@ -8,9 +8,9 @@ from datetime import date
 import model_main_single as model_main
 
 DEFAULT_PARAMS = {
-    "veg_CO2": 1390, "meat_CO2": 2054, "N": 300, "erdos_p": 3, "steps": 35000,
+    "veg_CO2": 1390, "meat_CO2": 2054, "N": 699, "erdos_p": 3, "steps": 35000,
     "w_i": 5, "immune_n": 0.1, "M": 5, "veg_f": 0.15, "meat_f": 0.85,
-    "n": 5, "v": 10, 'topology': "CSF", "alpha": 0.4, "beta": 0.6,
+    "n": 5, "v": 10, 'topology': "WS", "alpha": 0.4, "beta": 0.6,
     "agent_ini": "synthetic", "survey_file": "../data/final_data_parameters.csv"
 }
 
@@ -256,7 +256,7 @@ def main():
             timer(run_veg_growth_analysis, params=params,
                   veg_fractions=np.linspace(0.1, 0.6, 5))
         elif choice == '4':
-            timer(run_trajectory_analysis, params=params, runs_per_combo=5)
+            timer(run_trajectory_analysis, params=params, runs_per_combo=1)
     
         elif choice == '0':
             break
