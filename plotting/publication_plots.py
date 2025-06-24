@@ -147,6 +147,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
     # Network layout (use same layout for all panels)
     G = snapshots['final']['graph']
     pos = nx.spring_layout(G, seed=42, k=1, iterations=50)
+    nodes = list(G.nodes())  # Map array indices to node IDs
     
     # Time points for snapshots
     time_points = sorted([t for t in snapshots.keys() if isinstance(t, int)])
@@ -160,26 +161,27 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
         
         # Draw network
-        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.2, width=0.5)
+        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.5, width=0.3)
         nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
-                              node_size=60, alpha=0.8)
+                              node_size=30, alpha=0.9)
         
         # For panels 2&3, highlight top 3 and add labels
         if i > 0:  # Skip first panel
             reductions = np.array(snap['reductions'])
-            current_top3 = np.argsort(reductions)[-3:]
+            current_top3_idx = np.argsort(reductions)[-3:]
+            current_top3_nodes = [nodes[j] for j in current_top3_idx]  # Map to node IDs
             
             # Highlight top 3 with larger gold nodes
-            if len(current_top3) > 0:
-                top3_pos = {node: pos[node] for node in current_top3 if node in pos}
-                nx.draw_networkx_nodes(G, top3_pos, ax=ax, node_color='#f4a261',
-                                     node_size=120, alpha=0.9, edgecolors='black', linewidths=1)
+            if len(current_top3_nodes) > 0:
+                nx.draw_networkx_nodes(G, pos, nodelist=current_top3_nodes, ax=ax, 
+                                     node_color='#f4a261', node_size=120, alpha=0.9, 
+                                     edgecolors='black', linewidths=1)
                 
                 # Add reduction labels
-                for node in current_top3:
-                    if node in pos and reductions[node] > 0:
+                for j, node in zip(current_top3_idx, current_top3_nodes):
+                    if reductions[j] > 0:
                         x, y = pos[node]
-                        ax.annotate(f'{reductions[node]:.0f}', (x, y), 
+                        ax.annotate(f'{reductions[j]:.0f}', (x, y), 
                                   xytext=(8, 8), textcoords='offset points',
                                   fontsize=8, fontweight='bold',
                                   bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
@@ -191,21 +193,18 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
     # Panel 4: Distribution
     ax = axes[3]
     
-    # Remove zero reductions for cleaner distribution
-    nonzero_reductions = final_reductions[final_reductions > 0]
-    
-    if len(nonzero_reductions) > 0:
+    # Use all reductions, including zeros for full picture
+    if len(final_reductions) > 0:
         # Histogram
-        n, bins, patches = ax.hist(nonzero_reductions, bins=20, color=COLORS['secondary'], 
+        n, bins, patches = ax.hist(final_reductions, bins=20, color=COLORS['secondary'], 
                                   alpha=0.7, edgecolor='white', linewidth=0.5)
         
-        # Mark top 3 positions
-        for i, (idx, val) in enumerate(zip(top3_idx, top3_values)):
+        # Mark top 3 positions with vertical lines only
+        for val in top3_values:
             if val > 0:
                 ax.axvline(val, color='#f4a261', linewidth=2, alpha=0.9)
-                ax.text(val, max(n)*0.8 - i*max(n)*0.1, f'#{i+1}', 
-                       rotation=90, fontweight='bold', fontsize=10,
-                       bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
+    else:
+        ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
     
     ax.set_xlabel('Emissions Reduction Attributed [kg CO₂]')
     ax.set_ylabel('Number of Agents')

@@ -14,6 +14,7 @@ import math
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
+from netin import PATCH
 
 # %% Preliminary settings
 #random.seed(30)
@@ -27,7 +28,7 @@ params = {"veg_CO2": 1390,
           "erdos_p": 3,
           "steps": 50000,
           "w_i": 5, #weight of the replicator function
-          "immune_n": 0.10, #TODO: fix this
+          "immune_n": 0.10,
           "M": 10, # memory length
           "veg_f":0.5, #vegetarian fraction
           "meat_f": 0.5,  #meat eater fraciton
@@ -270,8 +271,14 @@ class Model():
                 self.params["N"], self.params["erdos_p"])
         
         elif params['topology'] == "CSF":  
-             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, 0.4)
+             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, 0.05)
+             
+        elif params['topology'] == "WS":  
+             self.G1 = nx.watts_strogatz_graph(params["N"], 6, 0.05)
         
+        elif params['topology'] == "PATCH":
+            self.G1 = PATCH(params["N"], params["M"], params["veg_f"], h_MM=0.6, h_mm=0.6)
+            
         self.system_C = []
         self.fraction_veg = []  
     
@@ -279,7 +286,14 @@ class Model():
         fraction_veg = sum(i == "veg" for i in self.get_attributes("diet"))/self.params["N"]
         self.fraction_veg.append(fraction_veg)
 
-    
+    def harmonise_NetIn(self):
+        """
+        Assigns agents to the PATCH minority or majority class based on diet. 
+        Initial agent diet fraction which is in the minority will be assigned such.
+        
+        """
+        pass
+        
     
 
     def agent_ini(self):
@@ -313,6 +327,7 @@ class Model():
         
         n_immune = int(self.params["immune_n"] * len(self.agents))
         immune_idx = np.random.choice(len(self.agents), n_immune, replace=False)
+        
         for i in immune_idx:
             self.agents[i].immune = True
 
@@ -356,13 +371,12 @@ class Model():
     
     def record_snapshot(self, t):
         """Record network state and agent attributes at time t"""
-        if t in self.snapshot_times or t == "final":
-            self.snapshots[t] = {
-                'diets': self.get_attributes("diet"),
-                'reductions': self.get_attributes("reduction_out"),
-                'graph': self.G1.copy(),
-                'veg_fraction': self.fraction_veg[-1]
-            }
+        self.snapshots[t] = {
+            'diets': self.get_attributes("diet"),
+            'reductions': self.get_attributes("reduction_out"),
+            'graph': self.G1.copy(),
+            'veg_fraction': self.fraction_veg[-1]
+        }
         
         
     def run(self):
@@ -384,24 +398,33 @@ class Model():
             # Record system state
             self.system_C.append(self.get_attribute("C")/self.params["N"])
             self.record_fraction()
-            self.record_snapshot(t)
             
-            # Final snapshot
-            self.record_snapshot('final')
-        
+            # Record snapshot if required
+            if t in self.snapshot_times:
+                self.record_snapshot(t)
+            
+            
+        # Final snapshot
+        self.record_snapshot('final')
+    
     
 
 # %%
-if  __name__ ==  '__main__': 
-    
+if __name__ == '__main__': 
+	
+	params.update({'topology': 'PATCH'})
+	
 	test_model = Model(params)
-
+	
 	test_model.run()
+	
 	trajec = test_model.fraction_veg
-
+	
 	plt.plot(trajec)
 	plt.ylabel("Vegetarian Fraction")
 	plt.xlabel("t (steps)")
 	plt.show()
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
+
+nx.draw(test_model.G1, node_size = 25, width = 0.5)
