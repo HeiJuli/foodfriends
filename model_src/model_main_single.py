@@ -14,7 +14,9 @@ import math
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
-from netin import PATCH
+from auxillary import network_stats
+from netin import PATCH, PAH
+
 
 # %% Preliminary settings
 #random.seed(30)
@@ -34,6 +36,7 @@ params = {"veg_CO2": 1390,
           "meat_f": 0.5,  #meat eater fraciton
           "n": 5,
           "v": 10,
+          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
@@ -271,13 +274,15 @@ class Model():
                 self.params["N"], self.params["erdos_p"])
         
         elif params['topology'] == "CSF":  
-             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, 0.05)
+             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, params["tc"])
              
         elif params['topology'] == "WS":  
-             self.G1 = nx.watts_strogatz_graph(params["N"], 6, 0.05)
+             self.G1 = nx.watts_strogatz_graph(params["N"], 6, params["tc"])
         
         elif params['topology'] == "PATCH":
-            self.G1 = PATCH(params["N"], params["M"], params["veg_f"], h_MM=0.6, h_mm=0.6)
+           # self.G1 = PATCH(params["N"], params["M"], params["veg_f"], h_MM=0.6, tc=params["tc"], h_mm=0.6)
+            self.G1 = PAH(params["N"], params["M"], params["veg_f"], h_MM=0.6, h_mm=0.6)
+            self.G1.generate()
             
         self.system_C = []
         self.fraction_veg = []  
@@ -417,9 +422,9 @@ if __name__ == '__main__':
 	test_model = Model(params)
 	
 	test_model.run()
-	
+	nx.draw(test_model.G1, node_size = 25, width = 0.5)
 	trajec = test_model.fraction_veg
-	
+	test_model.G1.infer_homophily_values()
 	plt.plot(trajec)
 	plt.ylabel("Vegetarian Fraction")
 	plt.xlabel("t (steps)")
@@ -427,4 +432,4 @@ if __name__ == '__main__':
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
 
-nx.draw(test_model.G1, node_size = 25, width = 0.5)
+network_stats.infer_homophily_values(test_model.G1)
