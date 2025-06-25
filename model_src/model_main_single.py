@@ -14,8 +14,10 @@ import math
 import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
-from auxillary import network_stats
 from netin import PATCH, PAH
+import sys
+sys.path.append('..')
+from auxillary import network_stats
 
 
 # %% Preliminary settings
@@ -28,7 +30,7 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 50000,
+          "steps": 25000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 10, # memory length
@@ -264,7 +266,7 @@ class Model():
 
         self.params = params
         self.snapshots = {}  # Store network snapshots
-        self.snapshot_times = [int(params["steps"] * r) for r in [0.15, 0.5, 0.85]]
+        self.snapshot_times = [int(params["steps"] * r) for r in [0.15, 0.20, 0.5,  0.75, 0.85]]
             
         if params['topology'] == "complete":
             
@@ -291,14 +293,18 @@ class Model():
         fraction_veg = sum(i == "veg" for i in self.get_attributes("diet"))/self.params["N"]
         self.fraction_veg.append(fraction_veg)
 
-    def harmonise_NetIn(self):
+    def harmonise_netIn(self):
         """
         Assigns agents to the PATCH minority or majority class based on diet. 
         Initial agent diet fraction which is in the minority will be assigned such.
         
         """
-        pass
         
+        for i in range(len(self.agents)):
+            self.G1.nodes[i]["m"] = 1 if self.agents[i].diet in "veg" else 0
+            
+        return
+            
     
 
     def agent_ini(self):
@@ -388,12 +394,14 @@ class Model():
         
         #print(f"Starting model with agent initation mode: {self.params['agent_ini']}")
         self.agent_ini()
+        self.harmonise_netIn()
         self.record_fraction()
         self.record_snapshot(0)
         
         time_array = list(range(self.params["steps"]))
         
         for t in time_array:
+
             # Select random agent
             i = np.random.choice(range(len(self.agents)))
             
@@ -406,6 +414,8 @@ class Model():
             
             # Record snapshot if required
             if t in self.snapshot_times:
+                print("mine", network_stats.infer_homophily_values(self.G1, self.fraction_veg[-1]))
+                print(self.G1.infer_homophily_values())
                 self.record_snapshot(t)
             
             
@@ -422,7 +432,7 @@ if __name__ == '__main__':
 	test_model = Model(params)
 	
 	test_model.run()
-	nx.draw(test_model.G1, node_size = 25, width = 0.5)
+	#nx.draw(test_model.G1, node_size = 25, width = 0.5)
 	trajec = test_model.fraction_veg
 	test_model.G1.infer_homophily_values()
 	plt.plot(trajec)
@@ -432,4 +442,4 @@ if __name__ == '__main__':
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
 
-network_stats.infer_homophily_values(test_model.G1)
+#network_stats.infer_homophily_values(test_model.G1, test_model.fraction_veg[-1])
