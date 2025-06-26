@@ -39,6 +39,8 @@ params = {"veg_CO2": 1390,
           "meat_f": 0.5,  #meat eater fraciton
           "n": 5,
           "v": 10,
+          "p_rewire": 0.1, #probability of rewire step
+          "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
@@ -217,6 +219,7 @@ class Agent():
         
         return util
     
+        
     
     def step(self, G, agents):
         """
@@ -231,6 +234,7 @@ class Agent():
         
         # Select random neighbor
         self.neighbours = [agents[neighbour] for neighbour in G.neighbors(self.i)]
+        
         if not self.neighbours:  # Skip if isolated node
             return
             
@@ -283,8 +287,7 @@ class Model():
              self.G1 = nx.watts_strogatz_graph(params["N"], 6, params["tc"])
         
         elif params['topology'] == "PATCH":
-            #self.G1 = PATCH(params["N"], params["M"], params["veg_f"], h_MM=0.6, tc=params["tc"], h_mm=0.6)
-            self.G1 = PAH(params["N"], params["m"], params["veg_f"], h_MM=0.6, h_mm=0.6)
+            self.G1 = PATCH(params["N"], params["M"], params["veg_f"], h_MM=0.6, tc=params["tc"], h_mm=0.6)
             self.G1.generate()
             
         self.system_C = []
@@ -389,7 +392,25 @@ class Model():
             'graph': self.G1.copy(),
             'veg_fraction': self.fraction_veg[-1]
         }
+    
+    def flip(self, p):
+        return np.random.random() < p
+    
+    def rewire(self, i):
         
+
+        if self.flip(self.params["p_rewire"]):
+            
+            non_neighbors = [k for k in nx.non_neighbors(self.G1, i.i)]
+            
+            j = random.choice(non_neighbors)
+            
+            if self.agents[j].diet != i.diet:
+                if self.flip(0.10):
+                    return
+            else:
+                self.G1.add_edge(i.i, j)
+                
         
     def run(self):
         
@@ -408,6 +429,8 @@ class Model():
             
             # Update based on pairwise interaction
             self.agents[i].step(self.G1, self.agents)
+            self.rewire(self.agents[i],)
+            
             
             # Record system state
             self.system_C.append(self.get_attribute("C")/self.params["N"])
@@ -415,8 +438,6 @@ class Model():
             
             # Record snapshot if required
             if t in self.snapshot_times:
-                print("mine", network_stats.homophily_inference_asymmetric(self.G1))
-                print(self.G1.infer_homophily_values())
                 self.record_snapshot(t)
                 
             self.harmonise_netIn()
@@ -433,15 +454,14 @@ if __name__ == '__main__':
 	test_model = Model(params)
 	
 	test_model.run()
-	nx.draw(test_model.G1, node_size = 25, width = 0.5)
+	#nx.draw(test_model.G1, node_size = 25, width = 0.5)
     
 	trajec = test_model.fraction_veg
-	test_model.G1.infer_homophily_values()
 	plt.plot(trajec)
 	plt.ylabel("Vegetarian Fraction")
 	plt.xlabel("t (steps)")
 	plt.show()
-# end_state_A = test_model.get_attributes("reduction_out")
-# end_state_frac = test_model.get_attributes("threshold")
-viz.handlers.plot_graph(test_model.G1, edge_width = 0.2, edge_arrows =False)
-#network_stats.infer_homophily_values(test_model.G1, test_model.fraction_veg[-1])
+    # end_state_A = test_model.get_attributes("reduction_out")
+    # end_state_frac = test_model.get_attributes("threshold")
+#viz.handlers.plot_graph(test_model.G1, edge_width = 0.2, edge_arrows =False)
+    #network_stats.infer_homophily_values(test_model.G1, test_model.fraction_veg[-1])
