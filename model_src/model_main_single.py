@@ -15,6 +15,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 from netin import PATCH, PAH
+from netin import viz
 import sys
 sys.path.append('..')
 from auxillary import network_stats
@@ -282,8 +283,8 @@ class Model():
              self.G1 = nx.watts_strogatz_graph(params["N"], 6, params["tc"])
         
         elif params['topology'] == "PATCH":
-           # self.G1 = PATCH(params["N"], params["M"], params["veg_f"], h_MM=0.6, tc=params["tc"], h_mm=0.6)
-            self.G1 = PAH(params["N"], params["M"], params["veg_f"], h_MM=0.6, h_mm=0.6)
+            #self.G1 = PATCH(params["N"], params["M"], params["veg_f"], h_MM=0.6, tc=params["tc"], h_mm=0.6)
+            self.G1 = PAH(params["N"], params["m"], params["veg_f"], h_MM=0.6, h_mm=0.6)
             self.G1.generate()
             
         self.system_C = []
@@ -401,7 +402,7 @@ class Model():
         time_array = list(range(self.params["steps"]))
         
         for t in time_array:
-
+                
             # Select random agent
             i = np.random.choice(range(len(self.agents)))
             
@@ -414,11 +415,11 @@ class Model():
             
             # Record snapshot if required
             if t in self.snapshot_times:
-                print("mine", network_stats.infer_homophily_values(self.G1, self.fraction_veg[-1]))
+                print("mine", network_stats.homophily_inference_asymmetric(self.G1))
                 print(self.G1.infer_homophily_values())
                 self.record_snapshot(t)
-            
-            
+                
+            self.harmonise_netIn()
         # Final snapshot
         self.record_snapshot('final')
     
@@ -432,7 +433,8 @@ if __name__ == '__main__':
 	test_model = Model(params)
 	
 	test_model.run()
-	#nx.draw(test_model.G1, node_size = 25, width = 0.5)
+	nx.draw(test_model.G1, node_size = 25, width = 0.5)
+    
 	trajec = test_model.fraction_veg
 	test_model.G1.infer_homophily_values()
 	plt.plot(trajec)
@@ -441,5 +443,5 @@ if __name__ == '__main__':
 	plt.show()
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
-
+viz.handlers.plot_graph(test_model.G1, edge_width = 0.2, edge_arrows =False)
 #network_stats.infer_homophily_values(test_model.G1, test_model.fraction_veg[-1])
