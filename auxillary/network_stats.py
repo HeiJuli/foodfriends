@@ -51,7 +51,7 @@ def get_edge_type_counts(g: Union[nx.Graph, nx.DiGraph], fractions: bool = False
 
     return counts
 
-def infer_homophily(graph, minority_frac) -> tuple[float, float]:
+def infer_homophily(graph) -> tuple[float, float]:
     """
     Infers analytically the homophily values for the majority and minority classes.
 
@@ -65,7 +65,7 @@ def infer_homophily(graph, minority_frac) -> tuple[float, float]:
     """
     from sympy import symbols, Eq, solve
 
-    f_m = minority_frac
+    f_m = sum(1 for _, data in graph.nodes(data=True) if data.get('m', 0) == 1) / graph.number_of_nodes()
     f_M = 1 - f_m
 
     e = get_edge_type_counts(graph)
