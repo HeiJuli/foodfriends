@@ -37,8 +37,6 @@ params = {"veg_CO2": 1390,
           "M": 10, # memory length
           "veg_f":0.5, #vegetarian fraction
           "meat_f": 0.5,  #meat eater fraciton
-          "n": 5,
-          "v": 10,
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
@@ -46,7 +44,7 @@ params = {"veg_CO2": 1390,
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
           "theta": 0, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": "twin", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/final_data_parameters.csv"
           }
 
@@ -402,6 +400,9 @@ class Model():
         if self.flip(self.params["p_rewire"]):
             
             non_neighbors = [k for k in nx.non_neighbors(self.G1, i.i)]
+            if not non_neighbors:
+                return
+            
             
             j = random.choice(non_neighbors)
             
@@ -409,7 +410,12 @@ class Model():
                 if self.flip(0.10):
                     return
             else:
+                # Get the neighbours before rewiirng so j is excluded
+                remove_neighbours = list(self.G1.neighbors(i.i))
+    
                 self.G1.add_edge(i.i, j)
+            
+                self.G1.remove_edge(i.i, random.choice(remove_neighbours))
                 
         
     def run(self):

@@ -7,12 +7,32 @@ import time
 from datetime import date
 import model_main_single as model_main
 
-DEFAULT_PARAMS = {
-    "veg_CO2": 1390, "meat_CO2": 2054, "N": 699, "erdos_p": 3, "steps": 35000,
-    "w_i": 5, "immune_n": 0.1, "M": 5, "veg_f": 0.15, "meat_f": 0.85,
-    "n": 5, "v": 10, 'topology': "WS", "alpha": 0.4, "beta": 0.6,
-    "agent_ini": "synthetic", "survey_file": "../data/final_data_parameters.csv"
-}
+#%%
+DEFAULT_PARAMS = {"veg_CO2": 1390,
+          "vegan_CO2": 1054,
+          "meat_CO2": 2054,
+          "N": 699,
+          "erdos_p": 3,
+          "steps": 45000,
+          "w_i": 5, #weight of the replicator function
+          "immune_n": 0.10,
+          "M": 10, # memory length
+          "veg_f":0.5, #vegetarian fraction
+          "meat_f": 0.5,  #meat eater fraciton
+          "p_rewire": 0.1, #probability of rewire step
+          "rewire_h": 0.1, # slightly preference for same diet
+          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
+          'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
+          "alpha": 0.35, #self dissonance
+          "beta": 0.65, #social dissonance
+          "theta": 0, #intrinsic preference (- is for meat, + for vego)
+          "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic" 
+          "survey_file": "../data/final_data_parameters.csv"
+          }
+
+
+
+#%%
 
 def ensure_output_dir():
     if not os.path.exists('../model_output'):
