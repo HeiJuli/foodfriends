@@ -124,6 +124,119 @@ def plot_heatmap(data=None, file_path=None, value_type='final', theta_values=[-0
 
 #%%
 def plot_network_agency_evolution(data=None, file_path=None, save=True):
+    """8-panel plot: 4 network snapshots + 4 reduction distributions"""
+    set_publication_style()
+    
+    if data is None:
+        data = load_data(file_path)
+        if data is None: return None
+    
+    # Get median twin trajectory
+    median_row = data[data['is_median_twin']].iloc[0]
+    snapshots = median_row['snapshots']
+    
+    # Create figure with custom height ratios - networks larger than histograms
+    fig = plt.figure(figsize=(18, 10))
+    gs = fig.add_gridspec(2, 4, height_ratios=[3, 1], hspace=0.05, wspace=0.1)
+    
+    # Create axes
+    net_axes = [fig.add_subplot(gs[0, i]) for i in range(4)]
+    hist_axes = [fig.add_subplot(gs[1, i]) for i in range(4)]
+    
+    # Better layout for clustered networks - try spectral layout for community structure
+    G = snapshots['final']['graph']
+    try:
+        # Use spectral layout which often reveals cluster structure better
+        pos = nx.spectral_layout(G, seed=42)
+    except:
+        # Fallback to spring layout with very loose clustering
+        pos = nx.spring_layout(G, k=2.0, iterations=200, seed=42)
+    nodes = list(G.nodes())
+    
+    # Get 4 time points: t=0, 33%, 66%, final
+    all_times = sorted([t for t in snapshots.keys() if isinstance(t, int)])
+    if len(all_times) >= 2:
+        time_points = [0, all_times[len(all_times)//3], all_times[2*len(all_times)//3], 'final']
+    else:
+        time_points = [0] + all_times + ['final']
+    time_points = time_points[:4]  # Ensure exactly 4
+    
+    # Top row: Network snapshots
+    for i, t in enumerate(time_points):
+        ax = net_axes[i]
+        snap = snapshots[t]
+        
+        # Node colors
+        node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
+        
+        # Draw network with thinner edges to show structure better
+        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.2, width=0.3)
+        nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
+                              node_size=6, alpha=0.9)
+        
+        # Highlight top reducers
+        reductions = np.array(snap['reductions'])
+        if np.max(reductions) > 0:
+            top3_idx = np.argsort(reductions)[-3:]
+            top3_nodes = [nodes[j] for j in top3_idx if reductions[j] > 0]
+            if top3_nodes:
+                nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=ax, 
+                                     node_color='#f4a261', node_size=20, alpha=1.0)
+                
+                # Add reduction labels
+                for j, node in zip(top3_idx, top3_nodes):
+                    if reductions[j] > 0:
+                        x, y = pos[node]
+                        ax.annotate(f'{reductions[j]:.0f}', (x, y), 
+                                  xytext=(8, 8), textcoords='offset points',
+                                  fontsize=7, fontweight='bold',
+                                  bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
+        
+        title = 'Initial' if t == 0 else f'Final' if t == 'final' else f'{t/1000:.0f}k steps'
+        ax.set_title(title, fontsize=11)
+        ax.set_aspect('equal')
+        ax.axis('off')
+    
+    # Bottom row: Histograms
+    for i, t in enumerate(time_points):
+        ax = hist_axes[i]
+        reductions = np.array(snapshots[t]['reductions'])
+        
+        if np.max(reductions) > 0:
+            ax.hist(reductions, bins=12, color=COLORS['secondary'], alpha=0.7, 
+                   edgecolor='white', linewidth=0.5)
+            # Mark top reducer
+            top_val = np.max(reductions)
+            ax.axvline(top_val, color='#f4a261', linewidth=2, alpha=0.9)
+        else:
+            ax.text(0.5, 0.5, 'No reductions', ha='center', va='center', 
+                   transform=ax.transAxes, fontsize=8)
+        
+        ax.set_xlabel('Reduction [kg CO₂]', fontsize=8)
+        if i == 0:
+            ax.set_ylabel('Count', fontsize=8)
+        apply_axis_style(ax)
+    
+    # Legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='#2a9d8f', label='Vegetarian'),
+        Patch(facecolor='#e76f51', label='Meat Eater'),
+        Patch(facecolor='#f4a261', label='Top Reducers')
+    ]
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.95), ncol=3)
+    
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.9)
+    
+    if save:
+        output_dir = ensure_output_dir()
+        plt.savefig(f'{output_dir}/network_agency_evolution.pdf', dpi=300, bbox_inches='tight')
+        print("Saved network_agency_evolution.pdf")
+    
+    return fig
+
+def plot_network_agency_evolution_old(data=None, file_path=None, save=True):
     """4-panel plot: network snapshots + reduction distribution"""
     set_publication_style()
     

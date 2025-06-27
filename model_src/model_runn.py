@@ -21,7 +21,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_f": 0.5,  #meat eater fraciton
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
-          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
+          "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
           'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
@@ -276,7 +276,7 @@ def main():
             timer(run_veg_growth_analysis, params=params,
                   veg_fractions=np.linspace(0.1, 0.6, 5))
         elif choice == '4':
-            timer(run_trajectory_analysis, params=params, runs_per_combo=1)
+            timer(run_trajectory_analysis, params=params, runs_per_combo=10)
     
         elif choice == '0':
             break

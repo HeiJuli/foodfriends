@@ -269,7 +269,7 @@ class Model():
 
         self.params = params
         self.snapshots = {}  # Store network snapshots
-        self.snapshot_times = [int(params["steps"] * r) for r in [0.15, 0.20, 0.5,  0.75, 0.85]]
+        self.snapshot_times = [int(params["steps"] * r) for r in [0.33, 0.66]]
             
         if params['topology'] == "complete":
             
