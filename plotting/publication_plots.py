@@ -163,7 +163,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         # Draw network
         nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.5, width=0.3)
         nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
-                              node_size=30, alpha=0.9)
+                              node_size=15, alpha=0.9)
         
         # For panels 2&3, highlight top 3 and add labels
         if i > 0:  # Skip first panel
