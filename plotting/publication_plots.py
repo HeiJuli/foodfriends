@@ -136,30 +136,33 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
     snapshots = median_row['snapshots']
     
     # Create figure with custom height ratios - networks larger than histograms
-    fig = plt.figure(figsize=(18, 10))
-    gs = fig.add_gridspec(2, 4, height_ratios=[3, 1], hspace=0.05, wspace=0.1)
+    fig = plt.figure(figsize=(14, 6))  # Reduced height
+    gs = fig.add_gridspec(2, 4, height_ratios=[2, 1], hspace=0.15, wspace=0.1)  # Reduced ratio, more hspace
     
     # Create axes
     net_axes = [fig.add_subplot(gs[0, i]) for i in range(4)]
     hist_axes = [fig.add_subplot(gs[1, i]) for i in range(4)]
     
-    # Better layout for clustered networks - try spectral layout for community structure
+    # Better layout for clustered networks
     G = snapshots['final']['graph']
     try:
-        # Use spectral layout which often reveals cluster structure better
         pos = nx.spectral_layout(G, seed=42)
     except:
-        # Fallback to spring layout with very loose clustering
-        pos = nx.spring_layout(G, k=2.0, iterations=200, seed=42)
+        pos = nx.spring_layout(G, k=1.5, iterations=200, seed=42)  # Tighter layout
     nodes = list(G.nodes())
     
-    # Get 4 time points: t=0, 33%, 66%, final
+    # Get position bounds for consistent scaling
+    pos_array = np.array(list(pos.values()))
+    x_min, x_max = pos_array[:, 0].min(), pos_array[:, 0].max()
+    y_min, y_max = pos_array[:, 1].min(), pos_array[:, 1].max()
+    
+    # Get 4 time points
     all_times = sorted([t for t in snapshots.keys() if isinstance(t, int)])
     if len(all_times) >= 2:
         time_points = [0, all_times[len(all_times)//3], all_times[2*len(all_times)//3], 'final']
     else:
         time_points = [0] + all_times + ['final']
-    time_points = time_points[:4]  # Ensure exactly 4
+    time_points = time_points[:4]
     
     # Top row: Network snapshots
     for i, t in enumerate(time_points):
@@ -169,10 +172,10 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         # Node colors
         node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
         
-        # Draw network with thinner edges to show structure better
+        # Draw network
         nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.2, width=0.3)
         nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
-                              node_size=6, alpha=0.9)
+                              node_size=12, alpha=0.9)  # Larger nodes
         
         # Highlight top reducers
         reductions = np.array(snap['reductions'])
@@ -181,7 +184,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
             top3_nodes = [nodes[j] for j in top3_idx if reductions[j] > 0]
             if top3_nodes:
                 nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=ax, 
-                                     node_color='#f4a261', node_size=20, alpha=1.0)
+                                     node_color='#f4a261', node_size=30, alpha=1.0)
                 
                 # Add reduction labels
                 for j, node in zip(top3_idx, top3_nodes):
@@ -194,10 +197,14 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         
         title = 'Initial' if t == 0 else f'Final' if t == 'final' else f'{t/1000:.0f}k steps'
         ax.set_title(title, fontsize=11)
-        ax.set_aspect('equal')
+        
+        # Set tight axis limits to minimize whitespace
+        padding = 0.05
+        ax.set_xlim(x_min - padding, x_max + padding)
+        ax.set_ylim(y_min - padding, y_max + padding)
         ax.axis('off')
     
-    # Bottom row: Histograms
+    # Bottom row: Histograms (unchanged)
     for i, t in enumerate(time_points):
         ax = hist_axes[i]
         reductions = np.array(snapshots[t]['reductions'])
@@ -205,7 +212,6 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         if np.max(reductions) > 0:
             ax.hist(reductions, bins=12, color=COLORS['secondary'], alpha=0.7, 
                    edgecolor='white', linewidth=0.5)
-            # Mark top reducer
             top_val = np.max(reductions)
             ax.axvline(top_val, color='#f4a261', linewidth=2, alpha=0.9)
         else:
@@ -224,7 +230,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         Patch(facecolor='#e76f51', label='Meat Eater'),
         Patch(facecolor='#f4a261', label='Top Reducers')
     ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.95), ncol=3)
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.995), ncol=3)
     
     plt.tight_layout()
     plt.subplots_adjust(top=0.9)
