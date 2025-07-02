@@ -143,12 +143,12 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
     net_axes = [fig.add_subplot(gs[0, i]) for i in range(4)]
     hist_axes = [fig.add_subplot(gs[1, i]) for i in range(4)]
     
-    # Network layout - more spread out for visibility
+    # Network layout
     G = snapshots['final']['graph']
     try:
         pos = nx.spectral_layout(G, seed=42)
     except:
-        pos = nx.spring_layout(G, k=2.5, iterations=300, seed=42)  # More spread out
+        pos = nx.spring_layout(G, k=2.5, iterations=300, seed=42)
     nodes = list(G.nodes())
     
     # Get position bounds for tight cropping
@@ -164,6 +164,14 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         time_points = [0] + all_times + ['final']
     time_points = time_points[:4]
     
+    # Calculate max y for consistent scaling - NO FILTERING
+    max_count = 0
+    for t in time_points:
+        reductions = np.array(snapshots[t]['reductions'])
+        if len(reductions) > 0:
+            counts, _ = np.histogram(reductions, bins=15)
+            max_count = max(max_count, np.max(counts))
+    
     # Top row: Network snapshots
     for i, t in enumerate(time_points):
         ax = net_axes[i]
@@ -172,7 +180,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         # Node colors
         node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
         
-        # Draw network with larger elements
+        # Draw network
         nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.3, width=0.4)
         nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
                               node_size=10, alpha=0.9)
@@ -186,7 +194,6 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
                 nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=ax, 
                                      node_color='#f4a261', node_size=60, alpha=1.0)
                 
-                # Add reduction labels
                 for j, node in zip(top3_idx, top3_nodes):
                     if reductions[j] > 0:
                         x, y = pos[node]
@@ -198,30 +205,55 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         title = 'Initial' if t == 0 else f'Final' if t == 'final' else f'{t/1000:.0f}k steps'
         ax.set_title(title, fontsize=12)
         
-        # Tight crop with minimal padding
         padding = 0.02
         ax.set_xlim(x_min - padding, x_max + padding)
         ax.set_ylim(y_min - padding, y_max + padding)
         ax.set_aspect('equal', adjustable='box')
         ax.axis('off')
     
-    # Bottom row: Histograms (no filtering)
+    # Bottom row: Histograms - DETAILED DEBUGGING
     for i, t in enumerate(time_points):
         ax = hist_axes[i]
         reductions = np.array(snapshots[t]['reductions'])
         
-        if np.max(reductions) > 0:
-            ax.hist(reductions, bins=15, color=COLORS['secondary'], alpha=0.7, 
-                   edgecolor='white', linewidth=0.5)
-            top_val = np.max(reductions)
-            ax.axvline(top_val, color='#f4a261', linewidth=2, alpha=0.9)
+        # Detailed debugging
+        print(f"\n=== Time {t} Debug ===")
+        print(f"Array shape: {reductions.shape}")
+        print(f"Array type: {type(reductions)}")
+        print(f"Length: {len(reductions)}")
+        print(f"Sum: {np.sum(reductions):.1f}")
+        print(f"Max: {np.max(reductions):.1f}")
+        print(f"Unique values: {len(np.unique(reductions))}")
+        print(f"Zero values: {np.sum(reductions == 0)}")
+        print(f"Non-zero values: {np.sum(reductions > 0)}")
+        print(f"Sample values: {reductions[:10] if len(reductions) >= 10 else reductions}")
+        
+        if len(reductions) > 0:
+            counts, bins, patches = ax.hist(reductions, bins=15, color=COLORS['secondary'], 
+                                          alpha=0.7, edgecolor='white', linewidth=0.5)
+            
+            print(f"Histogram counts: {counts}")
+            print(f"Histogram counts sum: {np.sum(counts)}")
+            print(f"Bins: {bins}")
+            
+            if np.max(reductions) > 0:
+                ax.axvline(np.max(reductions), color='#f4a261', linewidth=2, alpha=0.9)
         else:
-            ax.text(0.5, 0.5, 'No reductions', ha='center', va='center', 
+            ax.text(0.5, 0.5, 'No data', ha='center', va='center', 
                    transform=ax.transAxes, fontsize=8)
         
+        # Set consistent y-axis limit
+        ax.set_ylim(0, max_count * 1.1 if max_count > 0 else 1)
+        
         ax.set_xlabel('Reduction [kg CO₂]', fontsize=8)
+        
+        # Only show y-label and ticks on leftmost plot
         if i == 0:
             ax.set_ylabel('Count', fontsize=8)
+        else:
+            ax.set_ylabel('')
+            ax.tick_params(labelleft=False)
+        
         apply_axis_style(ax)
     
     # Legend
