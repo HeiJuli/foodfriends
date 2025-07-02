@@ -135,23 +135,23 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
     median_row = data[data['is_median_twin']].iloc[0]
     snapshots = median_row['snapshots']
     
-    # Create figure with custom height ratios - networks larger than histograms
-    fig = plt.figure(figsize=(14, 6))  # Reduced height
-    gs = fig.add_gridspec(2, 4, height_ratios=[2, 1], hspace=0.15, wspace=0.1)  # Reduced ratio, more hspace
+    # Create figure with larger networks
+    fig = plt.figure(figsize=(16, 7))
+    gs = fig.add_gridspec(2, 4, height_ratios=[2.5, 1], hspace=0.05, wspace=0.05)
     
     # Create axes
     net_axes = [fig.add_subplot(gs[0, i]) for i in range(4)]
     hist_axes = [fig.add_subplot(gs[1, i]) for i in range(4)]
     
-    # Better layout for clustered networks
+    # Network layout - more spread out for visibility
     G = snapshots['final']['graph']
     try:
         pos = nx.spectral_layout(G, seed=42)
     except:
-        pos = nx.spring_layout(G, k=1.5, iterations=200, seed=42)  # Tighter layout
+        pos = nx.spring_layout(G, k=2.5, iterations=300, seed=42)  # More spread out
     nodes = list(G.nodes())
     
-    # Get position bounds for consistent scaling
+    # Get position bounds for tight cropping
     pos_array = np.array(list(pos.values()))
     x_min, x_max = pos_array[:, 0].min(), pos_array[:, 0].max()
     y_min, y_max = pos_array[:, 1].min(), pos_array[:, 1].max()
@@ -172,45 +172,46 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         # Node colors
         node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
         
-        # Draw network
-        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.2, width=0.3)
+        # Draw network with larger elements
+        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.3, width=0.4)
         nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
-                              node_size=12, alpha=0.9)  # Larger nodes
+                              node_size=10, alpha=0.9)
         
-        # Highlight top reducers
+        # Highlight top reducers (no filtering)
         reductions = np.array(snap['reductions'])
         if np.max(reductions) > 0:
             top3_idx = np.argsort(reductions)[-3:]
             top3_nodes = [nodes[j] for j in top3_idx if reductions[j] > 0]
             if top3_nodes:
                 nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=ax, 
-                                     node_color='#f4a261', node_size=30, alpha=1.0)
+                                     node_color='#f4a261', node_size=60, alpha=1.0)
                 
                 # Add reduction labels
                 for j, node in zip(top3_idx, top3_nodes):
                     if reductions[j] > 0:
                         x, y = pos[node]
                         ax.annotate(f'{reductions[j]:.0f}', (x, y), 
-                                  xytext=(8, 8), textcoords='offset points',
-                                  fontsize=7, fontweight='bold',
-                                  bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
+                                  xytext=(10, 10), textcoords='offset points',
+                                  fontsize=8, fontweight='bold',
+                                  bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.9))
         
         title = 'Initial' if t == 0 else f'Final' if t == 'final' else f'{t/1000:.0f}k steps'
-        ax.set_title(title, fontsize=11)
+        ax.set_title(title, fontsize=12)
         
-        # Set tight axis limits to minimize whitespace
-        padding = 0.05
+        # Tight crop with minimal padding
+        padding = 0.02
         ax.set_xlim(x_min - padding, x_max + padding)
         ax.set_ylim(y_min - padding, y_max + padding)
+        ax.set_aspect('equal', adjustable='box')
         ax.axis('off')
     
-    # Bottom row: Histograms (unchanged)
+    # Bottom row: Histograms (no filtering)
     for i, t in enumerate(time_points):
         ax = hist_axes[i]
         reductions = np.array(snapshots[t]['reductions'])
         
         if np.max(reductions) > 0:
-            ax.hist(reductions, bins=12, color=COLORS['secondary'], alpha=0.7, 
+            ax.hist(reductions, bins=15, color=COLORS['secondary'], alpha=0.7, 
                    edgecolor='white', linewidth=0.5)
             top_val = np.max(reductions)
             ax.axvline(top_val, color='#f4a261', linewidth=2, alpha=0.9)
@@ -230,10 +231,10 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         Patch(facecolor='#e76f51', label='Meat Eater'),
         Patch(facecolor='#f4a261', label='Top Reducers')
     ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.995), ncol=3)
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.99), ncol=3)
     
     plt.tight_layout()
-    plt.subplots_adjust(top=0.9)
+    plt.subplots_adjust(top=0.92)
     
     if save:
         output_dir = ensure_output_dir()
@@ -242,112 +243,6 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
     
     return fig
 
-def plot_network_agency_evolution_old(data=None, file_path=None, save=True):
-    """4-panel plot: network snapshots + reduction distribution"""
-    set_publication_style()
-    
-    if data is None:
-        data = load_data(file_path)
-        if data is None: return None
-    
-    # Get median twin trajectory
-    median_row = data[data['is_median_twin']].iloc[0]
-    snapshots = median_row['snapshots']
-    
-    # Get final reductions and identify top 3
-    final_reductions = np.array(snapshots['final']['reductions'])
-    top3_idx = np.argsort(final_reductions)[-3:]
-    top3_values = final_reductions[top3_idx]
-    
-    # Create figure
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-    axes = axes.flatten()
-    
-    # Network layout (use same layout for all panels)
-    G = snapshots['final']['graph']
-    pos = nx.spring_layout(G, seed=42, k=1, iterations=50)
-    nodes = list(G.nodes())  # Map array indices to node IDs
-    
-    # Time points for snapshots
-    time_points = sorted([t for t in snapshots.keys() if isinstance(t, int)])
-    
-    # Panels 1-3: Network snapshots
-    for i, t in enumerate(time_points):
-        ax = axes[i]
-        snap = snapshots[t]
-        
-        # Node colors: veg=green, meat=red
-        node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
-        
-        # Draw network
-        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.5, width=0.3)
-        nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
-                              node_size=15, alpha=0.9)
-        
-        # For panels 2&3, highlight top 3 and add labels
-        if i > 0:  # Skip first panel
-            reductions = np.array(snap['reductions'])
-            current_top3_idx = np.argsort(reductions)[-3:]
-            current_top3_nodes = [nodes[j] for j in current_top3_idx]  # Map to node IDs
-            
-            # Highlight top 3 with larger gold nodes
-            if len(current_top3_nodes) > 0:
-                nx.draw_networkx_nodes(G, pos, nodelist=current_top3_nodes, ax=ax, 
-                                     node_color='#f4a261', node_size=120, alpha=0.9, 
-                                     edgecolors='black', linewidths=1)
-                
-                # Add reduction labels
-                for j, node in zip(current_top3_idx, current_top3_nodes):
-                    if reductions[j] > 0:
-                        x, y = pos[node]
-                        ax.annotate(f'{reductions[j]:.0f}', (x, y), 
-                                  xytext=(8, 8), textcoords='offset points',
-                                  fontsize=8, fontweight='bold',
-                                  bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
-        
-        ax.set_title(f'Time {t/1000:.0f}k steps' if isinstance(t, int) else 'Initial')
-        ax.set_aspect('equal')
-        ax.axis('off')
-    
-    # Panel 4: Distribution
-    ax = axes[3]
-    
-    # Use all reductions, including zeros for full picture
-    if len(final_reductions) > 0:
-        # Histogram
-        n, bins, patches = ax.hist(final_reductions, bins=20, color=COLORS['secondary'], 
-                                  alpha=0.7, edgecolor='white', linewidth=0.5)
-        
-        # Mark top 3 positions with vertical lines only
-        for val in top3_values:
-            if val > 0:
-                ax.axvline(val, color='#f4a261', linewidth=2, alpha=0.9)
-    else:
-        ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
-    
-    ax.set_xlabel('Emissions Reduction Attributed [kg CO₂]')
-    ax.set_ylabel('Number of Agents')
-    ax.set_title('Final Reduction Distribution')
-    apply_axis_style(ax)
-    
-    # Legend
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor='#2a9d8f', label='Vegetarian'),
-        Patch(facecolor='#e76f51', label='Meat Eater'),
-        Patch(facecolor='#f4a261', label='Top 3 Reducers')
-    ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.02), ncol=3)
-    
-    plt.tight_layout()
-    plt.subplots_adjust(bottom=0.1)
-    
-    if save:
-        output_dir = ensure_output_dir()
-        plt.savefig(f'{output_dir}/network_agency_evolution.pdf', dpi=300, bbox_inches='tight')
-        print("Saved network_agency_evolution.pdf")
-    
-    return fig
 #%%
 def plot_emissions_vs_veg_fraction(data=None, file_path=None, save=True):
     set_publication_style()

@@ -162,9 +162,10 @@ class Agent():
             influencer: agent who influenced the change
         """
         delta = old_c - self.C
-        current = getattr(influencer, "reduction_out")
-        setattr(influencer, "reduction_out", current + delta)
-    
+        if delta > 0: 
+            current = getattr(influencer, "reduction_out")
+            setattr(influencer, "reduction_out", current + delta)
+        
     
     def get_neighbour_attributes(self, attribute):
         """
@@ -243,18 +244,22 @@ class Agent():
         prob_switch = self.prob_calc(other_agent)
         
         if not self.immune and self.flip(prob_switch):
-            old_C = self.C
+            old_C, old_diet = self.C, self.diet
             self.diet = "meat" if self.diet == "veg" else "veg"
             
             # Update consumption based on influencer
-            self.C = other_agent.C if other_agent.diet == self.diet else \
-                self.diet_emissions(self.diet)
-                
+            if other_agent.diet == self.diet:
+                self.C = other_agent.C
+            else:
+                self.C = self.diet_emissions(self.diet)
+            
+            
             # If emissions reduced, attribute to influencing agent
-            if self.diet == "veg":
+            if old_diet == "meat" and self.diet == "veg":
                 self.reduction_tracker(old_C, other_agent)
         
-        self.C = self.diet_emissions(self.diet)
+        else: 
+            self.C = self.diet_emissions(self.diet)
         
       
         
