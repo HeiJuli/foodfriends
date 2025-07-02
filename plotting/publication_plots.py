@@ -388,6 +388,60 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
     
     return fig
 #%%
+def plot_parameter_sweep_trajectories(data=None, file_path=None, save=True):
+    """Plot trajectories grouped by parameter combinations for supplement"""
+    set_publication_style()
+    
+    if data is None:
+        data = load_data(file_path)
+        if data is None: return None
+    
+    # Get unique parameter combinations
+    param_sets = data['parameter_set'].unique()
+    
+    # Create subplot grid
+    n_sets = len(param_sets)
+    cols = min(3, n_sets)
+    rows = (n_sets + cols - 1) // cols
+    
+    fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows), sharey=True)
+    if n_sets == 1: axes = [axes]
+    axes = axes.flatten() if n_sets > 1 else axes
+    
+    for i, param_set in enumerate(param_sets):
+        if i >= len(axes): break
+        
+        ax = axes[i]
+        subset = data[data['parameter_set'] == param_set]
+        
+        # Plot all trajectories for this parameter set
+        colors = create_color_variations(COLORS['primary'], len(subset))
+        for j, (_, row) in enumerate(subset.iterrows()):
+            trajectory = row['fraction_veg_trajectory']
+            if isinstance(trajectory, list):
+                ax.plot(np.arange(len(trajectory)), trajectory, 
+                       color=colors[j % len(colors)], alpha=0.7, linewidth=1)
+        
+        ax.set_title(param_set, fontsize=10)
+        ax.set_xlabel('Time Steps')
+        if i % cols == 0:
+            ax.set_ylabel('Vegetarian Fraction')
+        ax.set_ylim(0, 1)
+        apply_axis_style(ax)
+    
+    # Hide unused subplots
+    for i in range(n_sets, len(axes)):
+        axes[i].set_visible(False)
+    
+    plt.tight_layout()
+    
+    if save:
+        output_dir = ensure_output_dir()
+        plt.savefig(f'{output_dir}/parameter_sweep_trajectories.pdf', dpi=300, bbox_inches='tight')
+        print("Saved parameter_sweep_trajectories.pdf")
+    
+    return fig
+#%%
 def select_file(pattern):
     import glob
     from datetime import datetime
@@ -410,7 +464,6 @@ def select_file(pattern):
         return files[int(choice)-1] if choice else files[0]
     except (ValueError, IndexError):
         return files[0]
-
 def main():
     print("=== Publication Plots ===")
     
@@ -422,6 +475,7 @@ def main():
         print("[5] Individual Reductions Distribution")
         print("[6] Parameter vs Twin Trajectories")
         print("[7] Network Agency Evolution")
+        print("[8] Parameter Sweep Trajectories (supplement)")
         print("[0] Exit")
         
         choice = input("Select: ")
@@ -452,6 +506,14 @@ def main():
                     plot_network_agency_evolution(file_path=file_path)
                 else:
                     print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
+        elif choice == '8':
+            file_path = select_file('parameter_trajectories')
+            if file_path: 
+                data = load_data(file_path)
+                if data is not None:
+                    plot_parameter_sweep_trajectories(data=data)
+                else:
+                    print("No parameter sweep trajectory data found.")
         elif choice == '0':
             break
         else:
