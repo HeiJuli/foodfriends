@@ -118,7 +118,7 @@ def run_parameter_analysis(params=None, alpha_range=None, beta_range=None,
             for t in theta_range:
                 for vf in veg_fractions:
                     p = params.copy()
-                    p.update({"alpha": a, "beta": b, "theta": ct, "veg_f": vf, "meat_f": 1-vf})
+                    p.update({"alpha": a, "beta": b, "theta": t, "veg_f": vf, "meat_f": 1-vf})
                     
                     for run in range(runs_per_combo):
                         count += 1
