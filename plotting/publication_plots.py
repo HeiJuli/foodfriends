@@ -123,11 +123,9 @@ def plot_heatmap(data=None, file_path=None, value_type='final', theta_values=[-0
     return fig
 
 #%%
-def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None, max_x=2500):
-    """8-panel plot: 4 network snapshots + 4 reduction distributions,
-        log_scale: None, 'y', or 'both' for log scaling
-        max_x: maximum x-axis value for truncation
-    """
+def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None):
+    """Simplified 8-panel plot: 4 network snapshots + 4 reduction distributions
+    log_scale: None, 'y', or 'loglog' for scaling options"""
     set_publication_style()
     
     if data is None:
@@ -138,13 +136,9 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     median_row = data[data['is_median_twin']].iloc[0]
     snapshots = median_row['snapshots']
     
-    # Create figure with larger networks
-    fig = plt.figure(figsize=(16, 7))
+    # Create figure
+    fig = plt.figure(figsize=(14, 6))
     gs = fig.add_gridspec(2, 4, height_ratios=[2.5, 1], hspace=0.05, wspace=0.05)
-    
-    # Create axes
-    net_axes = [fig.add_subplot(gs[0, i]) for i in range(4)]
-    hist_axes = [fig.add_subplot(gs[1, i]) for i in range(4)]
     
     # Network layout
     G = snapshots['final']['graph']
@@ -152,9 +146,8 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         pos = nx.spectral_layout(G, seed=42)
     except:
         pos = nx.spring_layout(G, k=2.5, iterations=300, seed=42)
-    nodes = list(G.nodes())
     
-    # Get position bounds for tight cropping
+    # Get position bounds for consistent aspect ratio
     pos_array = np.array(list(pos.values()))
     x_min, x_max = pos_array[:, 0].min(), pos_array[:, 0].max()
     y_min, y_max = pos_array[:, 1].min(), pos_array[:, 1].max()
@@ -167,96 +160,76 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         time_points = [0] + all_times + ['final']
     time_points = time_points[:4]
     
-    # Calculate max y for consistent scaling - NO FILTERING
-    max_count = 0
-    for t in time_points:
-        reductions = np.array(snapshots[t]['reductions'])
-        if len(reductions) > 0:
-            counts, _ = np.histogram(reductions, bins=15)
-            max_count = max(max_count, np.max(counts))
-    
-    # Top row: Network snapshots
+    # Plot networks and histograms
     for i, t in enumerate(time_points):
-        ax = net_axes[i]
+        # Network subplot
+        net_ax = fig.add_subplot(gs[0, i])
         snap = snapshots[t]
         
-        # Node colors
-        node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
-        
         # Draw network
-        nx.draw_networkx_edges(G, pos, ax=ax, alpha=0.3, width=0.4)
-        nx.draw_networkx_nodes(G, pos, ax=ax, node_color=node_colors, 
-                              node_size=10, alpha=0.9)
+        node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
+        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.3, width=0.3)
+        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=8, alpha=0.9)
         
-        # Highlight top reducers (no filtering)
+        # Highlight top reducers
         reductions = np.array(snap['reductions'])
         if np.max(reductions) > 0:
             top3_idx = np.argsort(reductions)[-3:]
-            top3_nodes = [nodes[j] for j in top3_idx if reductions[j] > 0]
+            top3_nodes = [list(G.nodes())[j] for j in top3_idx if reductions[j] > 0]
             if top3_nodes:
-                nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=ax, 
-                                     node_color='#f4a261', node_size=60, alpha=1.0)
-                
-                for j, node in zip(top3_idx, top3_nodes):
-                    if reductions[j] > 0:
-                        x, y = pos[node]
-                        ax.annotate(f'{reductions[j]:.0f}', (x, y), 
-                                  xytext=(10, 10), textcoords='offset points',
-                                  fontsize=8, fontweight='bold',
-                                  bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.9))
+                nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=net_ax, 
+                                     node_color='#f4a261', node_size=30, alpha=1.0)
         
-        title = 'Initial' if t == 0 else f'Final' if t == 'final' else f'{t/1000:.0f}k steps'
-        ax.set_title(title, fontsize=12)
+        title = 'Initial' if t == 0 else 'Final' if t == 'final' else f'{t//1000}k steps'
+        net_ax.set_title(title, fontsize=12)
         
+        # Set consistent bounds and aspect ratio
         padding = 0.02
-        ax.set_xlim(x_min - padding, x_max + padding)
-        ax.set_ylim(y_min - padding, y_max + padding)
-        ax.set_aspect('equal', adjustable='box')
-        ax.axis('off')
-    
-   # Bottom row: Seaborn histograms 
-    for i, t in enumerate(time_points):
-        ax = hist_axes[i]
-        reductions = np.array(snapshots[t]['reductions'])
+        net_ax.set_xlim(x_min - padding, x_max + padding)
+        net_ax.set_ylim(y_min - padding, y_max + padding)
+        net_ax.set_aspect('equal', adjustable='box')
+        net_ax.axis('off')
         
-        print(f"\n=== Time {t} Debug ===")
-        print(f"Length: {len(reductions)}, Sum: {np.sum(reductions):.1f}, Max: {np.max(reductions):.1f}")
-        print(f"Non-zero: {np.sum(reductions > 0)}")
+        # Histogram subplot
+        hist_ax = fig.add_subplot(gs[1, i])
+        reductions_tonnes = reductions / 1000  # Convert to tonnes
         
-        if len(reductions) > 0:
-            counts, bins = np.histogram(reductions)
-            print(f"Bin counts: {counts}")
-            print(f"Bin counts sum: {np.sum(counts)}")
+        if np.max(reductions) == 0:
+            hist_ax.text(0.5, 0.5, 'No reductions yet', ha='center', va='center', 
+                        transform=hist_ax.transAxes, fontsize=8, color='gray')
+        else:
+            # Plot normalized histogram
+            hist_ax.hist(reductions_tonnes, bins=15, density=True, color=COLORS['secondary'], 
+                        alpha=0.7, edgecolor='white', linewidth=0.5)
             
-            if np.max(reductions) == 0:
-                ax.text(0.5, 0.5, 'No reductions yet', ha='center', va='center', 
-                       transform=ax.transAxes, fontsize=8, color='gray')
+            if log_scale == 'y':
+                hist_ax.set_yscale('log')
+            elif log_scale == 'loglog':
+                hist_ax.set_yscale('log')
+                hist_ax.set_xscale('log')
+        
+        # Clean axis styling
+        hist_ax.spines['top'].set_visible(False)
+        hist_ax.spines['right'].set_visible(False)
+        
+        # Auto-adjust y-axis limits based on data
+        if np.max(reductions) > 0:
+            if log_scale in ['y', 'loglog']:
+                # For log scale, start from a small positive value
+                y_vals = hist_ax.get_ylim()
+                hist_ax.set_ylim(max(y_vals[0], 1e-6), y_vals[1])
             else:
-                # Truncate data if max_x specified
-                plot_data = reductions[reductions <= max_x] if max_x else reductions
-                
-                sns.histplot(plot_data, ax=ax, color=COLORS['secondary'], 
-                            alpha=0.7, edgecolor='white', linewidth=0.5, stat="count")
-                
-                # Apply log scaling
-                if log_scale == 'y':
-                    ax.set_yscale('log')
-                elif log_scale == 'both':
-                    ax.set_yscale('log')
-                    ax.set_xscale('log')
-                
-                # Set x-axis limit
-                if max_x:
-                    ax.set_xlim(0, max_x)
-
-    ax.set_xlabel('Reduction [kg CO₂]', fontsize=8)
-    if i == 0:
-        ax.set_ylabel('Count', fontsize=8)
-    else:
-        ax.set_ylabel('')
-        ax.tick_params(labelleft=False)
-    
-    apply_axis_style(ax)
+                # For linear scale, start from 0
+                hist_ax.set_ylim(0, None)
+        
+        if i == 0:
+            hist_ax.set_ylabel('Density', fontsize=8)
+        else:
+            hist_ax.set_ylabel('')
+            hist_ax.tick_params(labelleft=False)
+        
+        if i == 1 or i == 2:  # Only middle plots get x-label
+            hist_ax.set_xlabel('Reduction [tonnes CO₂]', fontsize=8)
     
     # Legend
     from matplotlib.patches import Patch
@@ -537,7 +510,7 @@ def main():
             if file_path: 
                 data = load_data(file_path)
                 if data is not None and 'is_median_twin' in data.columns:
-                    plot_network_agency_evolution(file_path=file_path, log_scale='single', max_x=None)
+                    plot_network_agency_evolution(file_path=file_path, log_scale="loglog")
                 else:
                     print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
         elif choice == '8':
