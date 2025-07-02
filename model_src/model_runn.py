@@ -13,9 +13,10 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 55000,
+          "steps": 160000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
+          "k": 8, #initial edges per node for graph generation
           "M": 10, # memory length
           "veg_f":0.5, #vegetarian fraction
           "meat_f": 0.5,  #meat eater fraciton
@@ -265,9 +266,9 @@ def main():
                   veg_fractions=[0.2], runs_per_combo=3)
         elif choice == '3':
             timer(run_veg_growth_analysis, params=params,
-                  veg_fractions=np.linspace(0.1, 0.6, 5))
+                  veg_fractions=np.linspace(0.1, 0.6, 10))
         elif choice == '4':
-            timer(run_trajectory_analysis, params=params, runs_per_combo=10)
+            timer(run_trajectory_analysis, params=params, runs_per_combo=3)
         elif choice == '5':
             timer(run_parameter_analysis, params=params,
                   alpha_range=np.linspace(0.1, 0.9, 3), beta_range=np.linspace(0.1, 0.9, 3),

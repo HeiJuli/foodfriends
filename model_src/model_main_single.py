@@ -32,6 +32,7 @@ params = {"veg_CO2": 1390,
           "N": 699,
           "erdos_p": 3,
           "steps": 25000,
+          "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 10, # memory length
@@ -290,7 +291,7 @@ class Model():
              self.G1 = nx.watts_strogatz_graph(params["N"], 6, params["tc"])
         
         elif params['topology'] == "PATCH":
-            self.G1 = PATCH(params["N"], params["M"], params["veg_f"], h_MM=0.6, tc=params["tc"], h_mm=0.6)
+            self.G1 = PATCH(params["N"], params["k"], float(params["veg_f"]), h_MM=0.6, tc=params["tc"], h_mm=0.6)
             self.G1.generate()
             
         self.system_C = []
