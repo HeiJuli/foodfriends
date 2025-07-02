@@ -13,7 +13,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 45000,
+          "steps": 55000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 10, # memory length
@@ -22,7 +22,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
-          'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
           "theta": 0, #intrinsic preference (- is for meat, + for vego)
@@ -99,8 +99,9 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None):
     return df
 
 def run_parameter_analysis(params=None, alpha_range=None, beta_range=None, 
-                          theta_range=None, veg_fractions=None, runs_per_combo=3):
-    """Unified parameter analysis - replaces both tipping point and 3D analysis"""
+                          theta_range=None, veg_fractions=None, runs_per_combo=3,
+                          record_trajectories=False):
+    """Unified parameter analysis - optionally records full trajectories"""
     params = DEFAULT_PARAMS.copy() if params is None else params
     alpha_range = np.linspace(0.1, 0.9, 5) if alpha_range is None else alpha_range
     beta_range = np.linspace(0.1, 0.9, 5) if beta_range is None else beta_range
@@ -116,7 +117,7 @@ def run_parameter_analysis(params=None, alpha_range=None, beta_range=None,
             for t in theta_range:
                 for vf in veg_fractions:
                     p = params.copy()
-                    p.update({"alpha": a, "beta": b, "theta": t, "veg_f": vf, "meat_f": 1-vf})
+                    p.update({"alpha": a, "beta": b, "theta": ct, "veg_f": vf, "meat_f": 1-vf})
                     
                     for run in range(runs_per_combo):
                         count += 1
@@ -125,18 +126,28 @@ def run_parameter_analysis(params=None, alpha_range=None, beta_range=None,
                         model = model_main.Model(p)
                         model.run()
                         
-                        results.append({
+                        result = {
                             'alpha': a, 'beta': b, 'theta': t,
                             'initial_veg_f': vf, 'final_veg_f': model.fraction_veg[-1],
                             'change': model.fraction_veg[-1] - vf,
                             'tipped': model.fraction_veg[-1] > (vf * 1.2),
                             'final_CO2': model.system_C[-1], 'run': run,
                             'individual_reductions': model.get_attributes("reduction_out")
-                        })
+                        }
+                        
+                        if record_trajectories:
+                            result.update({
+                                'fraction_veg_trajectory': model.fraction_veg,
+                                'system_C_trajectory': model.system_C,
+                                'parameter_set': f"α={a:.2f}, β={b:.2f}, θ={t:.2f}"
+                            })
+                        
+                        results.append(result)
     
     df = pd.DataFrame(results)
     ensure_output_dir()
-    filename = f'../model_output/parameter_analysis_{date.today().strftime("%Y%m%d")}.pkl'
+    suffix = "trajectories" if record_trajectories else "analysis"
+    filename = f'../model_output/parameter_{suffix}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved to {filename}")
     return df
@@ -162,12 +173,9 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg=0.6):
     print(f"Saved to {filename}")
     return df
 
-def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None, 
-                           theta_values=None, runs_per_combo=3):
+def run_trajectory_analysis(params=None, runs_per_combo=10):
+    """Run trajectory analysis for parameterized and twin modes only"""
     p = DEFAULT_PARAMS.copy() if params is None else params.copy()
-    a = [0.25, 0.5, 0.75] if alpha_values is None else alpha_values
-    b = [0.25, 0.5, 0.75] if beta_values is None else beta_values
-    t = [-0.5, 0, 0.5] if theta_values is None else theta_values
     r = []
     
     # Load survey data if needed
@@ -176,51 +184,33 @@ def run_trajectory_analysis(params=None, alpha_values=None, beta_values=None,
         sd = load_survey_data(p["survey_file"], ["nomem_encr", "alpha", "beta", "theta", "diet"])
         sm = extract_survey_params(sd)
     
-    # Synthetic mode
-    syn = p.copy()
-    syn["agent_ini"] = "synthetic"
-    for ax in a:
-        for bx in b:
-            for tx in t:
-                syn.update({"alpha": ax, "beta": bx, "theta": tx})
-                for i in range(runs_per_combo):
-                    m = model_main.Model(syn)
-                    m.run()
-                    r.append({
-                        'agent_ini': "synthetic", 'alpha': ax, 'beta': bx, 'theta': tx,
-                        'initial_veg_f': syn["veg_f"], 'final_veg_f': m.fraction_veg[-1],
-                        'fraction_veg_trajectory': m.fraction_veg, 'system_C_trajectory': m.system_C,
-                        'run': i, 'parameter_set': f"α={ax:.2f}, β={bx:.2f}, θ={tx:.2f}"
-                    })
-    
-    # Survey-based modes
+    # Parameterized mode
     if sd is not None:
-        # Parameterized
         par = p.copy()
         par.update({"agent_ini": "parameterized", **sm})
         for i in range(runs_per_combo):
-            m = model_main.Model(par)
-            m.run()
+            model = model_main.Model(par)
+            model.run()
             r.append({
                 'agent_ini': "parameterized", **sm,
-                'initial_veg_f': par["veg_f"], 'final_veg_f': m.fraction_veg[-1],
-                'fraction_veg_trajectory': m.fraction_veg, 'system_C_trajectory': m.system_C,
+                'initial_veg_f': par["veg_f"], 'final_veg_f': model.fraction_veg[-1],
+                'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
                 'run': i, 'parameter_set': "Survey Mean Parameters"
             })
         
-        # Twin mode with snapshots
+        # Twin mode
         twn = p.copy()
         twn.update({"agent_ini": "twin", "N": len(sd)})
         for i in range(runs_per_combo):
-            m = model_main.Model(twn)
-            m.run()
-            agent_means = {k: np.mean([getattr(ag, k) for ag in m.agents]) for k in ['alpha', 'beta', 'theta']}
+            model = model_main.Model(twn)
+            model.run()
+            agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'beta', 'theta']}
             r.append({
                 'agent_ini': "twin", **agent_means,
-                'initial_veg_f': sum(ag.diet=="veg" for ag in m.agents)/len(m.agents),
-                'final_veg_f': m.fraction_veg[-1],
-                'fraction_veg_trajectory': m.fraction_veg, 'system_C_trajectory': m.system_C,
-                'snapshots': m.snapshots if hasattr(m, 'snapshots') else None,
+                'initial_veg_f': sum(ag.diet=="veg" for ag in model.agents)/len(model.agents),
+                'final_veg_f': model.fraction_veg[-1],
+                'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
+                'snapshots': model.snapshots if hasattr(model, 'snapshots') else None,
                 'run': i, 'parameter_set': "Survey Individual Parameters"
             })
     
@@ -258,9 +248,10 @@ def main():
     
     while True:
         print("\n[1] Emissions vs Veg Fraction")
-        print("[2] Parameter Analysis (alpha-beta grid)")
+        print("[2] Parameter Analysis (alpha-beta grid, end states)")
         print("[3] Vegetarian Growth Analysis") 
-        print("[4] Trajectory Analysis")
+        print("[4] Trajectory Analysis (parameterized + twin modes)")
+        print("[5] Parameter Sweep with Trajectories (supplement)")
         print("[0] Exit")
         
         choice = input("Select: ")
@@ -277,7 +268,11 @@ def main():
                   veg_fractions=np.linspace(0.1, 0.6, 5))
         elif choice == '4':
             timer(run_trajectory_analysis, params=params, runs_per_combo=10)
-    
+        elif choice == '5':
+            timer(run_parameter_analysis, params=params,
+                  alpha_range=np.linspace(0.1, 0.9, 3), beta_range=np.linspace(0.1, 0.9, 3),
+                  theta_range=[-0.5, 0, 0.5], veg_fractions=[0.2], runs_per_combo=3,
+                  record_trajectories=True)
         elif choice == '0':
             break
         else:

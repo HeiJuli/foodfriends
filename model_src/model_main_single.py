@@ -40,7 +40,7 @@ params = {"veg_CO2": 1390,
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
-          'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
           "theta": 0, #intrinsic preference (- is for meat, + for vego)
