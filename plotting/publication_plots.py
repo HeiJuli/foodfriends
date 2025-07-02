@@ -123,8 +123,11 @@ def plot_heatmap(data=None, file_path=None, value_type='final', theta_values=[-0
     return fig
 
 #%%
-def plot_network_agency_evolution(data=None, file_path=None, save=True):
-    """8-panel plot: 4 network snapshots + 4 reduction distributions"""
+def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None, max_x=2500):
+    """8-panel plot: 4 network snapshots + 4 reduction distributions,
+        log_scale: None, 'y', or 'both' for log scaling
+        max_x: maximum x-axis value for truncation
+    """
     set_publication_style()
     
     if data is None:
@@ -211,50 +214,49 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True):
         ax.set_aspect('equal', adjustable='box')
         ax.axis('off')
     
-    # Bottom row: Histograms - DETAILED DEBUGGING
+   # Bottom row: Seaborn histograms 
     for i, t in enumerate(time_points):
         ax = hist_axes[i]
         reductions = np.array(snapshots[t]['reductions'])
         
-        # Detailed debugging
         print(f"\n=== Time {t} Debug ===")
-        print(f"Array shape: {reductions.shape}")
-        print(f"Array type: {type(reductions)}")
-        print(f"Length: {len(reductions)}")
-        print(f"Sum: {np.sum(reductions):.1f}")
-        print(f"Max: {np.max(reductions):.1f}")
-        print(f"Unique values: {len(np.unique(reductions))}")
-        print(f"Zero values: {np.sum(reductions == 0)}")
-        print(f"Non-zero values: {np.sum(reductions > 0)}")
-        print(f"Sample values: {reductions[:10] if len(reductions) >= 10 else reductions}")
+        print(f"Length: {len(reductions)}, Sum: {np.sum(reductions):.1f}, Max: {np.max(reductions):.1f}")
+        print(f"Non-zero: {np.sum(reductions > 0)}")
         
         if len(reductions) > 0:
-            counts, bins, patches = ax.hist(reductions, bins=15, color=COLORS['secondary'], 
-                                          alpha=0.7, edgecolor='white', linewidth=0.5)
+            counts, bins = np.histogram(reductions)
+            print(f"Bin counts: {counts}")
+            print(f"Bin counts sum: {np.sum(counts)}")
             
-            print(f"Histogram counts: {counts}")
-            print(f"Histogram counts sum: {np.sum(counts)}")
-            print(f"Bins: {bins}")
-            
-            if np.max(reductions) > 0:
-                ax.axvline(np.max(reductions), color='#f4a261', linewidth=2, alpha=0.9)
-        else:
-            ax.text(0.5, 0.5, 'No data', ha='center', va='center', 
-                   transform=ax.transAxes, fontsize=8)
-        
-        # Set consistent y-axis limit
-        ax.set_ylim(0, max_count * 1.1 if max_count > 0 else 1)
-        
-        ax.set_xlabel('Reduction [kg CO₂]', fontsize=8)
-        
-        # Only show y-label and ticks on leftmost plot
-        if i == 0:
-            ax.set_ylabel('Count', fontsize=8)
-        else:
-            ax.set_ylabel('')
-            ax.tick_params(labelleft=False)
-        
-        apply_axis_style(ax)
+            if np.max(reductions) == 0:
+                ax.text(0.5, 0.5, 'No reductions yet', ha='center', va='center', 
+                       transform=ax.transAxes, fontsize=8, color='gray')
+            else:
+                # Truncate data if max_x specified
+                plot_data = reductions[reductions <= max_x] if max_x else reductions
+                
+                sns.histplot(plot_data, ax=ax, color=COLORS['secondary'], 
+                            alpha=0.7, edgecolor='white', linewidth=0.5, stat="count")
+                
+                # Apply log scaling
+                if log_scale == 'y':
+                    ax.set_yscale('log')
+                elif log_scale == 'both':
+                    ax.set_yscale('log')
+                    ax.set_xscale('log')
+                
+                # Set x-axis limit
+                if max_x:
+                    ax.set_xlim(0, max_x)
+
+    ax.set_xlabel('Reduction [kg CO₂]', fontsize=8)
+    if i == 0:
+        ax.set_ylabel('Count', fontsize=8)
+    else:
+        ax.set_ylabel('')
+        ax.tick_params(labelleft=False)
+    
+    apply_axis_style(ax)
     
     # Legend
     from matplotlib.patches import Patch
@@ -535,7 +537,7 @@ def main():
             if file_path: 
                 data = load_data(file_path)
                 if data is not None and 'is_median_twin' in data.columns:
-                    plot_network_agency_evolution(file_path=file_path)
+                    plot_network_agency_evolution(file_path=file_path, log_scale='single', max_x=None)
                 else:
                     print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
         elif choice == '8':
