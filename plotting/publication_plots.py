@@ -142,10 +142,11 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     
     # Network layout
     G = snapshots['final']['graph']
+
     try:
         pos = nx.spectral_layout(G, seed=42)
     except:
-        pos = nx.spring_layout(G, k=2.5, iterations=300, seed=42)
+        pos = nx.spring_layout(G, k=3.5, iterations=300, seed=42)
     
     # Get position bounds for consistent aspect ratio
     pos_array = np.array(list(pos.values()))
@@ -171,7 +172,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.3, width=0.3)
         nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=8, alpha=0.9)
         
-        # Highlight top reducers
+        # Highlight top reducers and add labels
         reductions = np.array(snap['reductions'])
         if np.max(reductions) > 0:
             top3_idx = np.argsort(reductions)[-3:]
@@ -179,6 +180,15 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             if top3_nodes:
                 nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=net_ax, 
                                      node_color='#f4a261', node_size=30, alpha=1.0)
+                
+                # Add reduction labels
+                for j, node in zip(top3_idx, top3_nodes):
+                    if reductions[j] > 0:
+                        x, y = pos[node]
+                        net_ax.annotate(f'{reductions[j]:.0f}', (x, y), 
+                                      xytext=(8, 8), textcoords='offset points',
+                                      fontsize=8, fontweight='bold',
+                                      bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
         
         title = 'Initial' if t == 0 else 'Final' if t == 'final' else f'{t//1000}k steps'
         net_ax.set_title(title, fontsize=12)
@@ -197,6 +207,18 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         if np.max(reductions) == 0:
             hist_ax.text(0.5, 0.5, 'No reductions yet', ha='center', va='center', 
                         transform=hist_ax.transAxes, fontsize=8, color='gray')
+            # Apply consistent scaling even for empty plots
+            if log_scale == 'loglog':
+                hist_ax.set_yscale('log')
+                hist_ax.set_xscale('log')
+                hist_ax.set_xlim(1e-1, 1e2)
+                hist_ax.set_ylim(1e-3, 1e1)
+                hist_ax.yaxis.set_major_formatter(plt.LogFormatterMathtext())
+                hist_ax.xaxis.set_major_formatter(plt.LogFormatterMathtext())
+            elif log_scale == 'y':
+                hist_ax.set_yscale('log')
+                hist_ax.set_ylim(1e-3, 1e1)
+                hist_ax.yaxis.set_major_formatter(plt.LogFormatterMathtext())
         else:
             # Plot normalized histogram
             hist_ax.hist(reductions_tonnes, bins=15, density=True, color=COLORS['secondary'], 
@@ -204,26 +226,19 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             
             if log_scale == 'y':
                 hist_ax.set_yscale('log')
+                hist_ax.yaxis.set_major_formatter(plt.LogFormatterMathtext())
             elif log_scale == 'loglog':
                 hist_ax.set_yscale('log')
                 hist_ax.set_xscale('log')
+                hist_ax.yaxis.set_major_formatter(plt.LogFormatterMathtext())
+                hist_ax.xaxis.set_major_formatter(plt.LogFormatterMathtext())
         
         # Clean axis styling
         hist_ax.spines['top'].set_visible(False)
         hist_ax.spines['right'].set_visible(False)
         
-        # Auto-adjust y-axis limits based on data
-        if np.max(reductions) > 0:
-            if log_scale in ['y', 'loglog']:
-                # For log scale, start from a small positive value
-                y_vals = hist_ax.get_ylim()
-                hist_ax.set_ylim(max(y_vals[0], 1e-6), y_vals[1])
-            else:
-                # For linear scale, start from 0
-                hist_ax.set_ylim(0, None)
-        
         if i == 0:
-            hist_ax.set_ylabel('Density', fontsize=8)
+            hist_ax.set_ylabel('Normalised count', fontsize=8)
         else:
             hist_ax.set_ylabel('')
             hist_ax.tick_params(labelleft=False)
@@ -364,7 +379,7 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
         for i, (_, row) in enumerate(param_data.iterrows()):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
-                axs[0].plot(np.arange(len(trajectory)), trajectory, color=colors[i % len(colors)], linewidth=0.8)
+                axs[0].plot(np.arange(len(trajectory)), trajectory, color=colors[i % len(colors)], linewidth=0.2)
         
         alpha, beta, theta = param_data.iloc[0][['alpha', 'beta', 'theta']]
         axs[0].set_title(f"Parameterized: α={alpha:.2f}, β={beta:.2f}, θ={theta:.2f}")
@@ -376,7 +391,7 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
         for i, (_, row) in enumerate(twin_data.iterrows()):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
-                axs[1].plot(np.arange(len(trajectory)), trajectory, color=colors[i % len(colors)], linewidth=0.8)
+                axs[1].plot(np.arange(len(trajectory)), trajectory, color=colors[i % len(colors)], linewidth=0.2)
         
         axs[1].set_title("Twin: Survey Individual Parameters")
     

@@ -268,7 +268,7 @@ def main():
             timer(run_veg_growth_analysis, params=params,
                   veg_fractions=np.linspace(0.1, 0.6, 10))
         elif choice == '4':
-            timer(run_trajectory_analysis, params=params, runs_per_combo=3)
+            timer(run_trajectory_analysis, params=params, runs_per_combo=10)
         elif choice == '5':
             timer(run_parameter_analysis, params=params,
                   alpha_range=np.linspace(0.1, 0.9, 3), beta_range=np.linspace(0.1, 0.9, 3),
