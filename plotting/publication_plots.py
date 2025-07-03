@@ -11,6 +11,8 @@ from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMA
 
 #%%
 
+
+cm = 1/2.54
 def ensure_output_dir():
     output_dir = '../visualisations_output'
     os.makedirs(output_dir, exist_ok=True)
@@ -137,7 +139,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     snapshots = median_row['snapshots']
     
     # Create figure
-    fig = plt.figure(figsize=(14, 6))
+    fig = plt.figure(figsize=(17.8*cm, 10*cm)) 
     gs = fig.add_gridspec(2, 4, height_ratios=[2.5, 1], hspace=0.05, wspace=0.05)
     
     # Network layout
@@ -146,7 +148,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     try:
         pos = nx.spectral_layout(G, seed=42)
     except:
-        pos = nx.spring_layout(G, k=3.5, iterations=300, seed=42)
+        pos = nx.spring_layout(G, k=4.5, iterations=100, seed=42)
     
     # Get position bounds for consistent aspect ratio
     pos_array = np.array(list(pos.values()))
@@ -169,8 +171,8 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         
         # Draw network
         node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
-        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.3, width=0.3)
-        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=8, alpha=0.9)
+        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.3, width=0.2)
+        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=1, alpha=0.9)
         
         # Highlight top reducers and add labels
         reductions = np.array(snap['reductions'])
@@ -179,7 +181,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             top3_nodes = [list(G.nodes())[j] for j in top3_idx if reductions[j] > 0]
             if top3_nodes:
                 nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=net_ax, 
-                                     node_color='#f4a261', node_size=30, alpha=1.0)
+                                     node_color='#f4a261', node_size=10, alpha=1.0)
                 
                 # Add reduction labels
                 for j, node in zip(top3_idx, top3_nodes):
@@ -370,8 +372,10 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
         data = load_data(file_path)
         if data is None: return None
     
-    fig, axs = plt.subplots(1, 2, figsize=(8, 4))
+    fig, axs = plt.subplots(1, 2, figsize=(17.8*cm, 8*cm))
+
     
+    lw = 0.8
     # Parameterized mode
     param_data = data[data['agent_ini'] == 'parameterized']
     if len(param_data) > 0:
@@ -379,7 +383,8 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
         for i, (_, row) in enumerate(param_data.iterrows()):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
-                axs[0].plot(np.arange(len(trajectory)), trajectory, color=colors[i % len(colors)], linewidth=0.2)
+                t_thousands = np.arange(len(trajectory)) / 1000
+                axs[0].plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
         
         alpha, beta, theta = param_data.iloc[0][['alpha', 'beta', 'theta']]
         axs[0].set_title(f"Parameterized: α={alpha:.2f}, β={beta:.2f}, θ={theta:.2f}")
@@ -391,12 +396,13 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
         for i, (_, row) in enumerate(twin_data.iterrows()):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
-                axs[1].plot(np.arange(len(trajectory)), trajectory, color=colors[i % len(colors)], linewidth=0.2)
+                t_thousands = np.arange(len(trajectory)) / 1000
+                axs[1].plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
         
         axs[1].set_title("Twin: Survey Individual Parameters")
     
     for ax in axs:
-        ax.set_xlabel("Time Steps")
+        ax.set_xlabel("t (thousands)")
         ax.set_ylabel("Vegetarian Fraction")
         ax.set_ylim(0, 1)
         apply_axis_style(ax)
