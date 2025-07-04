@@ -171,8 +171,8 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         
         # Draw network
         node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
-        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.3, width=0.2)
-        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=1, alpha=0.9)
+        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.3, width=0.05)
+        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=0.5, alpha=0.9)
         
         # Highlight top reducers and add labels
         reductions = np.array(snap['reductions'])
@@ -181,15 +181,16 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             top3_nodes = [list(G.nodes())[j] for j in top3_idx if reductions[j] > 0]
             if top3_nodes:
                 nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=net_ax, 
-                                     node_color='#f4a261', node_size=10, alpha=1.0)
+                                     node_color='#f4a261', node_size=5, alpha=1.0)
                 
+        
                 # Add reduction labels
                 for j, node in zip(top3_idx, top3_nodes):
                     if reductions[j] > 0:
                         x, y = pos[node]
                         net_ax.annotate(f'{reductions[j]:.0f}', (x, y), 
                                       xytext=(8, 8), textcoords='offset points',
-                                      fontsize=8, fontweight='bold',
+                                      fontsize=5, fontweight='bold',
                                       bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
         
         title = 'Initial' if t == 0 else 'Final' if t == 'final' else f'{t//1000}k steps'
@@ -262,7 +263,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     
     if save:
         output_dir = ensure_output_dir()
-        plt.savefig(f'{output_dir}/network_agency_evolution.pdf', dpi=300, bbox_inches='tight')
+        plt.savefig(f'{output_dir}/network_agency_evolution.svg', dpi=300, bbox_inches='tight')
         print("Saved network_agency_evolution.pdf")
     
     return fig

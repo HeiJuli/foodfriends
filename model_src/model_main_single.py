@@ -290,6 +290,7 @@ class Model():
         elif params['topology'] == "WS":  
              self.G1 = nx.watts_strogatz_graph(params["N"], 6, params["tc"])
         
+        #MM stands for majority class, mm for minority, tc is triadic closure
         elif params['topology'] == "PATCH":
             self.G1 = PATCH(params["N"], params["k"], float(params["veg_f"]), h_MM=0.6, tc=params["tc"], h_mm=0.6)
             self.G1.generate()
@@ -307,7 +308,7 @@ class Model():
         Initial agent diet fraction which is in the minority will be assigned such.
         
         """
-        
+        # if m is one, node is minority, else majority
         for i in range(len(self.agents)):
             self.G1.nodes[i]["m"] = 1 if self.agents[i].diet in "veg" else 0
             
@@ -402,7 +403,7 @@ class Model():
     
     def rewire(self, i):
         
-
+        # Think about characteristic rewire timescale 
         if self.flip(self.params["p_rewire"]):
             
             non_neighbors = [k for k in nx.non_neighbors(self.G1, i.i)]
