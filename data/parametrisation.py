@@ -5,8 +5,8 @@ from scipy import stats
 import warnings
 
 # Load data
-data = pd.read_csv("C:/Users/emma.thill/Dropbox/Projects/Foodfriends/foodfriends_main_updated260325/foodfriends-main/data/final_data_parameters.csv")
-alpha = data['beta'].dropna()
+data = pd.read_excel("C:/Users/emma.thill/Dropbox/Projects/Foodfriends/Data/Collectivism/LISS/alpha_demographics.xlsx")
+alpha = data['Self-identity weight (alpha)'].dropna()
 
 # Candidate distributions
 distributions = {
@@ -87,6 +87,7 @@ plt.ylabel("Density")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
+plt.savefig("C:/Users/emma.thill/Dropbox/Projects/Foodfriends/Data/Reasons to Eat Less Meat/theta_dist_python.png", dpi=300, bbox_inches='tight')
 plt.show()
 
 # Print AIC scores
