@@ -3,14 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
 import warnings
-import argparse
 import sys
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description='Fit distributions to demographics data')
-parser.add_argument('parameter', choices=['alpha', 'theta', 'rho'], 
-                   help='Parameter to analyze: alpha, theta, or rho')
-args = parser.parse_args()
+# Get parameter from user input
+parameter = input("Enter parameter to analyze (alpha, theta, or rho): ").lower().strip()
+if parameter not in ['alpha', 'theta', 'rho']:
+    print("Invalid parameter. Please choose: alpha, theta, or rho")
+    sys.exit(1)
 
 # File and column mapping
 file_mapping = {
@@ -19,32 +18,35 @@ file_mapping = {
     'rho': ('rho_demographics.xlsx', 'Cost parameter (rho)')
 }
 
-filename, column_name = file_mapping[args.parameter]
+filename, column_name = file_mapping[parameter]
 
 # Load data
-print(f"Loading {args.parameter} data from {filename}...")
+print(f"Loading {parameter} data from {filename}...")
 try:
     data = pd.read_excel(f"./{filename}")
     if column_name not in data.columns:
         print(f"Available columns: {data.columns.tolist()}")
         sys.exit(f"Column '{column_name}' not found in {filename}")
     parameter_data = data[column_name].dropna()
-    print(f"Loaded {len(parameter_data)} data points for {args.parameter}")
+    print(f"Loaded {len(parameter_data)} data points for {parameter}")
 except Exception as e:
     sys.exit(f"Error loading data: {e}")
 
-# Candidate distributions - focus on continuous distributions for 0-1 bounded data
-distributions = {
-    'beta': stats.beta,      # Best for 0-1 bounded data
-    'norm': stats.norm,      # Normal distribution
-    'gamma': stats.gamma,    # Gamma distribution
-    'lognorm': stats.lognorm, # Log-normal
-    'weibull_min': stats.weibull_min,
-    'uniform': stats.uniform  # Uniform distribution
-}
+# Parameter-specific distributions
+if parameter == 'rho':
+    distributions = {'norm': stats.norm}  # Force normal for rho
+else:
+    distributions = {
+        'beta': stats.beta,      # Best for 0-1 bounded data
+        'norm': stats.norm,      # Normal distribution
+        'gamma': stats.gamma,    # Gamma distribution
+        'lognorm': stats.lognorm, # Log-normal
+        'weibull_min': stats.weibull_min,
+        'uniform': stats.uniform  # Uniform distribution
+    }
 
-# Add discrete distributions only if data appears to be discrete
-if len(np.unique(parameter_data)) < 20:  # Heuristic for discrete data
+# Add discrete distributions only if data appears to be discrete and not rho
+if parameter != 'rho' and len(np.unique(parameter_data)) < 20:
     distributions.update({
         'poisson': stats.poisson,
         'nbinom': stats.nbinom,
@@ -132,7 +134,7 @@ for name, dist in distributions.items():
             aic = 2 * k - 2 * loglik
             aic_scores[name] = aic
         except Exception as e:
-            print(f"⚠️ {name} failed: {e}")
+            print(f"WARNING: {name} failed: {e}")
 
 # Determine best fit
 sorted_aic = sorted(aic_scores.items(), key=lambda x: x[1])
@@ -142,8 +144,10 @@ best_params = fit_params[best_fit_name]
 
 # Plot
 plt.figure(figsize=(12, 8))
-plt.hist(parameter_data, bins=30, density=True, alpha=0.6, color='skyblue', 
-         edgecolor='black', label=f'{args.parameter.capitalize()} data histogram')
+# Use fewer bins for better density matching
+n_bins = max(10, min(20, len(np.unique(parameter_data))))
+plt.hist(parameter_data, bins=n_bins, density=True, alpha=0.6, color='skyblue', 
+         edgecolor='black', label=f'{parameter.capitalize()} data histogram')
 
 # Plot top 3 distributions for comparison
 top_3 = sorted_aic[:3]
@@ -155,32 +159,30 @@ for i, (dist_name, aic_score) in enumerate(top_3):
         plt.plot(fit_x, fit_y, color=colors[i], linewidth=2,
                 label=f"{dist_name} (AIC={aic_score:.1f})\nParams: {np.round(params, 3)}")
 
-plt.title(f"Distribution Fitting for {args.parameter.capitalize()} Parameter")
-plt.xlabel(f"{args.parameter.capitalize()} Value")
+plt.title(f"Distribution Fitting for {parameter.capitalize()} Parameter")
+plt.xlabel(f"{parameter.capitalize()} Value")
 plt.ylabel("Density")
 plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.grid(True, alpha=0.3)
 plt.tight_layout()
 
 # Save plot
-output_filename = f"{args.parameter}_distribution_fit.png"
+output_filename = f"{parameter}_distribution_fit.png"
 plt.savefig(output_filename, dpi=300, bbox_inches='tight')
 print(f"\nPlot saved as: {output_filename}")
 plt.show()
 
-# Print AIC scores
-print("\n📊 AIC Scores (lower = better):")
+# Print results
+print("\nAIC Scores (lower = better):")
 for dist_name, score in sorted_aic:
-    print(f"{dist_name:12}: AIC = {score:.2f}")
+    print(f"{dist_name:12}: {score:.2f}")
 
-# Print best distribution and its parameters
-print(f"\n✅ Best fit: {best_fit_name}")
-print(f"🔧 Parameters: {np.round(best_params, 5)}")
+print(f"\nBest fit: {best_fit_name}")
+print(f"Parameters: {np.round(best_params, 5)}")
 
-# Print summary statistics
-print(f"\n📈 Data Summary for {args.parameter}:")
-print(f"   Sample size: {len(parameter_data)}")
-print(f"   Mean: {np.mean(parameter_data):.4f}")
-print(f"   Std: {np.std(parameter_data):.4f}")
-print(f"   Min: {np.min(parameter_data):.4f}")
-print(f"   Max: {np.max(parameter_data):.4f}")
+print(f"\nData Summary for {parameter}:")
+print(f"Sample size: {len(parameter_data)}")
+print(f"Mean: {np.mean(parameter_data):.4f}")
+print(f"Std: {np.std(parameter_data):.4f}")
+print(f"Min: {np.min(parameter_data):.4f}")
+print(f"Max: {np.max(parameter_data):.4f}")
