@@ -44,6 +44,7 @@ params = {"veg_CO2": 1390,
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
+          "rho": 0, #behavioural intentions
           "theta": 0, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "twin", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/final_data_parameters.csv"
@@ -71,8 +72,11 @@ class Agent():
     
     def set_params(self, **kwargs):
         
+        #TODO: need to change these "synthetic" distibutions to have the right form 
+        # e.g theta is not normally distributed, but has a left-skewed distribution
         if self.params["agent_ini"] != "twin":
             self.diet = self.choose_diet()
+            self.rho = self.choose_alpha_beta(self.params["rho"])
             self.theta = truncnorm.rvs(-1, 1, loc=self.params["theta"])
             self.alpha = self.choose_alpha_beta(self.params["alpha"])
             self.beta = self.choose_alpha_beta(self.params["beta"])
@@ -117,7 +121,9 @@ class Agent():
         
         prob_switch = 1/(1+math.exp(-5*(u_s-u_i)))
         
-        return prob_switch
+        
+        #scale by readiness to switch
+        return prob_switch * self.rho 
 
 
     def dissonance_new(self, case, mode):
