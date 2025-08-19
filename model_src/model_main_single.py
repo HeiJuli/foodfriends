@@ -8,8 +8,7 @@ Created on Tue Apr  9 18:36:06 2024
 import networkx as nx
 import numpy as np
 import random
-from scipy.stats import norm
-from scipy.stats import truncnorm
+import scipy.stats as st
 import math
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -77,12 +76,17 @@ class Agent():
         if self.params["agent_ini"] != "twin":
             self.diet = self.choose_diet()
             self.rho = self.choose_alpha_beta(self.params["rho"])
-            self.theta = truncnorm.rvs(-1, 1, loc=self.params["theta"])
+            self.theta = st.truncnorm.rvs(-1, 1, loc=self.params["theta"])
             self.alpha = self.choose_alpha_beta(self.params["alpha"])
             self.beta = self.choose_alpha_beta(self.params["beta"])
         else:
             for key, value in kwargs.items():
                 setattr(self, key, value)
+                #yes I am hardcoding the survey derived params here i am lazy
+                #see output of parametrisation.py for details
+                self.rho = st.truncnorm.rvs(-1, 1, loc = 0.48, scale = 0.31 )
+                self.alpha = st.truncweibull_min(248.69, 0, 1, loc =-47.38, scale = 48.2)
+                self.theta = st.truncweibull_min(15.25, 0, 1, loc =-3.73, scale = 4.33)
                 
             
         
@@ -95,7 +99,7 @@ class Agent():
 
     
     def diet_emissions(self, diet):
-        veg, meat = list(map(lambda x: norm.rvs(loc=x, scale=0.1*x),
+        veg, meat = list(map(lambda x: st.norm.rvs(loc=x, scale=0.1*x),
                                 list(map(self.params.get, ["veg_CO2", "meat_CO2"]))))
         lookup = {"veg": veg, "meat": meat}
 
@@ -105,7 +109,7 @@ class Agent():
     
     def choose_alpha_beta(self, mean):
         a, b = 0, 1
-        val = truncnorm.rvs(a, b, loc=mean, scale=mean*0.2)
+        val = st.truncnorm.rvs(a, b, loc=mean, scale=mean*0.2)
         return val
         
         

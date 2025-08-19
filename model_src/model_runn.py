@@ -26,6 +26,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
+          "rho": 0, #behavioural intentions,
           "theta": 0, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/final_data_parameters.csv"

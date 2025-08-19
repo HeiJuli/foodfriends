@@ -14,7 +14,7 @@ DEFAULT_PARAMS = {
     "erdos_p": 3, "steps": 160000, "w_i": 5, "immune_n": 0.10, "k": 8,
     "M": 10, "veg_f": 0.5, "meat_f": 0.5, "p_rewire": 0.1,
     "rewire_h": 0.1, "tc": 0.2, 'topology': "PATCH", "alpha": 0.35,
-    "beta": 0.65, "theta": 0, "agent_ini": "synthetic",
+    "beta": 0.65,  "rho": 0, "theta": 0, "agent_ini": "synthetic",
     "survey_file": "../data/final_data_parameters.csv"
 }
 
