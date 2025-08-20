@@ -11,7 +11,7 @@ import seaborn as sns
 import itertools
 
 # Load your .xlsx file
-data = pd.read_excel("C:/Users/emma.thill/Dropbox/Projects/Foodfriends/Data/Collectivism/LISS/alpha_demographics.xlsx")
+data = pd.read_excel("alpha_demographics.xlsx")
 
 # Rename columns if needed (optional check)
 data.columns = data.columns.str.strip()

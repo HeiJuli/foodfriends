@@ -276,7 +276,7 @@ if parameter == 'theta':
 else:
     plt.xlim(-0.05, 1.05)
 
-plt.ylim(0, 1.5)  # Set max y-axis to 1.5
+plt.ylim(0, 3.3)  # Set max y-axis to 1.5
 plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2)
 
 plt.tight_layout()
