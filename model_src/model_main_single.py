@@ -49,6 +49,30 @@ params = {"veg_CO2": 1390,
           "survey_file": "../data/final_data_parameters.csv"
           }
 
+#%% Auxillary/Helpers
+
+def sample_from_pmf(demo_key, pmf_tables, param):
+    """Sample single parameter from PMF"""
+    if pmf_tables and demo_key in pmf_tables[param]:
+        pmf = pmf_tables[param][demo_key]
+        vals, probs = pmf['values'], pmf['probabilities']
+        nz = [(v,p) for v,p in zip(vals, probs) if p > 0]
+        if nz:
+            v, p = zip(*nz)
+            return np.random.choice(v, p=np.array(p)/sum(p))
+    
+    # Fallback: sample from all values or default
+    if pmf_tables:
+        all_vals = []
+        for cell in pmf_tables[param].values():
+            all_vals.extend(cell['values'])
+        return np.random.choice(all_vals) if all_vals else 0.5
+    return 0.5
+
+
+
+
+
 # %% Agent
 
 class Agent():
@@ -80,15 +104,19 @@ class Agent():
             self.alpha = self.choose_alpha_beta(self.params["alpha"])
             self.beta = self.choose_alpha_beta(self.params["beta"])
         else:
+            # Twin mode: set theta/diet from survey, sample alpha/rho from PMF
             for key, value in kwargs.items():
                 setattr(self, key, value)
-                #yes I am hardcoding the survey derived params here i am lazy
-                #see output of parametrisation.py for details
-                self.rho = st.truncnorm.rvs(-1, 1, loc = 0.48, scale = 0.31 )
-                self.alpha = st.truncweibull_min(248.69, 0, 1, loc =-47.38, scale = 48.2)
-                self.theta = st.truncweibull_min(15.25, 0, 1, loc =-3.73, scale = 4.33)
-                
             
+            # Use PMF if available, else synthetic fallback
+            if hasattr(self, 'demographics') and hasattr(self, 'pmf_tables') and self.pmf_tables:
+                self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha')
+                self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho')
+            else:
+                # Existing synthetic fallback
+                self.rho = st.truncnorm.rvs(-1, 1, loc=0.48, scale=0.31)
+                self.alpha = st.truncweibull_min(248.69, 0, 1, loc=-47.38, scale=48.2)
+                
         
     def choose_diet(self):
         
@@ -280,10 +308,11 @@ class Agent():
 
 #%% Model 
 class Model():
-    def __init__(self, params):
+    def __init__(self, params, pmf_tables = None):
         
 
         self.params = params
+        self.pmf_tables = pmf_tables
         self.snapshots = {}  # Store network snapshots
         self.snapshot_times = [int(params["steps"] * r) for r in [0.33, 0.66]]
             

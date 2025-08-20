@@ -4,6 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 import time
+import pickle
 from datetime import date
 import model_main_single as model_main
 
@@ -63,6 +64,31 @@ def extract_survey_params(survey_data):
         params['veg_f'] = (survey_data['diet'] == 'veg').mean()
         params['meat_f'] = 1 - params['veg_f']
     return params
+
+def load_pmf_tables(filepath="../data/demographic_pmfs.pkl"):
+    """Load PMF tables for alpha/rho sampling"""
+    try:
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        print(f"Warning: {filepath} not found, using synthetic for alpha/rho")
+        return None
+
+def sample_from_pmf(demo_key, pmf_tables, param):
+    """Sample single parameter from PMF"""
+    if demo_key in pmf_tables[param]:
+        pmf = pmf_tables[param][demo_key]
+        vals, probs = pmf['values'], pmf['probabilities']
+        nz = [(v,p) for v,p in zip(vals, probs) if p > 0]
+        if nz:
+            v, p = zip(*nz)
+            return np.random.choice(v, p=np.array(p)/sum(p))
+    
+    # Fallback: sample from all values
+    all_vals = []
+    for cell in pmf_tables[param].values():
+        all_vals.extend(cell['values'])
+    return np.random.choice(all_vals) if all_vals else 0.5
 
 def run_basic_model(params=None):
     params = params or DEFAULT_PARAMS.copy()
