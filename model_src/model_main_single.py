@@ -310,9 +310,9 @@ class Agent():
 class Model():
     def __init__(self, params, pmf_tables = None):
         
-
-        self.params = params
+        
         self.pmf_tables = pmf_tables
+        self.params = params
         self.snapshots = {}  # Store network snapshots
         self.snapshot_times = [int(params["steps"] * r) for r in [0.33, 0.66]]
             
@@ -359,30 +359,29 @@ class Model():
         
         
         if self.params["agent_ini"] == "twin":
-            
             self.survey_data = pd.read_csv(self.params["survey_file"])
             assert len(self.survey_data) == self.params["N"], "number of nodes does not match number of survey participants"
             
-            
-            self.agents=[]
+            self.agents = []
             for index, row in self.survey_data.iterrows():
+                # Create demographic key if PMF tables available
+                demo_key = None
+                if self.pmf_tables:
+                    demo_cols = ['gender', 'age_cat', 'netinc_cat', 'educcat']
+                    demo_key = tuple(row[col] for col in demo_cols if col in row)
+                
                 agent = Agent(
                     i=row["nomem_encr"],
-                    params=self.params, 
-                    alpha=row["alpha"],
-                    beta=row["beta"],
+                    params=self.params,
                     theta=row["theta"],
-                    diet=row["diet"]
+                    diet=row["diet"],
+                    demographics=demo_key,
+                    pmf_tables=self.pmf_tables
                 )
                 self.agents.append(agent)
-            print(f"Created {len(self.agents)} agents for {self.G1.number_of_nodes()} nodes")
-            
-            
-            
         else:
-            # Ensure agents are created for each node specifically
             self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
-            
+                
         
         n_immune = int(self.params["immune_n"] * len(self.agents))
         immune_idx = np.random.choice(len(self.agents), n_immune, replace=False)
