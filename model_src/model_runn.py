@@ -12,9 +12,9 @@ import model_main_single as model_main
 DEFAULT_PARAMS = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 699,
+          "N": 5715,
           "erdos_p": 3,
-          "steps": 160000,
+          "steps": 100,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "k": 8, #initial edges per node for graph generation
@@ -48,6 +48,15 @@ def timer(func, *args, **kwargs):
     print(f"Runtime: {int(elapsed/60)} mins {elapsed%60:.1f}s")
     return result
 
+def load_pmf_tables():
+    try:
+        import pickle
+        with open("../data/demographic_pmfs.pkl", 'rb') as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        print("Warning: demographic_pmfs.pkl not found, using synthetic for alpha/rho")
+        return None
+    
 def load_survey_data(filepath, variables):
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Survey file not found: {filepath}")
@@ -55,6 +64,14 @@ def load_survey_data(filepath, variables):
     print(f"Loaded survey data: {data.shape[0]} respondents")
     return data
 
+def get_model(params):
+    """Create model with PMF tables if twin mode"""
+    if params.get("agent_ini") == "twin":
+        pmf_tables = load_pmf_tables()
+        return model_main.Model(params, pmf_tables=pmf_tables)
+    else:
+        return model_main.Model(params)
+    
 def extract_survey_params(survey_data):
     params = {}
     for col in ['alpha', 'beta', 'theta']:
@@ -98,7 +115,7 @@ def run_basic_model(params=None):
         survey_params = extract_survey_params(survey_data)
         params.update(survey_params)
     
-    model = model_main.Model(params)
+    model = get_model(params)
     model.run()
     return model
 
@@ -151,7 +168,7 @@ def run_parameter_analysis(params=None, alpha_range=None, beta_range=None,
                         count += 1
                         print(f"Run {count}/{total}: α={a:.2f}, β={b:.2f}, θ={t:.2f}, veg_f={vf:.2f}")
                         
-                        model = model_main.Model(p)
+                        model = get_model(p)
                         model.run()
                         
                         result = {
@@ -217,7 +234,7 @@ def run_trajectory_analysis(params=None, runs_per_combo=10):
         par = p.copy()
         par.update({"agent_ini": "parameterized", **sm})
         for i in range(runs_per_combo):
-            model = model_main.Model(par)
+            model = get_model(par)
             model.run()
             r.append({
                 'agent_ini': "parameterized", **sm,
@@ -230,7 +247,7 @@ def run_trajectory_analysis(params=None, runs_per_combo=10):
         twn = p.copy()
         twn.update({"agent_ini": "twin", "N": len(sd)})
         for i in range(runs_per_combo):
-            model = model_main.Model(twn)
+            model = get_model(twn)
             model.run()
             agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'beta', 'theta']}
             r.append({
@@ -273,7 +290,11 @@ def main():
     if agent_ini in ["parameterized", "twin"]:
         survey_file = input(f"Survey file ({params['survey_file']}): ") or params['survey_file']
         params["survey_file"] = survey_file
-    
+        
+    if agent_ini == "twin":
+        pmf_tables = load_pmf_tables()
+        params["pmf_tables"] = pmf_tables
+        
     while True:
         print("\n[1] Emissions vs Veg Fraction")
         print("[2] Parameter Analysis (alpha-beta grid, end states)")
