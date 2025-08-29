@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Aug 28 17:03:11 2025
-
-@author: jpoveralls
-"""
-
-#!/usr/bin/env python3
-# create_hierarchical_agents.py
 import pandas as pd
 import pickle
 from scipy import stats
@@ -18,28 +9,42 @@ def load_and_match_surveys():
     
     # Load theta (base population)
     theta_raw = pd.read_excel("../data/theta_diet_demographics.xlsx")
+    print(f"Theta raw shape: {theta_raw.shape}")
+    print(f"Theta columns: {theta_raw.columns.tolist()}")
+    
+    print(f"Diet column values: {theta_raw['Diet - Vegan or Not'].unique()}")
+    
     theta_df = pd.DataFrame({
         'id': theta_raw['id'],
         'theta': pd.to_numeric(theta_raw['Personal Preference for Veg Diet'], errors='coerce'),
-        'diet': theta_raw['Diet - Vegan or Not'].map({'Yes': 'veg', 'No': 'meat'}),
+        'diet': theta_raw['Diet - Vegan or Not'],  # Already has 'meat'/'veg' values
         'gender': theta_raw['Gender'],
         'age': theta_raw['Age of the household member'],
         'incquart': theta_raw['Income Quartile'], 
         'educlevel': theta_raw['Education Level']
-    }).dropna()
+    })
+    
+    print(f"Theta before dropna: {len(theta_df)}")
+    print(f"NaN counts: {theta_df.isnull().sum().to_dict()}")
+    theta_df = theta_df.dropna()
+    print(f"Theta after dropna: {len(theta_df)}")
     
     theta_df['age_group'] = pd.cut(theta_df['age'], bins=[17,29,39,49,59,69,120],
                                   labels=['18-29','30-39','40-49','50-59','60-69','70+'])
     
     # Load rho
     rho_raw = pd.read_excel("../data/rho_demographics.xlsx")
+    print(f"Rho raw shape: {rho_raw.shape}")
+    
     rho_df = pd.DataFrame({
         'id': rho_raw['id'],
         'rho': pd.to_numeric(rho_raw['Cost parameter (rho)'], errors='coerce')
     }).dropna()
     
-    # Load alpha  
+    # Load alpha
     alpha_raw = pd.read_excel("../data/alpha_demographics.xlsx")
+    print(f"Alpha raw shape: {alpha_raw.shape}")
+    
     alpha_df = pd.DataFrame({
         'id': alpha_raw['id'],
         'alpha': pd.to_numeric(alpha_raw['Self-identity weight (alpha)'], errors='coerce')
@@ -118,19 +123,5 @@ def save_hierarchical_csv():
     agents_df[output_cols].to_csv("../data/hierarchical_agents.csv", index=False)
     print("Saved hierarchical_agents.csv")
 
-
-def sample_from_pmf_global(demo_key, pmf_tables, param):
-    """Global PMF sampling function"""
-    if demo_key and demo_key in pmf_tables[param]:
-        pmf = pmf_tables[param][demo_key]
-        vals, probs = pmf['values'], pmf['probabilities']
-        return np.random.choice(vals, p=np.array(probs)/sum(probs))
-    return 0.5
-
 if __name__ == "__main__":
-    
-    save_hierarchical_csv()    
-
-# Usage:
-# 1. python create_hierarchical_agents.py  
-# 2. params["survey_file"] = "hierarchical_agents.csv"
+    save_hierarchical_csv()
