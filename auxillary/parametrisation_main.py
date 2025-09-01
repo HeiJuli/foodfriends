@@ -14,9 +14,9 @@ if parameter not in ['alpha', 'theta', 'rho']:
 
 # File and column mapping
 file_mapping = {
-    'alpha': ('alpha_demographics.xlsx', 'Self-identity weight (alpha)'),
-    'theta': ('theta_diet_demographics.xlsx', 'Personal Preference for Veg Diet'),
-    'rho': ('rho_demographics.xlsx', 'Cost parameter (rho)')
+    'alpha': ('../data/alpha_demographics.xlsx', 'Self-identity weight (alpha)'),
+    'theta': ('../data/theta_diet_demographics.xlsx', 'Personal Preference for Veg Diet'),
+    'rho': ('../data/rho_demographics.xlsx', 'Cost parameter (rho)')
 }
 
 filename, column_name = file_mapping[parameter]

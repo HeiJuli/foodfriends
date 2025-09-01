@@ -268,9 +268,9 @@ def diagnose_pmf_tables():
 if __name__ == "__main__":
     
     # File paths
-    alpha_file = "alpha_demographics.xlsx"
-    rho_file = "rho_demographics.xlsx"
-    theta_file = "theta_diet_demographics.xlsx"
+    alpha_file = "../data/alpha_demographics.xlsx"
+    rho_file = "../data/rho_demographics.xlsx"
+    theta_file = "../data/theta_diet_demographics.xlsx"
     
     surveys = load_surveys(alpha_file, rho_file, theta_file)
     consistency = validate_demographic_consistency(surveys)

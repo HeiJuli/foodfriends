@@ -11,7 +11,7 @@ def test_demographic_predictive_power():
     print("=== 1. DEMOGRAPHIC PREDICTIVE POWER IN RAW DATA ===")
     
     # Load raw survey data
-    alpha_data = pd.read_excel("alpha_demographics.xlsx")
+    alpha_data = pd.read_excel("../data/alpha_demographics.xlsx")
     alpha_clean = pd.DataFrame({
         'alpha': alpha_data['Self-identity weight (alpha)'].dropna(),
         'age': alpha_data['Age of the household member'].dropna(),
@@ -146,7 +146,7 @@ def test_validation_methodology():
     print("\n=== 4. VALIDATION METHODOLOGY TEST ===")
     
     # Load survey data
-    alpha_data = pd.read_excel("alpha_demographics.xlsx")
+    alpha_data = pd.read_excel("../data/alpha_demographics.xlsx")
     alpha_clean = pd.DataFrame({
         'alpha': alpha_data['Self-identity weight (alpha)'].dropna(),
         'age': alpha_data['Age of the household member'].dropna(),
@@ -211,7 +211,7 @@ def plot_diagnostic():
     print("\n=== 5. DIAGNOSTIC PLOTS ===")
     
     # Load survey data
-    alpha_data = pd.read_excel("alpha_demographics.xlsx")
+    alpha_data = pd.read_excel("../data/alpha_demographics.xlsx")
     alpha_clean = pd.DataFrame({
         'alpha': alpha_data['Self-identity weight (alpha)'].dropna(),
         'age': alpha_data['Age of the household member'].dropna(),

@@ -10,9 +10,9 @@ def load_survey_data():
     """Load cleaned survey data with overlapping IDs"""
     
     # Load individual surveys (adjust paths as needed)
-    alpha_data = pd.read_excel("alpha_demographics.xlsx")
-    rho_data = pd.read_excel("rho_demographics.xlsx") 
-    theta_data = pd.read_excel("theta_diet_demographics.xlsx")
+    alpha_data = pd.read_excel("../data/alpha_demographics.xlsx")
+    rho_data = pd.read_excel("../data/rho_demographics.xlsx") 
+    theta_data = pd.read_excel("../data/theta_diet_demographics.xlsx")
     
     # Clean and extract key columns
     alpha_clean = alpha_data[['id', 'Self-identity weight (alpha)']].copy()
