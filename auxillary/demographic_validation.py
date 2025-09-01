@@ -77,9 +77,9 @@ def test_scientific_importance():
     print("\n=== SCIENTIFIC IMPORTANCE ANALYSIS ===")
     
     # Load matched datasets
-    alpha_data = pd.read_excel("alpha_demographics.xlsx")
-    rho_data = pd.read_excel("rho_demographics.xlsx")  
-    theta_data = pd.read_excel("theta_diet_demographics.xlsx")
+    alpha_data = pd.read_excel("../data/alpha_demographics.xlsx")
+    rho_data = pd.read_excel("../data/rho_demographics.xlsx")  
+    theta_data = pd.read_excel("../data/theta_diet_demographics.xlsx")
     
     # Create matches
     at_matched = pd.merge(alpha_data[['id', 'Self-identity weight (alpha)']], 

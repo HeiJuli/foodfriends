@@ -10,7 +10,7 @@ def create_pmf_tables():
     """Create PMF tables from raw Excel survey data using original methodology"""
     
     # Load and process alpha data
-    alpha_data = pd.read_excel("alpha_demographics.xlsx")
+    alpha_data = pd.read_excel("../data/alpha_demographics.xlsx")
     alpha_clean = pd.DataFrame({
         'alpha': alpha_data['Self-identity weight (alpha)'].dropna(),
         'age': alpha_data['Age of the household member'].dropna(),
@@ -23,7 +23,7 @@ def create_pmf_tables():
     alpha_clean = alpha_clean.dropna(subset=['alpha', 'gender', 'age_group', 'incquart', 'educlevel'])
     
     # Load and process rho data
-    rho_data = pd.read_excel("rho_demographics.xlsx")
+    rho_data = pd.read_excel("../data/rho_demographics.xlsx")
     rho_clean = pd.DataFrame({
         'rho': rho_data['Cost parameter (rho)'].dropna(),
         'age': rho_data['Age of the household member'].dropna(),
@@ -36,7 +36,7 @@ def create_pmf_tables():
     rho_clean = rho_clean.dropna(subset=['rho', 'gender', 'age_group', 'incquart', 'educlevel'])
     
     # Load and process theta data
-    theta_data = pd.read_excel("theta_diet_demographics.xlsx")
+    theta_data = pd.read_excel("../data/theta_diet_demographics.xlsx")
     theta_clean = pd.DataFrame({
         'theta': theta_data['Personal Preference for Veg Diet'].dropna(),
         'age': theta_data['Age of the household member'].dropna(),

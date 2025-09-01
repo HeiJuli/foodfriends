@@ -43,9 +43,9 @@ params = {"veg_CO2": 1390,
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
           "beta": 0.65, #social dissonance
-          "rho": 0, #behavioural intentions
+          "rho": 0.1, #behavioural intentions
           "theta": 0, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "twin", #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": "synthetic", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/final_data_parameters.csv"
           }
 
@@ -68,7 +68,6 @@ def sample_from_pmf(demo_key, pmf_tables, param):
             all_vals.extend(cell['values'])
         return np.random.choice(all_vals) if all_vals else 0.5
     return 0.5
-
 
 
 
@@ -97,6 +96,7 @@ class Agent():
         
         #TODO: need to change these "synthetic" distibutions to have the right form 
         # e.g theta is not normally distributed, but has a left-skewed distribution
+        # thinking of not doing this
         if self.params["agent_ini"] != "twin":
             self.diet = self.choose_diet()
             self.rho = self.choose_alpha_beta(self.params["rho"])
@@ -107,7 +107,11 @@ class Agent():
             # Twin mode: set theta/diet from survey, sample alpha/rho from PMF
             for key, value in kwargs.items():
                 setattr(self, key, value)
-            
+                # Ensure alpha-beta complementarity for hierarchical CSV
+                
+            if hasattr(self, 'alpha') and not hasattr(self, 'beta'):
+                self.beta = 1 - self.alpha
+                
             # Use PMF if available, else synthetic fallback
             if hasattr(self, 'demographics') and hasattr(self, 'pmf_tables') and self.pmf_tables:
                 self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha')
@@ -155,7 +159,7 @@ class Agent():
         
         
         #scale by readiness to switch
-        return prob_switch * self.rho 
+        return prob_switch * self.rho
 
 
     def dissonance_new(self, case, mode):
