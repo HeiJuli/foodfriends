@@ -10,12 +10,12 @@ from multiprocessing import Pool
 import model_main_single as model_main
 
 DEFAULT_PARAMS = {
-    "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054, "N": 699,
-    "erdos_p": 3, "steps": 160000, "w_i": 5, "immune_n": 0.10, "k": 8,
+    "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054, "N": 5602,
+    "erdos_p": 3, "steps": 100, "w_i": 5, "immune_n": 0.10, "k": 8,
     "M": 10, "veg_f": 0.5, "meat_f": 0.5, "p_rewire": 0.1,
     "rewire_h": 0.1, "tc": 0.2, 'topology': "PATCH", "alpha": 0.35,
-    "beta": 0.65,  "rho": 0, "theta": 0, "agent_ini": "synthetic",
-    "survey_file": "../data/final_data_parameters.csv"
+    "rho": 0, "theta": 0, "agent_ini": "other",
+    "survey_file": "../data/hierarchical_agents.csv"
 }
 
 def ensure_output_dir():
@@ -38,7 +38,7 @@ def load_survey_data(filepath, variables):
 
 def extract_survey_params(survey_data):
     params = {}
-    for col in ['alpha', 'beta', 'theta']:
+    for col in ['alpha', 'theta']:
         if col in survey_data.columns:
             params[col] = survey_data[col].mean()
     if 'diet' in survey_data.columns:
@@ -46,12 +46,46 @@ def extract_survey_params(survey_data):
         params['meat_f'] = 1 - params['veg_f']
     return params
 
+def load_pmf_tables(filepath="../data/demographic_pmfs.pkl"):
+    """Load PMF tables for alpha/rho sampling"""
+    try:
+        import pickle
+        with open(filepath, 'rb') as f:
+            return pickle.load(f)
+    except FileNotFoundError:
+        print(f"Warning: {filepath} not found, using synthetic for alpha/rho")
+        return None
+
+def sample_from_pmf(demo_key, pmf_tables, param):
+    """Sample single parameter from PMF"""
+    if demo_key in pmf_tables[param]:
+        pmf = pmf_tables[param][demo_key]
+        vals, probs = pmf['values'], pmf['probabilities']
+        nz = [(v,p) for v,p in zip(vals, probs) if p > 0]
+        if nz:
+            v, p = zip(*nz)
+            return np.random.choice(v, p=np.array(p)/sum(p))
+    
+    # Fallback: sample from all values
+    all_vals = []
+    for cell in pmf_tables[param].values():
+        all_vals.extend(cell['values'])
+    return np.random.choice(all_vals) if all_vals else 0.5
+
+def get_model(params):
+    """Create model with PMF tables if twin mode"""
+    if params.get("agent_ini") == "twin":
+        pmf_tables = load_pmf_tables()
+        return model_main.Model(params, pmf_tables=pmf_tables)
+    else:
+        return model_main.Model(params)
+
 def run_single_model(params):
     """Worker function - runs one model instance"""
-    model = model_main.Model(params)
+    model = get_model(params)
     model.run()
     return {
-        'alpha': params.get('alpha', 0), 'beta': params.get('beta', 0),
+        'alpha': params.get('alpha', 0), 'beta': 1 - params.get('alpha', 0.35),
         'theta': params.get('theta', 0), 'initial_veg_f': params.get('veg_f', 0),
         'final_veg_f': model.fraction_veg[-1],
         'change': model.fraction_veg[-1] - params.get('veg_f', 0),
@@ -68,16 +102,16 @@ def run_single_trajectory_model(params):
     """Worker function for trajectory analysis"""
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"],
-                                     ["nomem_encr", "alpha", "beta", "theta", "diet"])
+                                     ["nomem_encr", "alpha", "theta", "diet"])
         survey_params = extract_survey_params(survey_data)
         params.update(survey_params)
 
-    model = model_main.Model(params)
+    model = get_model(params)
     model.run()
 
     result = {
         'agent_ini': params["agent_ini"],
-        'alpha': params.get('alpha', 0), 'beta': params.get('beta', 0), 'theta': params.get('theta', 0),
+        'alpha': params.get('alpha', 0), 'beta': 1 - params.get('alpha', 0.35), 'theta': params.get('theta', 0),
         'initial_veg_f': params["veg_f"], 'final_veg_f': model.fraction_veg[-1],
         'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
         'run': params.get('run', 0), 'parameter_set': params.get('parameter_set', ''),
@@ -85,6 +119,9 @@ def run_single_trajectory_model(params):
     }
 
     if params["agent_ini"] == "twin":
+        agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'theta']}
+        result.update(agent_means)
+        result['beta'] = 1 - agent_means['alpha']
         result['snapshots'] = model.snapshots if hasattr(model, 'snapshots') else None
 
     return result
@@ -101,9 +138,9 @@ def run_parameter_analysis_parallel(base_params, alpha_range, beta_range,
                     for run in range(runs_per_combo):
                         p = base_params.copy()
                         p.update({
-                            'alpha': a, 'beta': b, 'theta': t, 'veg_f': vf, 'meat_f': 1-vf,
+                            'alpha': a, 'theta': t, 'veg_f': vf, 'meat_f': 1-vf,
                             'record_trajectories': record_trajectories,
-                            'parameter_set': f"α={a:.2f}, β={b:.2f}, θ={t:.2f}",
+                            'parameter_set': f"α={a:.2f}, β={1-a:.2f}, θ={t:.2f}",
                             'run': run
                         })
                         param_list.append(p)
@@ -152,7 +189,7 @@ def run_veg_growth_analysis(base_params, veg_fractions):
     for vf in veg_fractions:
         p = base_params.copy()
         p.update({"veg_f": vf, "meat_f": 1-vf})
-        model = model_main.Model(p)
+        model = get_model(p)
         model.run()
         results.append({
             'initial_veg_fraction': vf,
@@ -173,7 +210,7 @@ def run_trajectory_analysis_parallel(base_params, runs_per_combo, n_cores):
     # Load survey data if needed
     if base_params.get("agent_ini") in ["parameterized", "twin"]:
         survey_data = load_survey_data(base_params["survey_file"],
-                                     ["nomem_encr", "alpha", "beta", "theta", "diet"])
+                                     ["nomem_encr", "alpha", "theta", "diet"])
         survey_means = extract_survey_params(survey_data)
 
         # Parameterized mode
@@ -186,11 +223,14 @@ def run_trajectory_analysis_parallel(base_params, runs_per_combo, n_cores):
             })
             param_list.append(p)
 
-        # Twin mode
+        # Twin mode - use N from base_params
+        twin_N = base_params["N"]
+        print(f"INFO: Using N={twin_N} for twin mode")
+        
         for i in range(runs_per_combo):
             p = base_params.copy()
             p.update({
-                "agent_ini": "twin", "N": len(survey_data),
+                "agent_ini": "twin", "N": twin_N,
                 "parameter_set": "Survey Individual Parameters",
                 "run": i
             })

@@ -84,6 +84,7 @@ class Agent():
         self.C = self.diet_emissions(self.diet)
         self.memory = []
         self.i = i
+        self.survey_id = kwargs.get('survey_id', i)  # Original survey ID if available
         self.global_norm = 0.5
         self.reduction_out = 0
         self.diet_duration = 0  # Track how long agent maintains current diet
@@ -102,7 +103,7 @@ class Agent():
             self.rho = self.choose_alpha_beta(self.params["rho"])
             self.theta = st.truncnorm.rvs(-1, 1, loc=self.params["theta"])
             self.alpha = self.choose_alpha_beta(self.params["alpha"])
-            self.beta = self.choose_alpha_beta(self.params["beta"])
+            self.beta = 1-self.alpha
         else:
             # Twin mode: set theta/diet from survey, sample alpha/rho from PMF
             for key, value in kwargs.items():
@@ -116,10 +117,12 @@ class Agent():
             if hasattr(self, 'demographics') and hasattr(self, 'pmf_tables') and self.pmf_tables:
                 self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha')
                 self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho')
+                self.beta = 1 - self.alpha  # Recalculate beta after new alpha
             else:
                 # Existing synthetic fallback
                 self.rho = st.truncnorm.rvs(-1, 1, loc=0.48, scale=0.31)
                 self.alpha = st.truncweibull_min(248.69, 0, 1, loc=-47.38, scale=48.2)
+                self.beta = 1 - self.alpha  # Recalculate beta after new alpha
                 
         
     def choose_diet(self):
@@ -364,10 +367,21 @@ class Model():
         
         if self.params["agent_ini"] == "twin":
             self.survey_data = pd.read_csv(self.params["survey_file"])
-            assert len(self.survey_data) == self.params["N"], "number of nodes does not match number of survey participants"
+            
+            # Handle case where N is smaller than survey data
+            if len(self.survey_data) > self.params["N"]:
+                print(f"WARNING: Survey data has {len(self.survey_data)} participants but N={self.params['N']}")
+                print(f"WARNING: Randomly sampling {self.params['N']} participants from survey data")
+                self.survey_data = self.survey_data.sample(n=self.params["N"], random_state=42).reset_index(drop=True)
+                print(f"WARNING: Using {len(self.survey_data)} sampled participants for twin mode")
+            elif len(self.survey_data) < self.params["N"]:
+                raise ValueError(f"Cannot create {self.params['N']} agents from only {len(self.survey_data)} survey participants. "
+                               f"Either reduce N or provide more survey data.")
+            else:
+                print(f"INFO: Using all {len(self.survey_data)} survey participants for twin mode")
             
             self.agents = []
-            for index, row in self.survey_data.iterrows():
+            for agent_id, (index, row) in enumerate(self.survey_data.iterrows()):
                 # Create demographic key if PMF tables available
                 demo_key = None
                 if self.pmf_tables:
@@ -375,12 +389,13 @@ class Model():
                     demo_key = tuple(row[col] for col in demo_cols if col in row)
                 
                 agent = Agent(
-                    i=row["nomem_encr"],
+                    i=agent_id,  # Use sequential ID to match network nodes
                     params=self.params,
                     theta=row["theta"],
                     diet=row["diet"],
                     demographics=demo_key,
-                    pmf_tables=self.pmf_tables
+                    pmf_tables=self.pmf_tables,
+                    survey_id=row["nomem_encr"]  # Keep original survey ID as separate attribute
                 )
                 self.agents.append(agent)
         else:

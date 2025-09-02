@@ -12,7 +12,7 @@ import model_main_single as model_main
 DEFAULT_PARAMS = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 5715,
+          "N": 400,
           "erdos_p": 3,
           "steps": 100,
           "w_i": 5, #weight of the replicator function
@@ -240,9 +240,10 @@ def run_trajectory_analysis(params=None, runs_per_combo=1):
                 'run': i, 'parameter_set': "Survey Mean Parameters"
             })
         
-        # Twin mode
+        # Twin mode - use N from params
         twn = p.copy()
-        twn.update({"agent_ini": "twin", "N": len(sd)})
+        twn.update({"agent_ini": "twin"})
+        print(f"INFO: Using N={twn['N']} for twin mode")
         for i in range(runs_per_combo):
             model = get_model(twn)
             model.run()
