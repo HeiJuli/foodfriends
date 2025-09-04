@@ -17,6 +17,7 @@ import pandas as pd
 from netin import PATCH, PAH
 from netin import viz
 import sys
+import os
 sys.path.append('..')
 from auxillary import network_stats
 
@@ -36,8 +37,8 @@ params = {"veg_CO2": 1390,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 10, # memory length
-          "veg_f":0.25, #vegetarian fraction
-          "meat_f": 0.75,  #meat eater fraciton
+          "veg_f":0.02, #vegetarian fraction
+          "meat_f": 0.98,  #meat eater fraciton
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
@@ -486,7 +487,10 @@ class Model():
             axes[i].hist(vals[i], bins=30, alpha=0.7)
             axes[i].set_title(f'{params[i]} (μ={np.mean(vals[i]):.2f})')
         #plt.tight_layout()
-        plt.savefig("distro_plots.jpg")
+        
+        os.makedirs("../visualisations_output", exist_ok=True)
+        suffix = f"_{self.params['agent_ini']}"
+        plt.savefig(f"../visualisations_output/distro_plots{suffix}.jpg")
         print(f"Averages: α={np.mean(vals[0]):.2f} β={np.mean(vals[1]):.2f} ρ={np.mean(vals[2]):.2f} θ={np.mean(vals[3]):.2f}")
         print(f"Diet: {sum(d=='veg' for d in self.get_attributes('diet'))/len(self.agents):.2f} veg")
         
@@ -564,17 +568,26 @@ class Model():
 # %%
 if __name__ == '__main__': 
 	
+	n_trajectories = 5
+	
 	params.update({'topology': 'PATCH'})
 	
-	test_model = Model(params)
+	all_trajectories = []
 	
-	test_model.run()
-	#nx.draw(test_model.G1, node_size = 25, width = 0.5)
-    
-	trajec = test_model.fraction_veg
-	plt.plot(trajec)
+	for traj in range(n_trajectories):
+		print(f"Running trajectory {traj+1}/{n_trajectories}")
+		test_model = Model(params)
+		test_model.run()
+		all_trajectories.append(test_model.fraction_veg)
+	
+	# Plot all trajectories
+	plt.figure(figsize=(8, 6))
+	for i, trajec in enumerate(all_trajectories):
+		plt.plot(trajec, alpha=0.7, label=f'Trajectory {i+1}')
+	
 	plt.ylabel("Vegetarian Fraction")
 	plt.xlabel("t (steps)")
+	plt.legend()
 	plt.show()
     # end_state_A = test_model.get_attributes("reduction_out")
     # end_state_frac = test_model.get_attributes("threshold")
