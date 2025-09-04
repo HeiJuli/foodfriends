@@ -147,8 +147,9 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     try:
         pos = nx.spectral_layout(G, seed=42)
+        print("spectral layout used")
     except:
-        pos = nx.spring_layout(G, k=4.5, iterations=100, seed=42)
+        pos = nx.spring_layout(G, k=0.5, iterations=100, seed=42)
     
     # Get position bounds for consistent aspect ratio
     pos_array = np.array(list(pos.values()))
