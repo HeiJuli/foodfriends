@@ -42,8 +42,8 @@ params = {"veg_CO2": 1390,
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.36, #self dissonance
-          "rho": 0.4, #behavioural intentions
+          "alpha": 0.68, #self dissonance
+          "rho": 0.05, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "synthetic", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
@@ -486,7 +486,7 @@ class Model():
             axes[i].hist(vals[i], bins=30, alpha=0.7)
             axes[i].set_title(f'{params[i]} (μ={np.mean(vals[i]):.2f})')
         #plt.tight_layout()
-        plt.show()
+        plt.savefig("distro_plots.jpg")
         print(f"Averages: α={np.mean(vals[0]):.2f} β={np.mean(vals[1]):.2f} ρ={np.mean(vals[2]):.2f} θ={np.mean(vals[3]):.2f}")
         print(f"Diet: {sum(d=='veg' for d in self.get_attributes('diet'))/len(self.agents):.2f} veg")
         
