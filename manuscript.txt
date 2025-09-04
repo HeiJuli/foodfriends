@@ -1,0 +1,135 @@
+\section{Introduction}
+
+Food systems constitute at least one third of global anthropogenic GHG emissions \citep{Crippa2021}, with animal agriculture, and its associated environmental effects, contributing a significant portion. Despite the industry's insistence to the contrary, current consumption levels of animal-derived products, especially in the Global North, are not necessary for the healthy functioning of human physiology \citep{willet2019}. Many studies show that alternative diets with reduced levels of animal products have a lower carbon footprint, whilst being financially feasible and leading to better health outcomes \citep{Aleksandrowicz2016, willet2019}. Most importantly, such shifts are necessary to meet decarbonisation goals under the Paris Agreement, and the UN SDGs \citep{Eisen2022, willet2019}.
+
+All this evidence suggests that diets should change, however, only around $22\%$ of people worldwide are estimated to be vegetarian (World animal foundation, accessed on 12/08/2025), with numbers much lower when it comes to entirely plant-based diets (veganism), with the highest share of vegans estimated in India at only $13\%$ (Statista Consumer Insights, 2022). In some European countries such as the Netherlands, Spain and Germany, only $5\%$, $1.4\%$, and $10\%$, respectively, are estimated to follow a vegetarian diet. When it comes to veganism these numbers are even lower ranging around $1\%$ for the Netherlands and Spain to $2\%$ for Germany (World population review, accessed on 12/08/2025). Many citizens express willingness to make dietary changes out of concern for the environment, animal welfare or personal health, amongst other reasons, yet actual dietary changes remain significantly low. This phenomenon is known as the belief-action gap and is well-documented in the literature (Tjernstrom and Tietenberg, 2008; Kallbekken et al.,
+2011; Kallbekken and Sælen, 2011; Carattini et al., 2017; Klenert et al., 2018). Individuals are reluctant to act according to their beliefs because they are faced with uncertainty when it comes to their own individual impact \citep{Zaccai2008}, or because they fear social penalties for adoption (ref), especially when diet is strongly tied to group identity (Everall et al., 2025). In fact, a key factor that predicts green purchasing is the expectation of others' cooperation \citep{Gupta2009}. High perceived personal costs relative to expected individual impact thus makes it easier to stick to the status quo, reducing the likelihood of observing rapid dietary changes spreading across societies \citep{peattie2010}.
+
+Human agency has been central to debates across the social sciences and is increasingly seen as a critical variable in addressing sustainability challenges in the Anthropocene (Otto et al., 2020; Giddens, 1984; Emirbayer and Mische, 1998). It refers broadly to the ability of individuals and collectives to influence the course of events or shape the outcomes of processes (Pattberg and Stripple, 2008). While large-scale institutional shifts and technological innovation are necessary for climate action, transformative change also hinges on the aggregate impact of decisions made by individuals embedded in social networks and cultural systems. Under certain conditions, the actions of a small but committed minority can trigger cascading changes in norms and behavior, so-called social tipping points, that accelerate systemic transformation \citep{Everall_pareto_2025}. Some recent examples are the Fridays for Future movement \citep{Fritz2023} or the Stop de Kindermoord movement in the Netherlands \citep{Bruno2021}. In some cases, one person may be enough to start changes in social networks, particularly in the case of Fridays for Future movement. Yet individuals often underestimate the significance of their own actions for climate change mitigation, especially when outcomes depend on the cooperation of others, as well as the support of their peers for pro-environmental policies or actions, creating a collective action problem where change is stalled by mutual hesitation \citep{Zaccai2008}.
+
+In this paper, we explore the social spill-over effects of one individual’s shift toward a sustainable diet with the goal of raising awareness around individual agency in food systems. More specifically, we ask the following questions: (1) How much does this behavior reduce individual emissions, directly and indirectly, when this choice may spread through social interactions? (2) Under what conditions can such individual choices propagate and lead to broader societal change, potentially inducing a social tipping point? In this context, a tipping point captures the critical mass of people with a sustainable behavior that if crossed leads to a rapid uptake of this new behavior.
+
+We design an agent-based model (ABM) of networked social interactions to explore how a vegetarian diet might spread through society under different conditions such as changing individual preferences, network structures, or social pay-offs. We calibrate our ABM by using a combination of surveys on citizens' attitudes toward diets for the Netherlands from the Longitudinal Internet studies for the Social Sciences (LISS) data archive. We chose this setting for several reasons: (1) The LISS provides an online archive of panel surveys, representative of the Dutch population, with unique identifiers for each panel member that can be linked to their demographics, as well as other single-wave studies. Within this archive, they have detailed surveys that ask questions on the most relevant predictors of sustainable dietary preferences, such as animal welfare, environmental and health concerns, but also on the weight placed on personal vs. social dissonance, which will be an important predictor on the strength of social influence. (2) There is a clear belief-action gap visible in these data set. (3) With a very low share of vegetarians ($5\%$) and vegans ($1\%$), the Netherlands lends as an interesting case to study: if social tipping points are visible here, it might be generalizable to other populations that have similar social dynamics and preferences to the Netherlands. (4) Historically, the Netherlands has been a cradle of cultural change in Europe — from financial innovations like early stock markets and public banking (Neal 1990; Ferguson 2008), to farmer cooperatives in the 19th century (Colvin, Henderson, \& Turner 2018), to progressive movements in women’s and minority rights (Blom \& Lamberts 2006; Kennedy 2017). The Dutch tradition of openness also made it a hub for Enlightenment thought and scientific discovery (Israel 1995). Any potential for rapid social changes within this region could thus have an influence on a much larger scale within the Global North.
+
+We are able to exactly quantify the impact of an individual dietary choice in reducing dietary emissions and observe that mass shifts in dietary changes, i.e. social tipping points, are possible, highlighting the underestimated role of individual agency in adopting new dietary habits. This study is thus not only about the impact of individual emission reductions but also on changing social norms and the impact on the emissions of other people in the network, raising awareness of individual agency in climate change mitigation, which may inform future targeted communication and policy strategies.
+
+The rest of this paper is structured as follows: Section 2 lays down the model. In section 3, we present the key findings and finally, in section 4, we summarize and provide conclusions.
+
+\section{Data and Methods}
+
+\subsection{Model}
+
+Our model consists of a number $N$ of heterogeneous agents, who are embedded in an adaptive social network. The pairwise relationships between two given agents, represented as links in this network, characterize the exchange of information about dietary preferences. Each agent $i$ has a memory, denoted by $M_i$, which stores past interactions.
+
+An agent $i$ is endowed with a diet $d_i \in \{v,m\}$, where $v$ stands for vegetarian (vegan) and $m$ for a diet involving animal-based products. Each agent produces emissions $C_i \sim N(\mu, \sigma^2)$, associated with their diet. Here, $\mu$ is the mean emission for the corresponding diet and $\sigma$ its variance. An individual $i$'s preferences for a diet are given by
+
+\begin{equation*}
+u_i(d) = \alpha_i \theta_i(d_i) + \beta_i [q_i-(1-q_i)]
+\end{equation*}
+
+\begin{equation}
+\iff u_i(d) = \alpha_i\theta_i + (1-\alpha_i) (2q_i-1),
+\end{equation}
+
+The first term defines the importance of \textit{personal dissonance} of agent $i$, whereas the second term underlines the strength of \textit{social dissonance}. The \textit{personal dissonance} captures the fact that each agent has an inherent preference for a certain diet, $\theta_i(d_i) \in [-1,1]$, and puts a personal importance on these inherent preferences, $\alpha_i \in [0,1]$. Inherent dietary preferences $\theta_i(d_i)$ encodes an agent's personal preferences such as concern for animal welfare, concern for the environment or personal health, and how in line this is with one's diet. For instance, an individual might follow a meat-based diet because of family traditions or other social norms, however, an intrinsic concern for the environment and animal welfare means that it is not the diet that one would ideally want to follow, decreasing one's overall well-being from following this diet. If their diet aligns with their preferences $\theta_i>0$, otherwise $\theta_i<0$. The higher $\alpha_i$, the more weight the individual places on their personal dissonance.
+
+\textit{Social dissonance} captures the social pressure felt by the agent through their links in the network. The agent's network exerts normative pressure on the individual to adhere to a specific diet. We assume that agent $i$'s propensity to change their diet is dependent on the frequency of exposure to another agent $j$'s observed dietary choice. $q_i \in [0,1]$ is the proportion of agents that individual $i$ interacted with following the same diet and $(1-q^i)$ the proportion following the opposite diet. The pressure exerted on individual $i$ is then proportional to the difference $q_i-(1-q_i)=2q_i-1$. If $q_i < 1-q_i \iff q_i<1/2$, the social pressure term will be negative (i.e., the individual's utility will be reduced because of the many neighbors with a different diet). $\beta_i \in [0,1]$ then denotes the weight the agent places on the social pressure. For simplicity we assume that $\alpha_i$ and $\beta_i$ are complements, i.e. the more weight you place on social pressure, the less you place on your own personal preferences. Thus, we replace $\beta_i$ by $1-\alpha_i$.
+
+In our setting, individuals learn about the diet of the person they are interacting with and chose whether they could be better off by switching diets. If $d$ is the diet of individual $i$ and $d'$ the opposite diet, then $i$ has an incentive to change iff
+
+\begin{equation}
+u_i(d)<u_i(d').
+\end{equation}
+
+However, this imitation strategy has limitations and imperfections, in the sense that, with a probability larger than zero, agents will copy strategies that will make them worse off. We capture this by using a sigmoid function, which is often used across disciplines to model soft thresholds (ref). This allows us to estimate the probability of switching of each individual:
+
+\begin{equation}
+P_{i}^{switch}=\frac{1}{1+\exp\left[\left(u(d)-u(d')\right)/NK\right]}
+\label{eq:prob_switch}
+\end{equation}
+
+where $K$ quantifies the uncertainty/error in adoptions. In our simulations, we choose $K=0.1$, unless explicitly stated otherwise.
+
+To capture the belief-action gap, we add a multiplicative term to the above probability, that moderates the probability of switching, which would be too high and would simulate a situation within which this gap does not exist. The actual probability of switching for meat-eaters is thus:
+
+\begin{equation}
+P_{i}^{actual}=\rho \cdot P_{i}^{switch},
+\label{eq:prob_switch}
+\end{equation}
+
+where $\rho \in [0,1]$.
+
+\begin{table}[H]
+\centering
+\caption{Model parameters and their descriptions}
+\begin{tabular}{@{}p{4cm}p{2cm}p{2.5cm}p{2cm}@{}}
+\toprule
+\textbf{Param/Var} & \textbf{Value} & \textbf{Distribution} & \textbf{Ref} \\
+\midrule
+Agent emissions ($C_i$) & $\in [0, \max]$ & $X \sim N(\mu,\sigma^{2})$ & \\
+Agent diet ($d_i$) & $\in \{v, m\}$ & & \\
+Agent intrinsic preference ($\theta_i$) & $\in [-1, 1]$ & & \\
+Individualism ($\alpha_i$) & $\in [0, 1]$ & [Add distribution] & \\
+Social pressure ($\beta_i$) & $\in [0, 1]$ & [Add distribution] & \\
+Agent memory ($M_i$) & $4$ & & \\
+\bottomrule
+\end{tabular}
+\label{tab:model_parameters}
+\end{table}
+\subsection{Network Topology and Generation}
+
+Social interactions in our model occur between agents embedded in a network, where they are represented as nodes, and their social contacts as links. We define such a network as an undirected graph $G = (V, E)$ with $V$ the set of nodes $V = \{v_i, ..., v_n\}$, and $E \subseteq V \times V$ as the set of undirected links. Unless otherwise designated, our survey-data calibrated networks have cardinality $|V| = N = 5721$. Based on the well demonstrated principle of homophily, in social networks \citep{peixoto_disentangling_2022}, we assume a link is more likely to exist between two agents with a similar diet than the opposite. Due to uncertainty regarding the strength of this principle in regard to diets (ref), we only assume slight homophily in network generation. Probability of link generation between similar dietary classes is then $h_{MM} = h_{mm} = 0.60$, where the former refers to the majority dietary class (nominally meat-eaters), and the latter to the minority (nominally vegetarian).
+
+We employ both synthetic, i.e generated networks, as well as empirical networks in exploring the evolution of model dynamics. Table x displays several relevant network characteristics. Real-world networks are dynamic, we approximate this conservatively with a rewiring process where with a probability $p_{rewire}$, a given agent $i \in V$ selects a non-neighbour $i \neq j  \in V$ to establish a link. Following our principle of homophily above, rewiring is slightly more likely between members of the same diet. We implement this as a rejection of a new link with probability $p_{reject}$ if agent diets differ. Average degree is kept constant with a link being broken for a link established. For synthetic network generation,  we implement the PATCH algorithm from the NetIn python package \citep{pynetin}. An extension of the Holme-Kim clustered-scale-free model, PATCH incorporates preferential attachment, triadic closure (meeting friends of friends), and homophily.
+
+
+\subsection{Simulation parameters}
+
+We use survey data to initialize the model parameters $\alpha_i$, $\theta_i$ and $\rho$, as well as the fraction of vegetarians, in order to simulate agents' attitudes in a real-world setting. The data comes from the Longitudinal Internet studies for the Social Sciences (LISS) Data Archive. The LISS panel is a compendium of surveys of approximately $5000$ Dutch households and $7500$ panel members participating in monthly online surveys. A key advantage of the LISS panel bis its representative sampling of the Dutch population. Each dataset contains the variable $'nomem\_encr'$, a unique identifier for panel members, which we use to merge datasets.
+
+We draw from four sources within the LISS archive, including three single-wave studies titled (1) \textit{Reasons to Eat Less Meat} (July-August 2018); (2) \textit{Self-Regulatory Orientation: Addressing a basic aspect of the self and its relation to social indicators and life-outcomes} (February 2011), and (3) \textit{The energy transition from a citizen’s perspective} (May 2019). The fourth contains monthly-updated socio-economic and demographic information. All relevant survey questions are listed in table \ref{tab:survey_questions} in appendix A.
+
+From dataset (1), we calibrate the personal preference for a vegetarian diet, $\theta$, based on $14$ questions across three key motivations for reducing meat consumption: (i) personal health, (ii) animal welfare and (iii) environmental concerns. These themes are frequently cited as primary drivers of dietary change [ref]. The resulting distribution of $\theta$ is shown in Figure \ref{fig:param_distributions}. Furthermore, to estimate the share of vegetarians, we use the question "\textit{Diet - Vegan or Not}". While the prevalence of veganism is typically lower than vegetarianism, we treat this as a conservative proxy. If our model shows strong social diffusion at this lower baseline, the actual impact at typical vegetarian levels would likely be greater. In our sample, $1.21\%$ of respondents identify as vegan. We merge this data with the July 2018 background survey to extract demographic information, keeping information on \textit{age}, \textit{gender}, \textit{income quartile} and \textit{education level}\footnote{Both income and education levels are labelled from 1 to 4.}. The initial dataset contains $5748$ respondents. After merging and removing missing values, we retain 5708 individuals. Summary statistics for the demographics are shown in Table \ref{tab:demographics}.
+
+\begin{figure}[h!]
+\centering
+\begin{subfigure}{.33\textwidth}
+  \centering
+  \includegraphics[width=\linewidth]{Manuscript/figs/theta_dist_stata.pdf}
+\end{subfigure}%
+\begin{subfigure}{.33\textwidth}
+  \centering
+  \includegraphics[width=\linewidth]{Manuscript/figs/alpha_dist_stata.pdf}
+\end{subfigure}
+\begin{subfigure}{.33\textwidth}
+  \centering
+  \includegraphics[width=\linewidth]{Manuscript/figs/rho_dist_stata.pdf}
+\end{subfigure}
+\caption{The distribution of individual preferences for a vegetarian diet $\theta \in [-1;1]$, individual preference weight $\alpha \in [0,1]$ and belief-action gap $\rho \in [0,1]$.}
+\label{fig:param_distributions}
+\end{figure}
+
+
+\begin{table}[h!]
+\centering
+\caption{Summary statistics on demographics for survey data.}
+\label{tab:demographics}
+\begin{tabular}{lcccc}
+\hline\hline
+Variable    & Mean     & SD       & Min    & Max    \\
+\hline
+Age         & 51.303    & 18.28    & 16      & 100    \\
+Gender      & 1.540     & 0.498     & 1      & 2      \\
+Net income  & 2.919  & 0.990  & 1    & 4 \\
+Education   & 2.536     & 1.111     & 1      & 4      \\
+\hline
+\multicolumn{5}{l}{\textit{N} = 11,536} \\
+\hline\hline
+\end{tabular}
+\end{table}
+
+In order to parametrise $\alpha$, we use dataset (2) and the question "\textit{My personal identity, independent of others, is very important to me}". This question captures the extent to which respondents prioritize their own preferences ($\alpha$) versus social influence ($1-\alpha$), allowing us to assign a social weight. The distribution of $\alpha$ is presented in Figure \ref{fig:param_distributions}, with $0$ denoting "totally not applicable" and $1$ "totally applicable". While in theory we could match this dataset to the $\theta$ dataset using the unique ID, only $34.6\%$ of individuals appear in both. To circumvent this issue, we instead define a probability mass function (pmf) for $\alpha$ from its empirical distribution and draw from it to assign values to all agents in the ABM. To match $\alpha$ as best as possible to individuals in the network, we pair dataset (2) with demographics as well, and extract the pmf corresponding to the different demographics groups. This dataset comprises $5069$ individuals (out of an original $5108$). Although this survey was conducted in 2011, i.e. seven years prior to data set (1), evidence indicates such a deep-seated personality trait to be sufficiently stable over this time span [ref].
+
+To simulate more realistic vegetarian diet adoption dynamics, we account for the belief-action gap by moderating the probability of switching diets (Equation \ref{eq:prob_switch}). To do so, we use dataset (3), specifically the question "Would you want to try to eat less or even less meat?" This question captures \textit{intention}, distinct from individual \textit{preferences} $\theta$, and is used to derive the parameter $\rho$. The distribution of answers is shown in Figure \ref{fig:param_distributions}, with $0$ denoting "No, definitely not" and $1$ "Yes, definitely". This parameter is applied only for meat-eaters, as vegetarianism is not the status quo and we assume vegetarians experience no such gap. The distributions of $\theta$ and $\rho$ are visibly different, underlining the necessity of including this additional parameter: individuals may be better off by changing to a vegetarian diets when it comes to their personal preferences $\theta$ and yet, they won't change. Similar to the way we proceeded for $\alpha$, we use this data to estimate a distribution around the willingness to switch, $\rho$, again according to demographics. This combined dataset comprises a total of $2491$ (out of $2506$). Although the sample size is smaller compared to datasets (1) and (2), its representativeness allows us to infer a corresponding $\rho$ for each individual in the network. In addition, we use this same question to implement the rejection of a new link with probability $p_{reject} = 0.13$ if agent diets differ. Although the survey was conducted in 2019, we believe it to be a good approximation of attitudes already present in 2018.
+
+Finally, to track the emissions for each agent, denoted by $C_i(t)$, we draw on external estimates on emissions for vegetarians and a meat-eaters from [ref]. To reflect heterogeneity within diet groups, we draw emissions for each individual from a normal distribution with mean $\mu=1390 kg/CO_2$ for vegetarians and $\mu=2054 kg/CO_2$ for non-vegetarians, with variance $\sigma=0.1*\mu$ in both cases. .

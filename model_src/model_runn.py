@@ -12,9 +12,9 @@ import model_main_single as model_main
 DEFAULT_PARAMS = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 400,
+          "N": 602,
           "erdos_p": 3,
-          "steps": 100,
+          "steps": 15000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "k": 8, #initial edges per node for graph generation
@@ -26,7 +26,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.35, #self dissonance
-          "rho": 0, #behavioural intentions,
+          "rho": 0.1, #behavioural intentions,
           "theta": 0, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
@@ -215,7 +215,7 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg=0.6):
     print(f"Saved to {filename}")
     return df
 
-def run_trajectory_analysis(params=None, runs_per_combo=1):
+def run_trajectory_analysis(params=None, runs_per_combo=5):
     """Run trajectory analysis for parameterized and twin modes only"""
     p = DEFAULT_PARAMS.copy() if params is None else params.copy()
     r = []
@@ -315,11 +315,11 @@ def main():
             timer(run_veg_growth_analysis, params=params,
                   veg_fractions=np.linspace(0.1, 0.6, 10))
         elif choice == '4':
-            timer(run_trajectory_analysis, params=params, runs_per_combo=10)
+            timer(run_trajectory_analysis, params=params, runs_per_combo=4)
         elif choice == '5':
             timer(run_parameter_analysis, params=params,
                   alpha_range=np.linspace(0.1, 0.9, 3),
-                  theta_range=[-0.5, 0, 0.5], veg_fractions=[0.2], runs_per_combo=3,
+                  theta_range=[-0.5, 0, 0.5], veg_fractions=[0.2], runs_per_combo=2,
                   record_trajectories=True)
         elif choice == '0':
             break
