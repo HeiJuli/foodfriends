@@ -12,6 +12,7 @@ import scipy.stats as st
 import math
 import seaborn as sns
 import matplotlib.pyplot as plt
+plt.ion()  # Enable interactive mode for VSCode
 import pandas as pd
 from netin import PATCH, PAH
 from netin import viz
@@ -30,7 +31,7 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 25000,
+          "steps": 35000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
@@ -41,9 +42,9 @@ params = {"veg_CO2": 1390,
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.55, #self dissonance
-          "rho": 0.1, #behavioural intentions
-          "theta": 0.45, #intrinsic preference (- is for meat, + for vego)
+          "alpha": 0.36, #self dissonance
+          "rho": 0.4, #behavioural intentions
+          "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "synthetic", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
@@ -477,6 +478,18 @@ class Model():
                        for i in range(len(self.agents))]
         return attribute_l
     
+    def plot_params(self):
+        params = ['alpha', 'beta', 'rho', 'theta']
+        vals = [self.get_attributes(p) for p in params]
+        fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+        for i in range(4):
+            axes[i].hist(vals[i], bins=30, alpha=0.7)
+            axes[i].set_title(f'{params[i]} (μ={np.mean(vals[i]):.2f})')
+        #plt.tight_layout()
+        plt.show()
+        print(f"Averages: α={np.mean(vals[0]):.2f} β={np.mean(vals[1]):.2f} ρ={np.mean(vals[2]):.2f} θ={np.mean(vals[3]):.2f}")
+        print(f"Diet: {sum(d=='veg' for d in self.get_attributes('diet'))/len(self.agents):.2f} veg")
+        
     def record_snapshot(self, t):
         """Record network state and agent attributes at time t"""
         self.snapshots[t] = {
@@ -517,6 +530,7 @@ class Model():
         
         #print(f"Starting model with agent initation mode: {self.params['agent_ini']}")
         self.agent_ini()
+        self.plot_params()
         self.harmonise_netIn()
         self.record_fraction()
         self.record_snapshot(0)
