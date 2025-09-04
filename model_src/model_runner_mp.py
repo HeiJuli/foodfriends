@@ -9,14 +9,28 @@ from datetime import date
 from multiprocessing import Pool
 import model_main_single as model_main
 
-DEFAULT_PARAMS = {
-    "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054, "N": 5602,
-    "erdos_p": 3, "steps": 100, "w_i": 5, "immune_n": 0.10, "k": 8,
-    "M": 10, "veg_f": 0.5, "meat_f": 0.5, "p_rewire": 0.1,
-    "rewire_h": 0.1, "tc": 0.2, 'topology': "PATCH", "alpha": 0.35,
-    "rho": 0, "theta": 0, "agent_ini": "other",
-    "survey_file": "../data/hierarchical_agents.csv"
-}
+DEFAULT_PARAMS = {"veg_CO2": 1390,
+          "vegan_CO2": 1054,
+          "meat_CO2": 2054,
+          "N": 1000,
+          "erdos_p": 3,
+          "steps": 40000,
+          "w_i": 5,
+          "immune_n": 0.10,
+          "k": 8,
+          "M": 10,
+          "veg_f":0.5,
+          "meat_f": 0.5,
+          "p_rewire": 0.1,
+          "rewire_h": 0.1,
+          "tc": 0.2,
+          'topology': "PATCH",
+          "alpha": 0.35,
+          "rho": 0.1,
+          "theta": 0,
+          "agent_ini": "other",
+          "survey_file": "../data/hierarchical_agents.csv"
+          }
 
 def ensure_output_dir():
     if not os.path.exists('../model_output'):
@@ -80,6 +94,18 @@ def get_model(params):
     else:
         return model_main.Model(params)
 
+def run_basic_model(params=None):
+    params = params or DEFAULT_PARAMS.copy()
+    if params["agent_ini"] == "parameterized":
+        survey_data = load_survey_data(params["survey_file"], 
+                                     ["nomem_encr", "alpha", "theta", "diet"])
+        survey_params = extract_survey_params(survey_data)
+        params.update(survey_params)
+    
+    model = get_model(params)
+    model.run()
+    return model
+
 def run_single_model(params):
     """Worker function - runs one model instance"""
     model = get_model(params)
@@ -132,18 +158,17 @@ def run_parameter_analysis_parallel(base_params, alpha_range, beta_range,
     """Parallel parameter analysis"""
     param_list = []
     for a in alpha_range:
-        for b in beta_range:
-            for t in theta_range:
-                for vf in veg_fractions:
-                    for run in range(runs_per_combo):
-                        p = base_params.copy()
-                        p.update({
-                            'alpha': a, 'theta': t, 'veg_f': vf, 'meat_f': 1-vf,
-                            'record_trajectories': record_trajectories,
-                            'parameter_set': f"α={a:.2f}, β={1-a:.2f}, θ={t:.2f}",
-                            'run': run
-                        })
-                        param_list.append(p)
+        for t in theta_range:
+            for vf in veg_fractions:
+                for run in range(runs_per_combo):
+                    p = base_params.copy()
+                    p.update({
+                        'alpha': a, 'theta': t, 'veg_f': vf, 'meat_f': 1-vf,
+                        'record_trajectories': record_trajectories,
+                        'parameter_set': f"α={a:.2f}, β={1-a:.2f}, θ={t:.2f}",
+                        'run': run
+                    })
+                    param_list.append(p)
 
     print(f"Running {len(param_list)} simulations on {n_cores} cores...")
 

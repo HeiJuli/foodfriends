@@ -85,7 +85,6 @@ class Agent():
         self.memory = []
         self.i = i
         self.survey_id = kwargs.get('survey_id', i)  # Original survey ID if available
-        self.global_norm = 0.5
         self.reduction_out = 0
         self.diet_duration = 0  # Track how long agent maintains current diet
         self.diet_history = []  # Track diet changes
@@ -161,8 +160,11 @@ class Agent():
         prob_switch = 1/(1+math.exp(-5*(u_s-u_i)))
         
         
-        #scale by readiness to switch
-        return prob_switch * self.rho
+        #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
+        if self.diet == "meat":
+            return prob_switch * self.rho
+        else:
+            return prob_switch
 
 
     def dissonance_new(self, case, mode):
@@ -254,10 +256,11 @@ class Agent():
         
         # Calculate ratio based on single comparison
         if len(self.memory) == 0:
-            return
+            return 0.0  # Return neutral utility for empty memory
+        
         mem_same = sum(1 for x in self.memory[-self.params["M"]:] if x == diet)
         
-        ratio =  [mem_same/len(self.memory[-self.params["M"]:])][0]
+        ratio = mem_same/len(self.memory[-self.params["M"]:])  # Remove unnecessary list wrapping
 
         
         util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
@@ -293,19 +296,16 @@ class Agent():
             old_C, old_diet = self.C, self.diet
             self.diet = "meat" if self.diet == "veg" else "veg"
             
-            # Update consumption based on influencer
-            if other_agent.diet == self.diet:
-                self.C = other_agent.C
-            else:
-                self.C = self.diet_emissions(self.diet)
-            
+            # Update consumption with noise around current level
+            self.C = np.random.normal(self.C, 0.1 * self.C)
             
             # If emissions reduced, attribute to influencing agent
             if old_diet == "meat" and self.diet == "veg":
                 self.reduction_tracker(old_C, other_agent)
         
         else: 
-            self.C = self.diet_emissions(self.diet)
+            # Add same noise scale to current consumption without switching
+            self.C = np.random.normal(self.C, 0.1 * self.C)
         
       
         
