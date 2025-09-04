@@ -25,9 +25,9 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.35, #self dissonance
-          "rho": 0.1, #behavioural intentions,
-          "theta": 0, #intrinsic preference (- is for meat, + for vego)
+          "alpha": 0.45, #self dissonance
+          "rho": 0.25, #behavioural intentions,
+          "theta": -0.2, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }

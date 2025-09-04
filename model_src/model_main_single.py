@@ -35,16 +35,15 @@ params = {"veg_CO2": 1390,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 10, # memory length
-          "veg_f":0.5, #vegetarian fraction
-          "meat_f": 0.5,  #meat eater fraciton
+          "veg_f":0.25, #vegetarian fraction
+          "meat_f": 0.75,  #meat eater fraciton
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.35, #self dissonance
-          "beta": 0.65, #social dissonance
+          "alpha": 0.55, #self dissonance
           "rho": 0.1, #behavioural intentions
-          "theta": 0, #intrinsic preference (- is for meat, + for vego)
+          "theta": 0.45, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "synthetic", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/final_data_parameters.csv"
           }
@@ -112,10 +111,24 @@ class Agent():
             if hasattr(self, 'alpha') and not hasattr(self, 'beta'):
                 self.beta = 1 - self.alpha
                 
-            # Use PMF if available, else synthetic fallback
+            # Use hierarchical matching first, then PMF for gaps, finally synthetic fallback
             if hasattr(self, 'demographics') and hasattr(self, 'pmf_tables') and self.pmf_tables:
-                self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha')
-                self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho')
+                # Check if we have direct alpha match from survey
+                if hasattr(self, 'has_alpha') and self.has_alpha and hasattr(self, 'alpha'):
+                    # Use direct alpha from hierarchical matching
+                    pass  # self.alpha already set from kwargs
+                else:
+                    # Sample alpha from PMF using demographics
+                    self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha')
+                
+                # Check if we have direct rho match from survey  
+                if hasattr(self, 'has_rho') and self.has_rho and hasattr(self, 'rho'):
+                    # Use direct rho from hierarchical matching
+                    pass  # self.rho already set from kwargs
+                else:
+                    # Sample rho from PMF using demographics
+                    self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho')
+                
                 self.beta = 1 - self.alpha  # Recalculate beta after new alpha
             else:
                 # Existing synthetic fallback
@@ -385,17 +398,35 @@ class Model():
                 # Create demographic key if PMF tables available
                 demo_key = None
                 if self.pmf_tables:
-                    demo_cols = ['gender', 'age_cat', 'netinc_cat', 'educcat']
+                    demo_cols = ['gender', 'age_group', 'incquart', 'educlevel']
                     demo_key = tuple(row[col] for col in demo_cols if col in row)
+                
+                # Prepare agent kwargs with hierarchical matching data
+                agent_kwargs = {
+                    'theta': row["theta"],
+                    'diet': row["diet"],
+                    'demographics': demo_key,
+                    'pmf_tables': self.pmf_tables,
+                    'survey_id': row["nomem_encr"]
+                }
+                
+                # Add hierarchical matching flags and values if present
+                if "has_rho" in row and row["has_rho"]:
+                    agent_kwargs['has_rho'] = True
+                    agent_kwargs['rho'] = row["rho"]
+                else:
+                    agent_kwargs['has_rho'] = False
+                    
+                if "has_alpha" in row and row["has_alpha"]:
+                    agent_kwargs['has_alpha'] = True  
+                    agent_kwargs['alpha'] = row["alpha"]
+                else:
+                    agent_kwargs['has_alpha'] = False
                 
                 agent = Agent(
                     i=agent_id,  # Use sequential ID to match network nodes
                     params=self.params,
-                    theta=row["theta"],
-                    diet=row["diet"],
-                    demographics=demo_key,
-                    pmf_tables=self.pmf_tables,
-                    survey_id=row["nomem_encr"]  # Keep original survey ID as separate attribute
+                    **agent_kwargs
                 )
                 self.agents.append(agent)
         else:
