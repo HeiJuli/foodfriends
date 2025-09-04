@@ -263,7 +263,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     
     if save:
         output_dir = ensure_output_dir()
-        plt.savefig(f'{output_dir}/network_agency_evolution.svg', dpi=300, bbox_inches='tight')
+        plt.savefig(f'{output_dir}/network_agency_evolution.pdf', dpi=300, bbox_inches='tight')
         print("Saved network_agency_evolution.pdf")
     
     return fig
