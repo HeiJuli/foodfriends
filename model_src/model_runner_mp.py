@@ -294,7 +294,7 @@ def main():
     parser.add_argument('--alpha_points', type=int, default=5, help='Alpha grid points')
     parser.add_argument('--beta_points', type=int, default=5, help='Beta grid points')
     parser.add_argument('--veg_points', type=int, default=10, help='Veg fraction points')
-    parser.add_argument('--survey_file', default='../data/final_data_parameters.csv', help='Survey data file')
+    parser.add_argument('--survey_file', default='../data/hierarchical_agents.csv', help='Survey data file')
 
     args = parser.parse_args()
 
