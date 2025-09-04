@@ -45,7 +45,7 @@ params = {"veg_CO2": 1390,
           "rho": 0.1, #behavioural intentions
           "theta": 0.45, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "synthetic", #choose between "twin" "parameterized" or "synthetic" 
-          "survey_file": "../data/final_data_parameters.csv"
+          "survey_file": "../data/hierarchical_agents.csv"
           }
 
 #%% Auxillary/Helpers
