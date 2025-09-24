@@ -46,7 +46,7 @@ params = {"veg_CO2": 1390,
           "alpha": 0.36, #self dissonance
           "rho": 0.05, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "synthetic", #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": "parameterized", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
@@ -146,7 +146,16 @@ class Agent():
         #currently this should work for networks N >> 1 
         return np.random.choice(choices, p=[self.params["veg_f"], self.params["meat_f"]])
 
-    
+    def initialize_memory(self):
+        """Initialize agent memory with population-based sampling to represent realistic social context"""
+        choices = ["veg", "meat"]
+        probabilities = [self.params["veg_f"], self.params["meat_f"]]
+        
+        for _ in range(self.params["M"]):
+            sampled_diet = np.random.choice(choices, p=probabilities)
+            self.memory.append(sampled_diet)
+        
+            
     def diet_emissions(self, diet):
         veg, meat = list(map(lambda x: st.norm.rvs(loc=x, scale=0.1*x),
                                 list(map(self.params.get, ["veg_CO2", "meat_CO2"]))))
@@ -198,7 +207,7 @@ class Agent():
         #     return self.theta
         
         raw_dissonance = abs(self.theta - self.rho)
-        sigmoid_dissonance = 2 / (1 + math.exp(-2*raw_dissonance)) - 1
+        sigmoid_dissonance = raw_dissonance # 2 / (1 + math.exp(-2*raw_dissonance)) - 1
 
         # Positive dissonance = wants to be vegetarian
         # Negative dissonance = wants to be meat-eater
@@ -279,14 +288,16 @@ class Agent():
         
         # Calculate ratio based on single comparison
         if len(self.memory) == 0:
+            print("memory empty!")
             return 0.0  # Return neutral utility for empty memory
+           
         
         mem_same = sum(1 for x in self.memory[-self.params["M"]:] if x == diet)
         
         ratio = mem_same/len(self.memory[-self.params["M"]:])  # Remove unnecessary list wrapping
 
         
-        util = self.beta*(2*ratio-1) + self.alpha*0.5*self.dissonance_new("simple", mode)
+        util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
         
         return util
     
@@ -331,7 +342,6 @@ class Agent():
             self.C = np.random.normal(self.C, 0.1 * self.C)
         
       
-        
         
     def flip(self, p):
         return np.random.random() < p
@@ -438,9 +448,15 @@ class Model():
                     params=self.params,
                     **agent_kwargs
                 )
+                
+                agent.initialize_memory()
+                
                 self.agents.append(agent)
         else:
             self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
+            # Initialize memory for parameterized and synthetic modes
+            for agent in self.agents:
+                agent.initialize_memory()
                 
         
         n_immune = int(self.params["immune_n"] * len(self.agents))
