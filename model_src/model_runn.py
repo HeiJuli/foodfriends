@@ -12,7 +12,7 @@ import model_main_single as model_main
 DEFAULT_PARAMS = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 680,
+          "N": 699,
           "erdos_p": 3,
           "steps": 15000,
           "w_i": 5, #weight of the replicator function
