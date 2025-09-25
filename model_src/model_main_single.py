@@ -44,7 +44,7 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 35000,
+          "steps": 55000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
@@ -55,10 +55,10 @@ params = {"veg_CO2": 1390,
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.68, #self dissonance
+          "alpha": 0.36, #self dissonance
           "rho": 0.05, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "synthetic", #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": "parameterized", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
@@ -158,7 +158,16 @@ class Agent():
         #currently this should work for networks N >> 1 
         return np.random.choice(choices, p=[self.params["veg_f"], self.params["meat_f"]])
 
-    
+    def initialize_memory(self):
+        """Initialize agent memory with population-based sampling to represent realistic social context"""
+        choices = ["veg", "meat"]
+        probabilities = [self.params["veg_f"], self.params["meat_f"]]
+        
+        for _ in range(self.params["M"]):
+            sampled_diet = np.random.choice(choices, p=probabilities)
+            self.memory.append(sampled_diet)
+        
+            
     def diet_emissions(self, diet):
         veg, meat = list(map(lambda x: st.norm.rvs(loc=x, scale=0.1*x),
                                 list(map(self.params.get, ["veg_CO2", "meat_CO2"]))))
@@ -184,14 +193,18 @@ class Agent():
         u_i = self.calc_utility(other_agent, mode="same")
         u_s = self.calc_utility(other_agent, mode="diff")
         
-        prob_switch = 1/(1+math.exp(-5*(u_s-u_i)))
+
         
+        prob_switch = 1/(1+math.exp(-2*(u_s-u_i)))
         
+        inertia_factor = 1 / (1 + 0.5 * len(self.diet_history))
+
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
         if self.diet == "meat":
-            return prob_switch * self.rho
+            return prob_switch #* inertia_factor 
+
         else:
-            return prob_switch
+            return prob_switch #* inertia_factor
 
 
     def dissonance_new(self, case, mode):
@@ -202,17 +215,21 @@ class Agent():
         else:
             diet = "meat" if self.diet == "veg" else "veg"
         
-        if diet == "veg":
-            return self.theta
-        else:
-            return -1*self.theta
-    
-    #uses the sigmoid function to calculate dissonance
-   #     elif case == "sigmoid":
-   #         current_diet = 1 if self.diet == "veg" else -1
-   #         # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
-   #         return (2/(1+math.exp(-1*(self.theta*current_diet)))-1)/0.46
+        # if diet == "veg":
+        #     return self.theta
+        
+        raw_dissonance = abs(self.theta - self.rho)
+        sigmoid_dissonance = raw_dissonance # 2 / (1 + math.exp(-2*raw_dissonance)) - 1
 
+        # Positive dissonance = wants to be vegetarian
+        # Negative dissonance = wants to be meat-eater
+        
+        if self.theta > 0:  # Intrinsically prefers vegetarian
+            return sigmoid_dissonance if diet == "veg" else -sigmoid_dissonance
+        else:  # Intrinsically prefers meat
+            return -sigmoid_dissonance if diet == "veg" else sigmoid_dissonance
+
+      
 
         
     def select_node(self, i, G, i_x=None):
@@ -283,7 +300,9 @@ class Agent():
         
         # Calculate ratio based on single comparison
         if len(self.memory) == 0:
+            print("memory empty!")
             return 0.0  # Return neutral utility for empty memory
+           
         
         mem_same = sum(1 for x in self.memory[-self.params["M"]:] if x == diet)
         
@@ -335,7 +354,6 @@ class Agent():
             self.C = np.random.normal(self.C, 0.1 * self.C)
         
       
-        
         
     def flip(self, p):
         return np.random.random() < p
@@ -442,9 +460,15 @@ class Model():
                     params=self.params,
                     **agent_kwargs
                 )
+                
+                agent.initialize_memory()
+                
                 self.agents.append(agent)
         else:
             self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
+            # Initialize memory for parameterized and synthetic modes
+            for agent in self.agents:
+                agent.initialize_memory()
                 
         
         n_immune = int(self.params["immune_n"] * len(self.agents))
@@ -580,7 +604,7 @@ class Model():
 # %%
 if __name__ == '__main__': 
 	
-	n_trajectories = 5
+	n_trajectories = 2
 	
 	params.update({'topology': 'PATCH'})
 	
