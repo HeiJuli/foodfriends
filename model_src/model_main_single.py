@@ -32,7 +32,7 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 55000,
+          "steps": 2000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
@@ -43,10 +43,10 @@ params = {"veg_CO2": 1390,
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.36, #self dissonance
+          "alpha": 0.50, #self dissonance
           "rho": 0.05, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "parameterized", #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": "synthetic", #"parameterized", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
@@ -185,11 +185,11 @@ class Agent():
         
         prob_switch = 1/(1+math.exp(-2*(u_s-u_i)))
         
-        inertia_factor = 1 / (1 + 0.5 * len(self.diet_history))
+        #inertia_factor = 1 / (1 + 0.5 * len(self.diet_history))
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
         if self.diet == "meat":
-            return prob_switch #* inertia_factor 
+            return prob_switch #* self.rho
 
         else:
             return prob_switch #* inertia_factor
@@ -203,20 +203,18 @@ class Agent():
         else:
             diet = "meat" if self.diet == "veg" else "veg"
         
-        # if diet == "veg":
-        #     return self.theta
+        if diet == "veg":
+            return self.theta
         
-        raw_dissonance = abs(self.theta - self.rho)
-        sigmoid_dissonance = raw_dissonance # 2 / (1 + math.exp(-2*raw_dissonance)) - 1
+        else:
+           return -1*abs(self.theta - self.rho)
+           #raw_dissonance # 2 / (1 + math.exp(-2*raw_dissonance)) - 1
 
-        # Positive dissonance = wants to be vegetarian
-        # Negative dissonance = wants to be meat-eater
-        
-        if self.theta > 0:  # Intrinsically prefers vegetarian
-            return sigmoid_dissonance if diet == "veg" else -sigmoid_dissonance
-        else:  # Intrinsically prefers meat
-            return -sigmoid_dissonance if diet == "veg" else sigmoid_dissonance
-
+        # if self.theta > 0:  # Intrinsically prefers vegetarian
+        #     return sigmoid_dissonance if diet == "veg" else -sigmoid_dissonance
+        # else:  # Intrinsically prefers meat
+        #     return -sigmoid_dissonance if diet == "veg" else sigmoid_dissonance
+    
       
 
         
@@ -297,7 +295,7 @@ class Agent():
         ratio = mem_same/len(self.memory[-self.params["M"]:])  # Remove unnecessary list wrapping
 
         
-        util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
+        util = self.beta*(2*ratio-1) #+ self.alpha*self.dissonance_new("simple", mode)
         
         return util
     
