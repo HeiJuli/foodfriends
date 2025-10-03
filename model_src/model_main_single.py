@@ -8,11 +8,31 @@ Created on Tue Apr  9 18:36:06 2024
 import networkx as nx
 import numpy as np
 import random
-from scipy.stats import norm
-from scipy.stats import truncnorm
+import scipy.stats as st
 import math
 import seaborn as sns
 import matplotlib.pyplot as plt
+plt.ion()  # Enable interactive mode for VSCode
+import pandas as pd
+from netin import PATCH, PAH
+from netin import viz
+import sys
+import os
+sys.path.append('..')
+from auxillary import network_stats
+
+# Fix for Windows numpy randint issue with netin
+original_randint = np.random.randint
+
+def patched_randint(low, high=None, size=None, dtype=int):
+    if high is not None and high >= 2**31:
+        # Use a smaller bound that works on Windows
+        high = 2**31 - 1
+    return original_randint(low, high, size=size, dtype=dtype)
+
+# Apply the patch
+np.random.randint = patched_randint
+
 
 # %% Preliminary settings
 #random.seed(30)
@@ -22,56 +42,154 @@ import matplotlib.pyplot as plt
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 300,
+          "N": 699,
           "erdos_p": 3,
-          "steps":50000,
+          "steps": 55000,
+          "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
-          "immune_n": 0.1,
+          "immune_n": 0.10,
           "M": 10, # memory length
-          "veg_f":0.3, #vegetarian fraction
-          "meat_f": 0.7,  #meat eater fraciton
-          "n": 5,
-          "v": 10,
-          'topology': "BA", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.3, #self dissonance
-          "beta": 0.7 #social dissonance
-          
+          "veg_f":0.15, #vegetarian fraction
+          "meat_f": 0.85,  #meat eater fraction
+          "p_rewire": 0.1, #probability of rewire step
+          "rewire_h": 0.1, # slightly preference for same diet
+          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
+          'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
+          "warm_start": True,          # enable the pre-step socialization
+          "warm_intake_obs": None,     # None -> use M observations for intake; or set an int
+          "warm_decision_rounds": 1,    # one synchronous decision before t=1
+          "step_is_round": True,
+          "alpha": 0.45, #self dissonance
+          "rho": 0.45, #behavioural intentions
+          "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
+          "agent_ini": "synthetic", #"parameterized", #choose between "twin" "parameterized" or "synthetic" 
+          "survey_file": "../data/hierarchical_agents.csv"
           }
+
+#%% Auxillary/Helpers
+
+def sample_from_pmf(demo_key, pmf_tables, param):
+    """Sample single parameter from PMF"""
+    if pmf_tables and demo_key in pmf_tables[param]:
+        pmf = pmf_tables[param][demo_key]
+        vals, probs = pmf['values'], pmf['probabilities']
+        nz = [(v,p) for v,p in zip(vals, probs) if p > 0]
+        if nz:
+            v, p = zip(*nz)
+            return np.random.choice(v, p=np.array(p)/sum(p))
+    
+    # Fallback: sample from all values or default
+    if pmf_tables:
+        all_vals = []
+        for cell in pmf_tables[param].values():
+            all_vals.extend(cell['values'])
+        return np.random.choice(all_vals) if all_vals else 0.5
+    return 0.5
+
+
+
 
 # %% Agent
 
 class Agent():
-
-    def __init__(self, i, params):
-
-        # types can be vegetarian or meat eater
+    
+    def __init__(self, i, params, **kwargs):
+        
         self.params = params
-        self.diet = self.choose_diet(self.params)
-        self.C = self.diet_emissions(self.diet, self.params)
+        # types can be vegetarian or meat eater
+        self.set_params(**kwargs)
+        self.C = self.diet_emissions(self.diet)
         self.memory = []
         self.i = i
-        self.individual_norm = truncnorm.rvs(-1, 1)
-        self.global_norm = 0.5
+        self.survey_id = kwargs.get('survey_id', i)  # Original survey ID if available
         self.reduction_out = 0
-        # implement other distributions (pareto)
-        self.alpha = self.choose_alpha_beta(params["alpha"])
-        self.beta = self.choose_alpha_beta(params["beta"])
         self.diet_duration = 0  # Track how long agent maintains current diet
         self.diet_history = []  # Track diet changes
         self.last_change_time = 0  # Track when diet last changed
+        self.immune = False
+    
+    
+    def set_params(self, **kwargs):
         
-    def choose_diet(self, params):
+        #TODO: need to change these "synthetic" distibutions to have the right form 
+        # e.g theta is not normally distributed, but has a left-skewed distribution
+        # thinking of not doing this
+        if self.params["agent_ini"] != "twin":
+            self.diet = self.choose_diet()
+            self.rho = self.choose_alpha_beta(self.params["rho"])
+            self.theta = st.truncnorm.rvs(-1, 1, loc=self.params["theta"])
+            self.alpha = self.choose_alpha_beta(self.params["alpha"])
+            self.beta = 1-self.alpha
+        else:
+            # Twin mode: set theta/diet from survey, sample alpha/rho from PMF
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+                # Ensure alpha-beta complementarity for hierarchical CSV
+                
+            if hasattr(self, 'alpha') and not hasattr(self, 'beta'):
+                self.beta = 1 - self.alpha
+                
+            # Use hierarchical matching first, then PMF for gaps, finally synthetic fallback
+            if hasattr(self, 'demographics') and hasattr(self, 'pmf_tables') and self.pmf_tables:
+                # Check if we have direct alpha match from survey
+                if hasattr(self, 'has_alpha') and self.has_alpha and hasattr(self, 'alpha'):
+                    # Use direct alpha from hierarchical matching
+                    pass  # self.alpha already set from kwargs
+                else:
+                    # Sample alpha from PMF using demographics
+                    self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha')
+                
+                # Check if we have direct rho match from survey  
+                if hasattr(self, 'has_rho') and self.has_rho and hasattr(self, 'rho'):
+                    # Use direct rho from hierarchical matching
+                    pass  # self.rho already set from kwargs
+                else:
+                    # Sample rho from PMF using demographics
+                    self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho')
+                
+                self.beta = 1 - self.alpha  # Recalculate beta after new alpha
+            else:
+                # Existing synthetic fallback
+                self.rho = st.truncnorm.rvs(-1, 1, loc=0.48, scale=0.31)
+                self.alpha = st.truncweibull_min(248.69, 0, 1, loc=-47.38, scale=48.2)
+                self.beta = 1 - self.alpha  # Recalculate beta after new alpha
+                
+        
+    def choose_diet(self):
         
         choices = ["veg",  "meat"] #"vegan",
         #TODO: implement determenistic way of initalising agent diets if required
         #currently this should work for networks N >> 1 
-        return np.random.choice(choices, p=[params["veg_f"], params["meat_f"]])
-
+        return np.random.choice(choices, p=[self.params["veg_f"], self.params["meat_f"]])
     
-    def diet_emissions(self, diet, params):
+    def initialize_memory_from_neighbours(self, G, agents):
+        
+        """Seed memory using local neighbours' diets (with replacement)."""
+        
+        neigh_ids = list(G.neighbors(self.i))
+        if len(neigh_ids)==0:
+            # Fallback: if isolated, just seed with own diet
+            self.memory = [self.diet]* self.params["M"]
+            return
+        neigh_diets = [agents[j].diet for j in neigh_ids]
+        p_veg = sum(d == "veg" for d in neigh_diets) / len(neigh_diets)
+        choices = ["veg", "meat"]
+        probs = [p_veg, 1-p_veg]
+        self.memory = list(np.random.choice(choices, size=self.params["M"], p=probs))
 
-        veg, meat = list(map(lambda x: norm.rvs(loc=x, scale=0.1*x),
-                                list(map(params.get, ["veg_CO2", "meat_CO2"]))))
+    def initialize_memory(self):
+        """Initialize agent memory with population-based sampling to represent realistic social context"""
+        choices = ["veg", "meat"]
+        probabilities = [self.params["veg_f"], self.params["meat_f"]]
+        
+        for _ in range(self.params["M"]):
+            sampled_diet = np.random.choice(choices, p=probabilities)
+            self.memory.append(sampled_diet)
+        
+            
+    def diet_emissions(self, diet):
+        veg, meat = list(map(lambda x: st.norm.rvs(loc=x, scale=0.1*x),
+                                list(map(self.params.get, ["veg_CO2", "meat_CO2"]))))
         lookup = {"veg": veg, "meat": meat}
 
         return lookup[diet]
@@ -79,14 +197,9 @@ class Agent():
     
     
     def choose_alpha_beta(self, mean):
-        
         a, b = 0, 1
-        val = truncnorm.rvs(a, b, loc=mean, scale=mean*0.2)
-        
+        val = st.truncnorm.rvs(a, b, loc=mean, scale=mean*0.2)
         return val
-        
-        
-        
         
         
     def prob_calc(self, other_agent):
@@ -97,11 +210,20 @@ class Agent():
             other_agent: the agent being compared with
         """
         u_i = self.calc_utility(other_agent, mode="same")
-        u_s = self.calc_utility(other_agent, mode="diff")
+        u_s = self.calc_utility(other_agent, mode="diff") #- self.rho
         
-        prob_switch = 1/(1+math.exp(-5*(u_s-u_i)))
+
         
-        return prob_switch
+        prob_switch = 1/(1+math.exp(-2*(u_s-u_i)))
+        
+        #inertia_factor = 1 / (1 + 0.5 * len(self.diet_history))
+
+        #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
+        if self.diet == "meat":
+            return prob_switch * self.rho
+
+        else:
+            return prob_switch #* inertia_factor
 
 
     def dissonance_new(self, case, mode):
@@ -113,17 +235,37 @@ class Agent():
             diet = "meat" if self.diet == "veg" else "veg"
         
         if diet == "veg":
-            return self.individual_norm
+            return self.theta
+        
         else:
-            return -1*self.individual_norm
+           return -1*self.theta #abs(self.theta - self.rho)
+           #raw_dissonance # 2 / (1 + math.exp(-2*raw_dissonance)) - 1
+
+        # if self.theta > 0:  # Intrinsically prefers vegetarian
+        #     return sigmoid_dissonance if diet == "veg" else -sigmoid_dissonance
+        # else:  # Intrinsically prefers meat
+        #     return -sigmoid_dissonance if diet == "veg" else sigmoid_dissonance
     
-    #uses the sigmoid function to calculate dissonance
-   #     elif case == "sigmoid":
-   #         current_diet = 1 if self.diet == "veg" else -1
-   #         # The devision of 0.4621171572600098 is to normalize the sigmoid function in the interval of[-1,1].
-   #         return (2/(1+math.exp(-1*(self.individual_norm*current_diet)))-1)/0.46
+      
+    def dissonance_alternative(self, case, mode):
+        
+        """At the moment theta is merely a shove towards an alternative diet.
+        We want it to capture actual dissonance. This is an alternative strategy I propose
+        Cognitive dissonance: utility penalty if current diet creates a gap between behavior and belief
+        or if future diet would.
+        theta > 0  = belief meat is bad (prefers veg)
+        theta < 0  = belief veg is bad (prefers meat)"""
 
+        prefers_veg = (self.theta > 0)
+        aligned_now = (self.diet == "veg" and prefers_veg) or (self.diet == "meat" and not prefers_veg)
+        s = abs(self.theta)
 
+        if mode == "same":
+            # penalty only if you'd stay misaligned
+            return -s if not aligned_now else 0.0
+        else:  # mode == "diff"
+            # penalty only if switching would create misalignment (i.e., you're currently aligned)
+            return -s if aligned_now else 0.0
         
     def select_node(self, i, G, i_x=None):
         neighbours = set(G.neighbors(i))
@@ -147,9 +289,10 @@ class Agent():
             influencer: agent who influenced the change
         """
         delta = old_c - self.C
-        current = getattr(influencer, "reduction_out")
-        setattr(influencer, "reduction_out", current + delta)
-    
+        if delta > 0: 
+            current = getattr(influencer, "reduction_out")
+            setattr(influencer, "reduction_out", current + delta)
+        
     
     def get_neighbour_attributes(self, attribute):
         """
@@ -192,31 +335,35 @@ class Agent():
         
         # Calculate ratio based on single comparison
         if len(self.memory) == 0:
-            return
-        mem_same = sum(1 for x in self.memory[-params["M"]:] if x == diet)
+            print("memory empty!")
+            return 0.0  # Return neutral utility for empty memory
+           
         
-        ratio =  [mem_same/len(self.memory[-params["M"]:])][0]
+        mem_same = sum(1 for x in self.memory[-self.params["M"]:] if x == diet)
+        
+        ratio = mem_same/len(self.memory[-self.params["M"]:])  # Remove unnecessary list wrapping
 
         
-        util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
+        util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_alternative("simple", mode) #self.dissonance_new("simple", mode)
         
         return util
     
+        
     
-    def step(self, G, agents, params):
+    def step(self, G, agents):
         """
        Steps agent i forward one t
     
        Args:
            G (dic): an nx graph object
            agents (list): list of agents in G
-           params (dic): model parameters
        Returns:
            
         """
         
         # Select random neighbor
         self.neighbours = [agents[neighbour] for neighbour in G.neighbors(self.i)]
+        
         if not self.neighbours:  # Skip if isolated node
             return
             
@@ -226,31 +373,36 @@ class Agent():
         # Calculate probability of switching based on pairwise comparison
         prob_switch = self.prob_calc(other_agent)
         
-        if self.flip(prob_switch):
-            old_C = self.C
+        if not self.immune and self.flip(prob_switch):
+            old_C, old_diet = self.C, self.diet
             self.diet = "meat" if self.diet == "veg" else "veg"
             
-            # Update consumption based on influencer
-            self.C = other_agent.C if other_agent.diet == self.diet else \
-                self.diet_emissions(self.diet, params)
-                
+            # Update consumption with noise around current level
+            self.C = np.random.normal(self.C, 0.1 * self.C)
+            
             # If emissions reduced, attribute to influencing agent
-            if self.diet == "veg":
+            if old_diet == "meat" and self.diet == "veg":
                 self.reduction_tracker(old_C, other_agent)
         
-        self.C = self.diet_emissions(self.diet, self.params)
+        else: 
+            # Add same noise scale to current consumption without switching
+            self.C = np.random.normal(self.C, 0.1 * self.C)
         
       
-        
         
     def flip(self, p):
         return np.random.random() < p
 
 #%% Model 
 class Model():
-    def __init__(self, params):
+    def __init__(self, params, pmf_tables = None):
         
+        
+        self.pmf_tables = pmf_tables
         self.params = params
+        self.snapshots = {}  # Store network snapshots
+        self.snapshot_times = [int(params["steps"] * r) for r in [0.33, 0.66]]
+            
         if params['topology'] == "complete":
             
             self.G1 = nx.complete_graph(params["N"])
@@ -259,8 +411,16 @@ class Model():
                 self.params["N"], self.params["erdos_p"])
         
         elif params['topology'] == "CSF":  
-             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, 0.4)
+             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, params["tc"])
+             
+        elif params['topology'] == "WS":  
+             self.G1 = nx.watts_strogatz_graph(params["N"], 6, params["tc"])
         
+        #MM stands for majority class, mm for minority, tc is triadic closure
+        elif params['topology'] == "PATCH":
+            self.G1 = PATCH(params["N"], params["k"], float(params["veg_f"]), h_MM=0.6, tc=params["tc"], h_mm=0.6)
+            self.G1.generate()
+            
         self.system_C = []
         self.fraction_veg = []  
     
@@ -268,14 +428,89 @@ class Model():
         fraction_veg = sum(i == "veg" for i in self.get_attributes("diet"))/self.params["N"]
         self.fraction_veg.append(fraction_veg)
 
+    def harmonise_netIn(self):
+        """
+        Assigns agents to the PATCH minority or majority class based on diet. 
+        Initial agent diet fraction which is in the minority will be assigned such.
+        
+        """
+        # if m is one, node is minority, else majority
+        for i in range(len(self.agents)):
+            self.G1.nodes[i]["m"] = 1 if self.agents[i].diet in "veg" else 0
+            
+        return
+            
     
 
-
-    def agent_ini(self, params):
-        # Ensure agents are created for each node specifically
-        self.agents = [Agent(node, params) for node in self.G1.nodes()]
+    def agent_ini(self):
         
-
+        
+        if self.params["agent_ini"] == "twin":
+            self.survey_data = pd.read_csv(self.params["survey_file"])
+            
+            # Handle case where N is smaller than survey data
+            if len(self.survey_data) > self.params["N"]:
+                print(f"WARNING: Survey data has {len(self.survey_data)} participants but N={self.params['N']}")
+                print(f"WARNING: Randomly sampling {self.params['N']} participants from survey data")
+                self.survey_data = self.survey_data.sample(n=self.params["N"], random_state=42).reset_index(drop=True)
+                print(f"WARNING: Using {len(self.survey_data)} sampled participants for twin mode")
+            elif len(self.survey_data) < self.params["N"]:
+                raise ValueError(f"Cannot create {self.params['N']} agents from only {len(self.survey_data)} survey participants. "
+                               f"Either reduce N or provide more survey data.")
+            else:
+                print(f"INFO: Using all {len(self.survey_data)} survey participants for twin mode")
+            
+            self.agents = []
+            for agent_id, (index, row) in enumerate(self.survey_data.iterrows()):
+                # Create demographic key if PMF tables available
+                demo_key = None
+                if self.pmf_tables:
+                    demo_cols = ['gender', 'age_group', 'incquart', 'educlevel']
+                    demo_key = tuple(row[col] for col in demo_cols if col in row)
+                
+                # Prepare agent kwargs with hierarchical matching data
+                agent_kwargs = {
+                    'theta': row["theta"],
+                    'diet': row["diet"],
+                    'demographics': demo_key,
+                    'pmf_tables': self.pmf_tables,
+                    'survey_id': row["nomem_encr"]
+                }
+                
+                # Add hierarchical matching flags and values if present
+                if "has_rho" in row and row["has_rho"]:
+                    agent_kwargs['has_rho'] = True
+                    agent_kwargs['rho'] = row["rho"]
+                else:
+                    agent_kwargs['has_rho'] = False
+                    
+                if "has_alpha" in row and row["has_alpha"]:
+                    agent_kwargs['has_alpha'] = True  
+                    agent_kwargs['alpha'] = row["alpha"]
+                else:
+                    agent_kwargs['has_alpha'] = False
+                
+                agent = Agent(
+                    i=agent_id,  # Use sequential ID to match network nodes
+                    params=self.params,
+                    **agent_kwargs
+                )
+                
+                agent.initialize_memory_from_neighbours(self.G1, self.agents) #agent.initialize_memory()
+                
+                self.agents.append(agent)
+        else:
+            self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
+            # Initialize memory for parameterized and synthetic modes
+            for agent in self.agents:
+                agent.initialize_memory_from_neighbours(self.G1, self.agents)
+                
+        
+        n_immune = int(self.params["immune_n"] * len(self.agents))
+        immune_idx = np.random.choice(len(self.agents), n_immune, replace=False)
+        
+        for i in immune_idx:
+            self.agents[i].immune = True
 
     def get_attribute(self, attribute):
         """
@@ -315,38 +550,186 @@ class Model():
                        for i in range(len(self.agents))]
         return attribute_l
     
-
+    def plot_params(self):
+        params = ['alpha', 'beta', 'rho', 'theta']
+        vals = [self.get_attributes(p) for p in params]
+        fig, axes = plt.subplots(1, 4, figsize=(12, 3))
+        for i in range(4):
+            axes[i].hist(vals[i], bins=30, alpha=0.7)
+            axes[i].set_title(f'{params[i]} (μ={np.mean(vals[i]):.2f})')
+        #plt.tight_layout()
+        
+        os.makedirs("../visualisations_output", exist_ok=True)
+        suffix = f"_{self.params['agent_ini']}"
+        plt.savefig(f"../visualisations_output/distro_plots{suffix}.jpg")
+        print(f"Averages: α={np.mean(vals[0]):.2f} β={np.mean(vals[1]):.2f} ρ={np.mean(vals[2]):.2f} θ={np.mean(vals[3]):.2f}")
+        print(f"Diet: {sum(d=='veg' for d in self.get_attributes('diet'))/len(self.agents):.2f} veg")
+        
+    def record_snapshot(self, t):
+        """Record network state and agent attributes at time t"""
+        self.snapshots[t] = {
+            'diets': self.get_attributes("diet"),
+            'reductions': self.get_attributes("reduction_out"),
+            'graph': self.G1.copy(),
+            'veg_fraction': self.fraction_veg[-1]
+        }
+    
+    def flip(self, p):
+        return np.random.random() < p
+    
+    def rewire(self, i):
+        
+        # Think about characteristic rewire timescale 
+        if self.flip(self.params["p_rewire"]):
+            
+            non_neighbors = [k for k in nx.non_neighbors(self.G1, i.i)]
+            if not non_neighbors:
+                return
+            
+            
+            j = random.choice(non_neighbors)
+            
+            if self.agents[j].diet != i.diet:
+                if self.flip(0.10):
+                    return
+            else:
+                # Get the neighbours before rewiirng so j is excluded
+                remove_neighbours = list(self.G1.neighbors(i.i))
+    
+                self.G1.add_edge(i.i, j)
+            
+                self.G1.remove_edge(i.i, random.choice(remove_neighbours))
+                
+        
     def run(self):
-        self.agent_ini(self.params)
+        
+        #print(f"Starting model with agent initation mode: {self.params['agent_ini']}")
+        self.agent_ini()
+        self.plot_params()
+        
+        # >>> add these lines <<<
+        if self.params.get("warm_start", True):
+            self.warm_start(intake_obs=self.params.get("warm_intake_obs", None),
+                        decision_rounds=self.params.get("warm_decision_rounds", 1))
+        
+        self.harmonise_netIn()
         self.record_fraction()
+        self.record_snapshot(0)
+        
         
         time_array = list(range(self.params["steps"]))
+        
         for t in time_array:
+                
             # Select random agent
             i = np.random.choice(range(len(self.agents)))
             
             # Update based on pairwise interaction
-            self.agents[i].step(self.G1, self.agents, self.params)
+            self.agents[i].step(self.G1, self.agents)
+            self.rewire(self.agents[i],)
+            
             
             # Record system state
             self.system_C.append(self.get_attribute("C")/self.params["N"])
             self.record_fraction()
+            
+            # Record snapshot if required
+            if t in self.snapshot_times:
+                self.record_snapshot(t)
+                
+            self.harmonise_netIn()
+        # Final snapshot
+        self.record_snapshot('final')
     
+    def warm_start(self, intake_obs=None, decision_rounds=1):
+        """
+        Phase A: 'intake' — agents observe neighbours a few times to fill memory,
+                 but nobody switches.
+        Phase B: one or more synchronous decisions — compute switch prob from the
+                 current state and apply all changes together before t=1.
+        """
     
-
+        # ------- Phase A: intake only (no switching) -------
+        obs = self.params.get("M") if intake_obs is None else int(intake_obs)
+        if obs > 0:
+            for _ in range(obs):
+                for a in self.agents:
+                    nbrs = list(self.G1.neighbors(a.i))
+                    if not nbrs:
+                        continue
+                    other = self.agents[np.random.choice(nbrs)]
+                    a.memory.append(other.diet)
+                    if len(a.memory) > self.params["M"]:
+                        a.memory.pop(0)
+    
+        # ------- Phase B: synchronous decision(s) -------
+        for _ in range(int(decision_rounds)):
+            pending_diet = [a.diet for a in self.agents]
+            pending_C    = [a.C    for a in self.agents]
+            influencers  = [None   for _ in self.agents]
+    
+            # (Optionally) observe once more before deciding, to mirror your step()
+            for idx, a in enumerate(self.agents):
+                nbrs = list(self.G1.neighbors(a.i))
+                other = self.agents[np.random.choice(nbrs)] if nbrs else None
+                influencers[idx] = other
+                if other is not None:
+                    a.memory.append(other.diet)
+                    if len(a.memory) > self.params["M"]:
+                        a.memory.pop(0)
+    
+            # compute intention -> action from current state
+            for idx, a in enumerate(self.agents):
+                other = influencers[idx]
+                u_same = a.calc_utility(other, mode="same")
+                u_diff = a.calc_utility(other, mode="diff")
+                p_intent = 1.0/(1.0 + np.exp(-2.0*(u_diff - u_same)))
+                rho_dir = a.rho if a.diet == "meat" else 1.0
+                p_act = rho_dir * p_intent
+    
+                if (not a.immune) and (np.random.random() < p_act):
+                    new_diet = "veg" if a.diet == "meat" else "meat"
+                    pending_diet[idx] = new_diet
+                    # match your step(): update C with noise regardless
+                    pending_C[idx] = np.random.normal(a.C, 0.1 * a.C)
+                else:
+                    pending_C[idx] = np.random.normal(a.C, 0.1 * a.C)
+    
+            # apply all at once; attribute reductions like in step()
+            for idx, a in enumerate(self.agents):
+                old_C, old_diet = a.C, a.diet
+                a.diet, a.C = pending_diet[idx], pending_C[idx]
+                if old_diet == "meat" and a.diet == "veg" and influencers[idx] is not None:
+                    a.reduction_tracker(old_C, influencers[idx])
+    
 
 # %%
-if  __name__ ==  '__main__': 
-	test_model = Model(params)
-
-	test_model.run()
-	trajec = test_model.fraction_veg
-
-	plt.plot(trajec)
-	plt.ylabel("Vegetarian Fraction")
-	plt.xlabel("t (steps)")
-	plt.show()
-# end_state_A = test_model.get_attributes("reduction_out")
-# end_state_frac = test_model.get_attributes("threshold")
-
-
+if __name__ == '__main__': 
+	
+    n_trajectories = 2
+	
+    params.update({'topology': 'PATCH'})
+	
+    all_trajectories = []
+	
+    for traj in range(n_trajectories):
+        print(f"Running trajectory {traj+1}/{n_trajectories}")
+        test_model = Model(params)
+        test_model.run()
+        all_trajectories.append(test_model.fraction_veg)
+	
+	# Plot all trajectories
+    plt.figure(figsize=(8, 6))
+    for i, trajec in enumerate(all_trajectories):
+        plt.plot(trajec, alpha=0.7, label=f'Trajectory {i+1}')
+	
+    plt.ylabel("Vegetarian Fraction")
+    plt.xlabel("t (steps)")
+    plt.legend()
+    plt.show()
+    
+    
+    # end_state_A = test_model.get_attributes("reduction_out")
+    # end_state_frac = test_model.get_attributes("threshold")
+#viz.handlers.plot_graph(test_model.G1, edge_width = 0.2, edge_arrows =False)
+    #network_stats.infer_homophily_values(test_model.G1, test_model.fraction_veg[-1])
