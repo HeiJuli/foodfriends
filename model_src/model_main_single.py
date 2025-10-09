@@ -49,16 +49,15 @@ params = {"veg_CO2": 1390,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 10, # memory length
-          "veg_f":0.15, #vegetarian fraction
-          "meat_f": 0.85,  #meat eater fraction
+          "veg_f":0.02, #vegetarian fraction
+          "meat_f": 0.98,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "warm_start": True,          # enable the pre-step socialization
+          "warm_start": False,          # enable the pre-step socialization
           "warm_intake_obs": None,     # None -> use M observations for intake; or set an int
           "warm_decision_rounds": 1,    # one synchronous decision before t=1
-          "step_is_round": True,
           "alpha": 0.45, #self dissonance
           "rho": 0.45, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
@@ -210,7 +209,7 @@ class Agent():
             other_agent: the agent being compared with
         """
         u_i = self.calc_utility(other_agent, mode="same")
-        u_s = self.calc_utility(other_agent, mode="diff") #- self.rho
+        u_s = self.calc_utility(other_agent, mode="diff") 
         
 
         
@@ -220,7 +219,7 @@ class Agent():
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
         if self.diet == "meat":
-            return prob_switch * self.rho
+            return prob_switch #* self.rho
 
         else:
             return prob_switch #* inertia_factor
@@ -238,7 +237,7 @@ class Agent():
             return self.theta
         
         else:
-           return -1*self.theta #abs(self.theta - self.rho)
+           return -1*abs(self.theta - self.rho)
            #raw_dissonance # 2 / (1 + math.exp(-2*raw_dissonance)) - 1
 
         # if self.theta > 0:  # Intrinsically prefers vegetarian
