@@ -148,6 +148,7 @@ def run_single_trajectory_model(params):
         agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'theta']}
         result.update(agent_means)
         result['beta'] = 1 - agent_means['alpha']
+        result['initial_veg_f'] = sum(ag.diet=="veg" for ag in model.agents)/len(model.agents)
         result['snapshots'] = model.snapshots if hasattr(model, 'snapshots') else None
 
     return result
