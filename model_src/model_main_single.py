@@ -32,13 +32,13 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 2000,
+          "steps": 10000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
-          "M": 10, # memory length
-          "veg_f":0.02, #vegetarian fraction
-          "meat_f": 0.98,  #meat eater fraciton
+          "M": 5, # memory length
+          "veg_f":0.01, #vegetarian fraction
+          "meat_f": 0.99,  #meat eater fraciton
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
@@ -46,7 +46,7 @@ params = {"veg_CO2": 1390,
           "alpha": 0.50, #self dissonance
           "rho": 0.05, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "synthetic", #"parameterized", #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": "twin", #parameterized", #synthetic", #"parameterized", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
@@ -135,7 +135,7 @@ class Agent():
             else:
                 # Existing synthetic fallback
                 self.rho = st.truncnorm.rvs(-1, 1, loc=0.48, scale=0.31)
-                self.alpha = st.truncweibull_min(248.69, 0, 1, loc=-47.38, scale=48.2)
+                self.alpha = st.truncweibull_min.rvs(248.69, 0, 1, loc=-47.38, scale=48.2)
                 self.beta = 1 - self.alpha  # Recalculate beta after new alpha
                 
         
@@ -145,7 +145,29 @@ class Agent():
         #TODO: implement determenistic way of initalising agent diets if required
         #currently this should work for networks N >> 1 
         return np.random.choice(choices, p=[self.params["veg_f"], self.params["meat_f"]])
+    
+    
+    def initialize_memory_from_neighbours(self, G, agents):
 
+        """Seed memory deterministically to match current neighbor distribution."""
+
+        neigh_ids = list(G.neighbors(self.i))
+        if len(neigh_ids)==0:
+            # Fallback: if isolated, just seed with own diet
+            self.memory = [self.diet]* self.params["M"]
+            return
+
+        neigh_diets = [agents[j].diet for j in neigh_ids]
+        n_veg = sum(d == "veg" for d in neigh_diets)
+        n_meat = len(neigh_diets) - n_veg
+
+        # Create memory deterministically proportional to neighbor diets
+        veg_in_mem = round(self.params["M"] * n_veg / len(neigh_diets))
+        meat_in_mem = self.params["M"] - veg_in_mem
+
+        self.memory = ["veg"] * veg_in_mem + ["meat"] * meat_in_mem
+        np.random.shuffle(self.memory)  # Shuffle order but keep counts exact
+        
     def initialize_memory(self):
         """Initialize agent memory with population-based sampling to represent realistic social context"""
         choices = ["veg", "meat"]
@@ -179,41 +201,47 @@ class Agent():
             other_agent: the agent being compared with
         """
         u_i = self.calc_utility(other_agent, mode="same")
+        
+        #utility "shadow", i.e alternative choice
         u_s = self.calc_utility(other_agent, mode="diff")
         
 
         
         prob_switch = 1/(1+math.exp(-2*(u_s-u_i)))
         
-        #inertia_factor = 1 / (1 + 0.5 * len(self.diet_history))
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
-        if self.diet == "meat":
+        if self.diet == 'meat':
             return prob_switch #* self.rho
 
         else:
-            return prob_switch #* inertia_factor
-
+            return prob_switch 
 
     def dissonance_new(self, case, mode):
-        
+        """
+        Cognitive dissonance based on alignment between preference (theta) and behavior.
+        Uses (theta - rho) gap as dissonance magnitude.
+        Returns penalty only for misaligned states to avoid double-counting.
+
+        theta > 0: prefers veg
+        theta < 0: prefers meat
+        rho: behavioral intention (belief-action gap for meat-eaters)
+        """
         if mode == "same":
             diet = self.diet
-       
         else:
             diet = "meat" if self.diet == "veg" else "veg"
-        
-        if diet == "veg":
-            return self.theta
-        
-        else:
-           return -1*abs(self.theta - self.rho)
-           #raw_dissonance # 2 / (1 + math.exp(-2*raw_dissonance)) - 1
 
-        # if self.theta > 0:  # Intrinsically prefers vegetarian
-        #     return sigmoid_dissonance if diet == "veg" else -sigmoid_dissonance
-        # else:  # Intrinsically prefers meat
-        #     return -sigmoid_dissonance if diet == "veg" else sigmoid_dissonance
+        # Determine alignment
+        prefers_veg = (self.theta > 0)
+        diet_is_veg = (diet == "veg")
+        aligned = (prefers_veg == diet_is_veg)
+
+        # Dissonance magnitude based on belief-action gap
+        gap = abs(self.theta - self.rho)
+
+        # Only penalize misalignment (return 0 for aligned to avoid double-counting)
+        return 0.0 if aligned else -gap
     
       
 
@@ -265,11 +293,7 @@ class Agent():
         return attribute_l
     
     
-    #get ratio of meat eaters for a given agent
-    #if mode = same, 
-    #working
-
-    #working
+ 
     def calc_utility(self, other_agent, mode):
         """
         Calculates utility for pairwise interaction
@@ -291,12 +315,12 @@ class Agent():
            
         
         mem_same = sum(1 for x in self.memory[-self.params["M"]:] if x == diet)
-        
+
         ratio = mem_same/len(self.memory[-self.params["M"]:])  # Remove unnecessary list wrapping
 
-        
-        util = self.beta*(2*ratio-1) #+ self.alpha*self.dissonance_new("simple", mode)
-        
+
+        util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
+
         return util
     
         
@@ -327,15 +351,15 @@ class Agent():
         if not self.immune and self.flip(prob_switch):
             old_C, old_diet = self.C, self.diet
             self.diet = "meat" if self.diet == "veg" else "veg"
-            
-            # Update consumption with noise around current level
-            self.C = np.random.normal(self.C, 0.1 * self.C)
-            
+
+            # Recalculate emissions for new diet
+            self.C = self.diet_emissions(self.diet)
+
             # If emissions reduced, attribute to influencing agent
             if old_diet == "meat" and self.diet == "veg":
                 self.reduction_tracker(old_C, other_agent)
-        
-        else: 
+
+        else:
             # Add same noise scale to current consumption without switching
             self.C = np.random.normal(self.C, 0.1 * self.C)
         
@@ -418,7 +442,7 @@ class Model():
                 if self.pmf_tables:
                     demo_cols = ['gender', 'age_group', 'incquart', 'educlevel']
                     demo_key = tuple(row[col] for col in demo_cols if col in row)
-                
+
                 # Prepare agent kwargs with hierarchical matching data
                 agent_kwargs = {
                     'theta': row["theta"],
@@ -427,34 +451,36 @@ class Model():
                     'pmf_tables': self.pmf_tables,
                     'survey_id': row["nomem_encr"]
                 }
-                
+
                 # Add hierarchical matching flags and values if present
                 if "has_rho" in row and row["has_rho"]:
                     agent_kwargs['has_rho'] = True
                     agent_kwargs['rho'] = row["rho"]
                 else:
                     agent_kwargs['has_rho'] = False
-                    
+
                 if "has_alpha" in row and row["has_alpha"]:
-                    agent_kwargs['has_alpha'] = True  
+                    agent_kwargs['has_alpha'] = True
                     agent_kwargs['alpha'] = row["alpha"]
                 else:
                     agent_kwargs['has_alpha'] = False
-                
+
                 agent = Agent(
                     i=agent_id,  # Use sequential ID to match network nodes
                     params=self.params,
                     **agent_kwargs
                 )
-                
-                agent.initialize_memory()
-                
+
                 self.agents.append(agent)
+
+            # Initialize memory after all agents created
+            for agent in self.agents:
+                agent.initialize_memory_from_neighbours(self.G1, self.agents)
         else:
             self.agents = [Agent(node, self.params) for node in self.G1.nodes()]
             # Initialize memory for parameterized and synthetic modes
             for agent in self.agents:
-                agent.initialize_memory()
+                agent.initialize_memory_from_neighbours(self.G1, self.agents)
                 
         
         n_immune = int(self.params["immune_n"] * len(self.agents))
