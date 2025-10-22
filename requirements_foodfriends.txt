@@ -1,9 +1,9 @@
-# This file may be used to create an environment using:
-# $ conda create --name <env> --file <this file>
-python==3.11
+# Python dependencies for foodfriends project
+# Compatible with pip, uv, and pyenv
+# Install with: pip install -r requirements_foodfriends.txt
 networkx==3.1
 numpy==1.26.4
 scipy==1.12.0
 seaborn==0.12.2
 matplotlib==3.8.4
-pip install netin
+netin
