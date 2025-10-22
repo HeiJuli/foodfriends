@@ -21,6 +21,18 @@ import os
 sys.path.append('..')
 from auxillary import network_stats
 
+# Fix for Windows numpy randint issue with netin
+original_randint = np.random.randint
+
+def patched_randint(low, high=None, size=None, dtype=int):
+    if high is not None and high >= 2**31:
+        # Use a smaller bound that works on Windows
+        high = 2**31 - 1
+    return original_randint(low, high, size=size, dtype=dtype)
+
+# Apply the patch
+np.random.randint = patched_randint
+
 
 # %% Preliminary settings
 #random.seed(30)
@@ -36,9 +48,15 @@ params = {"veg_CO2": 1390,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
+<<<<<<< HEAD
           "M": 5, # memory length
           "veg_f":0.01, #vegetarian fraction
           "meat_f": 0.99,  #meat eater fraciton
+=======
+          "M": 10, # memory length
+          "veg_f":0.02, #vegetarian fraction
+          "meat_f": 0.98,  #meat eater fraction
+>>>>>>> 56ea3e1a0e1a598e541b3d3c18f0c2ef9f15f6b2
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
