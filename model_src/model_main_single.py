@@ -44,21 +44,21 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 10000,
+          "steps": 35000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 5, # memory length
-          "veg_f":0.02, #vegetarian fraction
-          "meat_f": 0.98,  #meat eater fraction
+          "veg_f":0.50, #vegetarian fraction
+          "meat_f": 0.50,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.50, #self dissonance
-          "rho": 0.05, #behavioural intentions
+          "alpha": 0.36, #self dissonance
+          "rho": 0.5, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "twin", #parameterized", #synthetic", #"parameterized", #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": 'twin',#"synthetic", #"twin",#choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
@@ -219,7 +219,7 @@ class Agent():
         
 
         
-        prob_switch = 1/(1+math.exp(-2*(u_s-u_i)))
+        prob_switch = 1/(1+math.exp(-2.3*(u_s-u_i)))
         
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
@@ -331,7 +331,7 @@ class Agent():
         ratio = mem_same/len(self.memory[-self.params["M"]:])  # Remove unnecessary list wrapping
 
 
-        util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
+        util = self.beta*(3*ratio-1.5) + self.alpha*self.dissonance_new("simple", mode)
 
         return util
     
@@ -556,10 +556,17 @@ class Model():
         
     def record_snapshot(self, t):
         """Record network state and agent attributes at time t"""
+        # Handle PATCH graphs which may not copy properly in some netin versions
+        try:
+            graph_copy = self.G1.copy()
+        except TypeError:
+            # Fallback: convert to standard nx.Graph
+            graph_copy = nx.Graph(self.G1)
+
         self.snapshots[t] = {
             'diets': self.get_attributes("diet"),
             'reductions': self.get_attributes("reduction_out"),
-            'graph': self.G1.copy(),
+            'graph': graph_copy,
             'veg_fraction': self.fraction_veg[-1]
         }
     
