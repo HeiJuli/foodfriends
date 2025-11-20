@@ -14,7 +14,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 15000,
+          "steps": 30000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "k": 8, #initial edges per node for graph generation
@@ -22,12 +22,12 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "veg_f":0.5, #vegetarian fraction
           "meat_f": 0.5,  #meat eater fraciton
           "p_rewire": 0.1, #probability of rewire step
-          "rewire_h": 0.1, # slightly preference for same diet
+          "rewire_h": 0.1, # slightly preference for same diet2
           "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.45, #self dissonance
+          "alpha": 0.36, #self dissonance
           "rho": 0.25, #behavioural intentions,
-          "theta": -0.2, #intrinsic preference (- is for meat, + for vego)
+          "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
