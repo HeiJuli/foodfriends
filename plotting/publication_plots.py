@@ -224,10 +224,19 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                 hist_ax.set_ylim(1e-3, 1e1)
                 hist_ax.yaxis.set_major_formatter(plt.LogFormatterMathtext())
         else:
-            # Plot normalized histogram
-            hist_ax.hist(reductions_tonnes, bins=15, density=True, color=COLORS['secondary'], 
+            # Plot absolute count histogram with higher resolution
+            hist_ax.hist(reductions_tonnes, bins=30, density=False, color=COLORS['secondary'],
                         alpha=0.7, edgecolor='white', linewidth=0.5)
-            
+
+            # Add tail statistics as text
+            nonzero = reductions_tonnes[reductions_tonnes > 0]
+            if len(nonzero) > 0:
+                p90 = np.percentile(nonzero, 90)
+                tail_frac = np.sum(nonzero > p90) / len(reductions_tonnes) * 100
+                hist_ax.text(0.95, 0.95, f'{tail_frac:.1f}% > P90\n({p90:.1f}t)',
+                           transform=hist_ax.transAxes, ha='right', va='top',
+                           fontsize=6, bbox=dict(boxstyle='round,pad=0.3', fc='white', alpha=0.7))
+
             if log_scale == 'y':
                 hist_ax.set_yscale('log')
                 hist_ax.yaxis.set_major_formatter(plt.LogFormatterMathtext())
@@ -242,7 +251,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         hist_ax.spines['right'].set_visible(False)
         
         if i == 0:
-            hist_ax.set_ylabel('Normalised count', fontsize=8)
+            hist_ax.set_ylabel('Count', fontsize=8)
         else:
             hist_ax.set_ylabel('')
             hist_ax.tick_params(labelleft=False)

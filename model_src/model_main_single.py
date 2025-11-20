@@ -11,8 +11,9 @@ import random
 import scipy.stats as st
 import math
 import seaborn as sns
+import matplotlib
+#matplotlib.use('Agg')  # Non-interactive backend for headless environments
 import matplotlib.pyplot as plt
-plt.ion()  # Enable interactive mode for VSCode
 import pandas as pd
 from netin import PATCH, PAH
 from netin import viz
@@ -22,16 +23,18 @@ sys.path.append('..')
 from auxillary import network_stats
 
 # Fix for Windows numpy randint issue with netin
-original_randint = np.random.randint
+# Only patch once to avoid recursion on module reload
+# if not hasattr(np.random.randint, '_is_patched'):
+#     _original_randint = np.random.randint
 
-def patched_randint(low, high=None, size=None, dtype=int):
-    if high is not None and high >= 2**31:
-        # Use a smaller bound that works on Windows
-        high = 2**31 - 1
-    return original_randint(low, high, size=size, dtype=dtype)
+#     def patched_randint(low, high=None, size=None, dtype=int):
+#         if high is not None and high >= 2**31:
+#             # Use a smaller bound that works on Windows
+#             high = 2**31 - 1
+#         return _original_randint(low, high, size=size, dtype=dtype)
 
-# Apply the patch
-np.random.randint = patched_randint
+#     patched_randint._is_patched = True
+#     np.random.randint = patched_randint
 
 
 # %% Preliminary settings
@@ -44,21 +47,21 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 699,
           "erdos_p": 3,
-          "steps": 35000,
+          "steps": 25000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 5, # memory length
-          "veg_f":0.50, #vegetarian fraction
-          "meat_f": 0.50,  #meat eater fraction
+          "veg_f":0.1, #vegetarian fraction
+          "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.36, #self dissonance
-          "rho": 0.5, #behavioural intentions
-          "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": 'twin',#"synthetic", #"twin",#choose between "twin" "parameterized" or "synthetic" 
+          "alpha": 0.68, #self dissonance
+          "rho": 0.45, #behavioural intentions
+          "theta": 0.58, #intrinsic preference (- is for meat, + for vego)
+          "agent_ini": 'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
@@ -103,6 +106,11 @@ class Agent():
         self.diet_history = []  # Track diet changes
         self.last_change_time = 0  # Track when diet last changed
         self.immune = False
+
+        # Cascade attribution tracking (Guilbeault & Centola 2021)
+        self.influence_parent = None  # Direct influencer of last diet change
+        self.influenced_agents = []   # Agents this agent directly influenced
+        self.change_time = None       # Timestep when diet last changed
     
     
     def set_params(self, **kwargs):
@@ -224,7 +232,7 @@ class Agent():
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
         if self.diet == 'meat':
-            return prob_switch #* self.rho
+            return prob_switch #self.rho
 
         else:
             return prob_switch 
@@ -232,8 +240,7 @@ class Agent():
     def dissonance_new(self, case, mode):
         """
         Cognitive dissonance based on alignment between preference (theta) and behavior.
-        Uses (theta - rho) gap as dissonance magnitude.
-        Returns penalty only for misaligned states to avoid double-counting.
+        Dissonance magnitude scales with social exposure to alternative diet.
 
         theta > 0: prefers veg
         theta < 0: prefers meat
@@ -244,16 +251,19 @@ class Agent():
         else:
             diet = "meat" if self.diet == "veg" else "veg"
 
-        # Determine alignment
         prefers_veg = (self.theta > 0)
         diet_is_veg = (diet == "veg")
         aligned = (prefers_veg == diet_is_veg)
 
-        # Dissonance magnitude based on belief-action gap
+        if aligned or len(self.memory) == 0:
+            return 0.0
+
+        # Dissonance activates only with social exposure to alternative
+        veg_exposure = sum(1 for d in self.memory if d == "veg") / len(self.memory)
+        exposure_factor = 1 / (1 + np.exp(-20 * (veg_exposure - 0.25)))
         gap = abs(self.theta - self.rho)
 
-        # Only penalize misalignment (return 0 for aligned to avoid double-counting)
-        return 0.0 if aligned else -gap
+        return -gap * exposure_factor
     
       
 
@@ -271,18 +281,45 @@ class Agent():
 
         return neighbour_node
     
-    def reduction_tracker(self, old_c, influencer):
+    def reduction_tracker(self, old_c, influencer, agents_list, cascade_depth=1, decay=0.7, max_depth=5, visited=None):
         """
-        Tracks emission reductions attributed to single influencing agent
-        
+        Tracks direct + cascading emission reductions with generational decay
+
+        Implements cascade attribution model combining:
+        - Guilbeault & Centola (2021): Complex contagion influence chains
+        - Banerjee et al. (2013): Recursive cascade tracking
+        - Pentland (2014): Generational decay parameter
+
         Args:
             old_c: previous consumption level
-            influencer: agent who influenced the change
+            influencer: agent who directly influenced the change
+            agents_list: reference to all agents for recursive attribution
+            cascade_depth: generation distance (1=direct, 2=secondary, etc.)
+            decay: discount factor per generation (default 0.7, literature range 0.5-0.8)
+            max_depth: maximum cascade depth to prevent infinite recursion (default 5)
+            visited: set of agent IDs already visited to prevent cycles
         """
+        # Initialize visited set on first call
+        if visited is None:
+            visited = set()
+
+        # Stop if max depth reached or agent already visited (circular reference)
+        if cascade_depth > max_depth or influencer.i in visited:
+            return
+
+        # Mark this agent as visited
+        visited.add(influencer.i)
+
         delta = old_c - self.C
-        if delta > 0: 
-            current = getattr(influencer, "reduction_out")
-            setattr(influencer, "reduction_out", current + delta)
+        if delta > 0:
+            # Attribute to direct influencer with generational decay
+            attribution = delta * (decay ** (cascade_depth - 1))
+            influencer.reduction_out += attribution
+
+            # Recursive attribution through influence chain
+            if influencer.influence_parent is not None:
+                parent = agents_list[influencer.influence_parent]
+                self.reduction_tracker(old_c, parent, agents_list, cascade_depth + 1, decay, max_depth, visited)
         
     
     def get_neighbour_attributes(self, attribute):
@@ -337,29 +374,30 @@ class Agent():
     
         
     
-    def step(self, G, agents):
+    def step(self, G, agents, t):
         """
        Steps agent i forward one t
-    
+
        Args:
            G (dic): an nx graph object
            agents (list): list of agents in G
+           t (int): current timestep
        Returns:
-           
+
         """
-        
+
         # Select random neighbor
         self.neighbours = [agents[neighbour] for neighbour in G.neighbors(self.i)]
-        
+
         if not self.neighbours:  # Skip if isolated node
             return
-            
+
         other_agent = random.choice(self.neighbours)
         self.memory.append(other_agent.diet)
-        
+
         # Calculate probability of switching based on pairwise comparison
         prob_switch = self.prob_calc(other_agent)
-        
+
         if not self.immune and self.flip(prob_switch):
             old_C, old_diet = self.C, self.diet
             self.diet = "meat" if self.diet == "veg" else "veg"
@@ -367,9 +405,15 @@ class Agent():
             # Recalculate emissions for new diet
             self.C = self.diet_emissions(self.diet)
 
-            # If emissions reduced, attribute to influencing agent
+            # If emissions reduced, track influence and cascade attribution
             if old_diet == "meat" and self.diet == "veg":
-                self.reduction_tracker(old_C, other_agent)
+                # Record influence relationship (Banerjee et al. 2013)
+                self.influence_parent = other_agent.i
+                self.change_time = t
+                other_agent.influenced_agents.append(self.i)
+
+                # Cascade attribution with decay (Guilbeault & Centola 2021)
+                self.reduction_tracker(old_C, other_agent, agents, cascade_depth=1)
 
         else:
             # Add same noise scale to current consumption without switching
@@ -405,7 +449,7 @@ class Model():
         
         #MM stands for majority class, mm for minority, tc is triadic closure
         elif params['topology'] == "PATCH":
-            self.G1 = PATCH(params["N"], params["k"], float(params["veg_f"]), h_MM=0.6, tc=params["tc"], h_mm=0.6)
+            self.G1 = PATCH(params["N"], params["k"], float(params["veg_f"]), h_MM=0.6, tc=params["tc"], h_mm=0.7)
             self.G1.generate()
             
         self.system_C = []
@@ -570,9 +614,70 @@ class Model():
             'veg_fraction': self.fraction_veg[-1]
         }
     
+    def cascade_statistics(self):
+        """
+        Calculate cascade metrics for each agent
+
+        Implements metrics from:
+        - Banerjee et al. (2013): Diffusion centrality and cascade sizes
+        - Guilbeault & Centola (2021): Complex path influence measurement
+
+        Returns:
+            pd.DataFrame with columns:
+                - agent_id: agent index
+                - direct_influence: first-generation adopters influenced
+                - total_cascade: full cascade size (all generations)
+                - attributed_reduction: total CO2 reduction with decay
+                - multiplier: network amplification (total/direct)
+        """
+        stats = []
+        for agent in self.agents:
+            cascade_size = len(agent.influenced_agents)
+
+            # Count indirect influence via DFS through influence graph
+            visited = set()
+            indirect = self._count_indirect_influence(agent.i, depth=0, visited=visited)
+
+            stats.append({
+                'agent_id': agent.i,
+                'direct_influence': cascade_size,
+                'total_cascade': indirect,
+                'attributed_reduction': agent.reduction_out,
+                'multiplier': indirect / cascade_size if cascade_size > 0 else 0
+            })
+        return pd.DataFrame(stats)
+
+    def _count_indirect_influence(self, agent_id, depth, max_depth=5, visited=None):
+        """
+        Recursively count cascade size with depth limit and cycle protection
+
+        Args:
+            agent_id: starting agent
+            depth: current recursion depth
+            max_depth: maximum cascade depth to track (prevents infinite recursion)
+            visited: set of already counted agent IDs (prevents double-counting and cycles)
+
+        Returns:
+            int: total number of unique agents in cascade
+        """
+        if visited is None:
+            visited = set()
+
+        if depth > max_depth or agent_id in visited:
+            return 0
+
+        visited.add(agent_id)
+
+        count = len(self.agents[agent_id].influenced_agents)
+        for child_id in self.agents[agent_id].influenced_agents:
+            if child_id not in visited:
+                count += self._count_indirect_influence(child_id, depth + 1, max_depth, visited)
+
+        return count
+
     def flip(self, p):
         return np.random.random() < p
-    
+
     def rewire(self, i):
         
         # Think about characteristic rewire timescale 
@@ -609,12 +714,12 @@ class Model():
         time_array = list(range(self.params["steps"]))
         
         for t in time_array:
-                
+
             # Select random agent
             i = np.random.choice(range(len(self.agents)))
-            
+
             # Update based on pairwise interaction
-            self.agents[i].step(self.G1, self.agents)
+            self.agents[i].step(self.G1, self.agents, t)
             self.rewire(self.agents[i],)
             
             
@@ -651,12 +756,15 @@ if __name__ == '__main__':
 	plt.figure(figsize=(8, 6))
 	for i, trajec in enumerate(all_trajectories):
 		plt.plot(trajec, alpha=0.7, label=f'Trajectory {i+1}')
-	
+
 	plt.ylabel("Vegetarian Fraction")
 	plt.xlabel("t (steps)")
 	plt.legend()
 	plt.show()
-    # end_state_A = test_model.get_attributes("reduction_out")
-    # end_state_frac = test_model.get_attributes("threshold")
-#viz.handlers.plot_graph(test_model.G1, edge_width = 0.2, edge_arrows =False)
-    #network_stats.infer_homophily_values(test_model.G1, test_model.fraction_veg[-1])
+
+	#plt.savefig('../visualisations_output/trajectories.png', dpi=300, bbox_inches='tight')
+	print("Plot saved to visualisations_output/trajectories.png")
+	# end_state_A = test_model.get_attributes("reduction_out")
+	# end_state_frac = test_model.get_attributes("threshold")
+	#viz.handlers.plot_graph(test_model.G1, edge_width = 0.2, edge_arrows =False)
+	#network_stats.infer_homophily_values(test_model.G1, test_model.fraction_veg[-1])
