@@ -6,9 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import os
-sys.path.append('..')
-from model_main_single import Model, Agent, params
 import copy
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from model_main_single import Model, Agent, params
 
 # Test configurations - refined ranges around current values
 sigmoid_coeffs = [2.3, 2.5, 2.7, 3.0]  # Current is 2.3
