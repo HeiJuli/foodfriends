@@ -56,6 +56,9 @@ def modify_agent_social_scaling(scaling):
     Agent.calc_utility = new_calc_utility
     return original_calc_utility
 
+# Change to model_src directory so relative paths work
+os.chdir(os.path.join(os.path.dirname(__file__), '..'))
+
 # Test 1: Sigmoid coefficient
 print("=" * 60)
 print("TEST 1: Sigmoid coefficient sensitivity")
@@ -122,8 +125,8 @@ ax.legend()
 ax.grid(alpha=0.3)
 
 plt.tight_layout()
-os.makedirs("../visualisations_output", exist_ok=True)
-plt.savefig('../visualisations_output/initial_uptake_sensitivity_refined.png', dpi=300, bbox_inches='tight')
+os.makedirs("visualisations_output", exist_ok=True)
+plt.savefig('visualisations_output/initial_uptake_sensitivity_refined.png', dpi=300, bbox_inches='tight')
 print("\n" + "=" * 60)
 print("Plot saved to visualisations_output/initial_uptake_sensitivity_refined.png")
 print("=" * 60)
