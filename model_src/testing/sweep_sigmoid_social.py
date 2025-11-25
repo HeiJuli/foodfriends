@@ -84,6 +84,9 @@ def run_single_config(config):
     return result
 
 if __name__ == '__main__':
+    # Change to model_src directory so relative paths work
+    os.chdir(os.path.join(os.path.dirname(__file__), '..'))
+
     # Generate all combinations
     configs = [(sig, soc) for sig in sigmoid_coeffs for soc in social_scalings]
 
@@ -151,8 +154,8 @@ if __name__ == '__main__':
     plt.tight_layout()
 
     # Save
-    os.makedirs("../visualisations_output", exist_ok=True)
-    outfile = '../visualisations_output/sweep_sigmoid_social_2d.png'
+    os.makedirs("visualisations_output", exist_ok=True)
+    outfile = 'visualisations_output/sweep_sigmoid_social_2d.png'
     plt.savefig(outfile, dpi=300, bbox_inches='tight')
     print(f"\nVisualization saved to: {outfile}")
 
@@ -190,7 +193,7 @@ if __name__ == '__main__':
         plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     plt.tight_layout()
-    outfile2 = '../visualisations_output/sweep_sigmoid_social_heatmaps.png'
+    outfile2 = 'visualisations_output/sweep_sigmoid_social_heatmaps.png'
     plt.savefig(outfile2, dpi=300, bbox_inches='tight')
     print(f"Heatmaps saved to: {outfile2}")
     print("\n" + "=" * 60)
