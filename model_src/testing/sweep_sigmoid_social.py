@@ -9,6 +9,7 @@ import sys
 import os
 import copy
 from multiprocessing import Pool
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model_main_single import Model, Agent, params
 
