@@ -4,3 +4,4 @@ CLAUDE.md
 manuscript.txt
 claude_stuff/
 model_src/__pycache__
+model_src/visualisations_output

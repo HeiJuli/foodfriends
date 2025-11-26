@@ -14,6 +14,9 @@ from model_main_single import Model, Agent, params
 # Test configurations - refined ranges around current values
 sigmoid_coeffs = [2.3, 2.5, 2.7, 3.0]  # Current is 2.3
 social_scalings = [3.0, 3.3, 3.6, 4.0]  # Current uses 3.0 in (3*ratio - 1.5)
+memory_lengths = [5, 10, 15, 20]  # Current is 5
+init_bias_factors = [1.0, 0.7, 0.5, 0.3]  # 1.0=no bias, 0.3=strong bias toward current diet
+pure_diet_init_M = [5, 10, 15, 20]  # Test 100% current diet init with different M
 
 # Reduced run for speed - focus on initial uptake only
 test_params = copy.deepcopy(params)
@@ -56,77 +59,138 @@ def modify_agent_social_scaling(scaling):
     Agent.calc_utility = new_calc_utility
     return original_calc_utility
 
+def modify_memory_initialization(bias_factor):
+    """Monkey patch Agent.initialize_memory_from_neighbours to bias toward current diet"""
+    original_init = Agent.initialize_memory_from_neighbours
+    def new_init(self, G, agents):
+        neigh_ids = list(G.neighbors(self.i))
+        if len(neigh_ids) == 0:
+            self.memory = [self.diet] * self.params["M"]
+            return
+
+        neigh_diets = [agents[j].diet for j in neigh_ids]
+        n_veg = sum(d == "veg" for d in neigh_diets)
+        n_meat = len(neigh_diets) - n_veg
+
+        # Apply bias: reduce exposure to opposite diet
+        veg_in_mem = round(self.params["M"] * n_veg / len(neigh_diets) * bias_factor)
+
+        # If agent is veg, ensure they have more veg in memory; if meat, more meat
+        if self.diet == "veg":
+            veg_in_mem = max(veg_in_mem, self.params["M"] - veg_in_mem)
+        else:  # meat
+            veg_in_mem = min(veg_in_mem, self.params["M"] - veg_in_mem)
+
+        meat_in_mem = self.params["M"] - veg_in_mem
+        self.memory = ["veg"] * veg_in_mem + ["meat"] * meat_in_mem
+        np.random.shuffle(self.memory)
+    Agent.initialize_memory_from_neighbours = new_init
+    return original_init
+
+def modify_pure_diet_initialization():
+    """Monkey patch to initialize memory with 100% current diet (ignore neighbors)"""
+    original_init = Agent.initialize_memory_from_neighbours
+    def new_init(self, G, agents):
+        # Initialize with 100% current diet - maximum stability
+        self.memory = [self.diet] * self.params["M"]
+    Agent.initialize_memory_from_neighbours = new_init
+    return original_init
+
 # Change to model_src directory so relative paths work
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 
-# Test 1: Sigmoid coefficient
+# Test: 100% Current Diet Initialization with varying M
 print("=" * 60)
-print("TEST 1: Sigmoid coefficient sensitivity")
+print("TEST: 100% Current Diet Initialization (vs neighbor-based)")
 print("=" * 60)
 
-sigmoid_results = {}
-for coeff in sigmoid_coeffs:
-    print(f"\nTesting sigmoid coefficient = {coeff}")
-    original = modify_agent_sigmoid(coeff)
+pure_init_results = {}
+neighbor_init_results = {}
 
-    model = Model(test_params)
+for M in pure_diet_init_M:
+    # Test with 100% current diet initialization
+    print(f"\n[100% Current Diet] Testing M = {M}")
+    test_params_M = copy.deepcopy(test_params)
+    test_params_M['M'] = M
+
+    original = modify_pure_diet_initialization()
+    model = Model(test_params_M)
     model.run()
 
-    sigmoid_results[coeff] = model.fraction_veg
-    Agent.prob_calc = original  # Restore
+    pure_init_results[M] = model.fraction_veg
+    Agent.initialize_memory_from_neighbours = original  # Restore
+
     print(f"  Initial: {model.fraction_veg[0]:.3f}")
+    print(f"  At 5k:   {model.fraction_veg[5000]:.3f}")
     print(f"  At 25k:  {model.fraction_veg[25000]:.3f}")
     print(f"  At 50k:  {model.fraction_veg[50000]:.3f}")
     print(f"  Final:   {model.fraction_veg[-1]:.3f}")
 
-# Test 2: Social pressure scaling
-print("\n" + "=" * 60)
-print("TEST 2: Social pressure scaling sensitivity")
-print("=" * 60)
+    # Test with neighbor-based initialization for comparison
+    print(f"[Neighbor-Based] Testing M = {M}")
+    model2 = Model(test_params_M)
+    model2.run()
 
-social_results = {}
-for scaling in social_scalings:
-    print(f"\nTesting social scaling = {scaling} (term: {scaling}*ratio - {scaling/2})")
-    original = modify_agent_social_scaling(scaling)
+    neighbor_init_results[M] = model2.fraction_veg
 
-    model = Model(test_params)
-    model.run()
-
-    social_results[scaling] = model.fraction_veg
-    Agent.calc_utility = original  # Restore
-    print(f"  Initial: {model.fraction_veg[0]:.3f}")
-    print(f"  At 25k:  {model.fraction_veg[25000]:.3f}")
-    print(f"  At 50k:  {model.fraction_veg[50000]:.3f}")
-    print(f"  Final:   {model.fraction_veg[-1]:.3f}")
+    print(f"  Initial: {model2.fraction_veg[0]:.3f}")
+    print(f"  At 5k:   {model2.fraction_veg[5000]:.3f}")
+    print(f"  At 25k:  {model2.fraction_veg[25000]:.3f}")
+    print(f"  At 50k:  {model2.fraction_veg[50000]:.3f}")
+    print(f"  Final:   {model2.fraction_veg[-1]:.3f}")
 
 # Plot results
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-# Plot 1: Sigmoid coefficient
-ax = axes[0]
-for coeff, trajectory in sigmoid_results.items():
-    ax.plot(trajectory, label=f'coeff={coeff}', alpha=0.8)
-ax.axhline(y=0.2, color='red', linestyle='--', alpha=0.3, label='20% threshold')
+# Plot 1: 100% Current Diet Init - All M values
+ax = axes[0, 0]
+for M, trajectory in pure_init_results.items():
+    label = f'M={M}' + (' (current)' if M == 5 else '')
+    ax.plot(trajectory, label=label, alpha=0.8, linewidth=2 if M == 5 else 1)
+ax.axhline(y=0.05, color='red', linestyle='--', alpha=0.3, label='5% reference')
 ax.set_xlabel('t (steps)')
 ax.set_ylabel('Vegetarian Fraction')
-ax.set_title('Sigmoid Coefficient (Refined)')
+ax.set_title('100% Current Diet Initialization')
 ax.legend()
 ax.grid(alpha=0.3)
 
-# Plot 2: Social pressure scaling
-ax = axes[1]
-for scaling, trajectory in social_results.items():
-    ax.plot(trajectory, label=f'scaling={scaling}', alpha=0.8)
-ax.axhline(y=0.2, color='red', linestyle='--', alpha=0.3, label='20% threshold')
+# Plot 2: Neighbor-Based Init - All M values
+ax = axes[0, 1]
+for M, trajectory in neighbor_init_results.items():
+    label = f'M={M}' + (' (current)' if M == 5 else '')
+    ax.plot(trajectory, label=label, alpha=0.8, linewidth=2 if M == 5 else 1)
+ax.axhline(y=0.05, color='red', linestyle='--', alpha=0.3, label='5% reference')
 ax.set_xlabel('t (steps)')
 ax.set_ylabel('Vegetarian Fraction')
-ax.set_title('Social Pressure Scaling (Refined)')
+ax.set_title('Neighbor-Based Initialization (Current)')
+ax.legend()
+ax.grid(alpha=0.3)
+
+# Plot 3: Direct comparison M=5
+ax = axes[1, 0]
+ax.plot(pure_init_results[5], label='100% Current Diet', alpha=0.8, linewidth=2)
+ax.plot(neighbor_init_results[5], label='Neighbor-Based', alpha=0.8, linewidth=2, linestyle='--')
+ax.axhline(y=0.05, color='red', linestyle='--', alpha=0.3, label='5% reference')
+ax.set_xlabel('t (steps)')
+ax.set_ylabel('Vegetarian Fraction')
+ax.set_title('Comparison: M=5')
+ax.legend()
+ax.grid(alpha=0.3)
+
+# Plot 4: Direct comparison M=10
+ax = axes[1, 1]
+ax.plot(pure_init_results[10], label='100% Current Diet', alpha=0.8, linewidth=2)
+ax.plot(neighbor_init_results[10], label='Neighbor-Based', alpha=0.8, linewidth=2, linestyle='--')
+ax.axhline(y=0.05, color='red', linestyle='--', alpha=0.3, label='5% reference')
+ax.set_xlabel('t (steps)')
+ax.set_ylabel('Vegetarian Fraction')
+ax.set_title('Comparison: M=10')
 ax.legend()
 ax.grid(alpha=0.3)
 
 plt.tight_layout()
 os.makedirs("visualisations_output", exist_ok=True)
-plt.savefig('visualisations_output/initial_uptake_sensitivity_refined.png', dpi=300, bbox_inches='tight')
+plt.savefig('visualisations_output/pure_diet_initialization_test.png', dpi=300, bbox_inches='tight')
 print("\n" + "=" * 60)
-print("Plot saved to visualisations_output/initial_uptake_sensitivity_refined.png")
+print("Plot saved to visualisations_output/pure_diet_initialization_test.png")
 print("=" * 60)
