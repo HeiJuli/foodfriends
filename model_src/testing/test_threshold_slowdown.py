@@ -184,52 +184,52 @@ if __name__ == '__main__':
 
     # Plot 1: Memory lag variants
     ax = axes[0]
-    ax.plot(results_dict['Utility Model']['fraction_veg'][:10000],
+    ax.plot(results_dict['Utility Model']['fraction_veg'],
             label='Utility', alpha=0.8, linewidth=2, color='C0')
-    ax.plot(results_dict['k=15 baseline']['fraction_veg'][:10000],
+    ax.plot(results_dict['k=15 baseline']['fraction_veg'],
             label='k=15 baseline', alpha=0.8, linewidth=2, color='C1')
     for lag in [3, 5, 7]:
         name = f'k=15 + Lag({lag})'
-        ax.plot(results_dict[name]['fraction_veg'][:10000],
+        ax.plot(results_dict[name]['fraction_veg'],
                 label=name, alpha=0.8, linewidth=2)
     ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3, label='Initial')
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
-    ax.set_title('Strategy 1: Memory Lag (0-10k steps)')
+    ax.set_title('Strategy 1: Memory Lag')
     ax.legend()
     ax.grid(alpha=0.3)
 
     # Plot 2: Scaling + floor variants
     ax = axes[1]
-    ax.plot(results_dict['Utility Model']['fraction_veg'][:10000],
+    ax.plot(results_dict['Utility Model']['fraction_veg'],
             label='Utility', alpha=0.8, linewidth=2, color='C0')
-    ax.plot(results_dict['k=15 baseline']['fraction_veg'][:10000],
+    ax.plot(results_dict['k=15 baseline']['fraction_veg'],
             label='k=15 baseline', alpha=0.8, linewidth=2, color='C1')
-    ax.plot(results_dict['k=15 + Scale(0.5) + Floor(0.15)']['fraction_veg'][:10000],
+    ax.plot(results_dict['k=15 + Scale(0.5) + Floor(0.15)']['fraction_veg'],
             label='Scale(0.5)+Floor(0.15)', alpha=0.8, linewidth=2)
-    ax.plot(results_dict['k=15 + Scale(0.4) + Floor(0.2)']['fraction_veg'][:10000],
+    ax.plot(results_dict['k=15 + Scale(0.4) + Floor(0.2)']['fraction_veg'],
             label='Scale(0.4)+Floor(0.2)', alpha=0.8, linewidth=2)
     ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3)
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
-    ax.set_title('Strategy 2: Scaling + Floor (0-10k steps)')
+    ax.set_title('Strategy 2: Scaling + Floor')
     ax.legend()
     ax.grid(alpha=0.3)
 
     # Plot 3: High k variants
     ax = axes[2]
-    ax.plot(results_dict['Utility Model']['fraction_veg'][:10000],
+    ax.plot(results_dict['Utility Model']['fraction_veg'],
             label='Utility', alpha=0.8, linewidth=2, color='C0')
-    ax.plot(results_dict['k=15 baseline']['fraction_veg'][:10000],
+    ax.plot(results_dict['k=15 baseline']['fraction_veg'],
             label='k=15 baseline', alpha=0.8, linewidth=2)
-    ax.plot(results_dict['k=30 baseline']['fraction_veg'][:10000],
+    ax.plot(results_dict['k=30 baseline']['fraction_veg'],
             label='k=30', alpha=0.8, linewidth=2)
-    ax.plot(results_dict['k=40 baseline']['fraction_veg'][:10000],
+    ax.plot(results_dict['k=40 baseline']['fraction_veg'],
             label='k=40', alpha=0.8, linewidth=2)
     ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3)
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
-    ax.set_title('Strategy 3: Very High k (0-10k steps)')
+    ax.set_title('Strategy 3: Very High k')
     ax.legend()
     ax.grid(alpha=0.3)
 
