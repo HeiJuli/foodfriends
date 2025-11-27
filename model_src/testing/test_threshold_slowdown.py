@@ -22,8 +22,6 @@ def create_threshold_prob_calc(k_value=15, variant='baseline', **kwargs):
     - 'baseline': Standard threshold model
     - 'memory_lag': Dissonance only after sustained exposure (veg_count >= threshold)
     - 'scaled_floor': Combine dissonance scaling + threshold floor
-    - 'adaptive': Threshold increases with population veg fraction
-    - 'high_k': Very sharp threshold (k=30-50)
     """
     def new_prob_calc(self, other_agent):
         opposite_diet = "meat" if self.diet == "veg" else "veg"
@@ -72,12 +70,6 @@ def create_threshold_prob_calc(k_value=15, variant='baseline', **kwargs):
 
                 threshold -= scaling * self.alpha * dissonance
 
-        # VARIANT: Adaptive - threshold increases with veg fraction
-        if variant == 'adaptive':
-            veg_frac = self.model.current_veg_fraction()
-            resistance = kwargs.get('resistance', 0.3)
-            threshold = threshold * (1 + resistance * veg_frac)
-
         # Apply floor if variant requires it
         if variant == 'scaled_floor':
             floor = kwargs.get('floor', 0.15)
@@ -104,19 +96,6 @@ def run_single_variant(config):
 
     if variant_type != 'utility':
         Agent.prob_calc = create_threshold_prob_calc(k_value, variant_type, **variant_kwargs)
-
-        # For adaptive variant, inject model reference after agent_ini
-        if variant_type == 'adaptive':
-            def patched_run(self):
-                self.agent_ini()
-                for agent in self.agents:
-                    agent.model = self
-                # Continue with rest of run()
-                self.plot_params()
-                for step in range(self.params["steps"]):
-                    self.step(step)
-                self.end_calcs()
-            Model.run = patched_run
 
     # Run model
     model = Model(test_params)
@@ -176,10 +155,6 @@ if __name__ == '__main__':
         # Strategy 3: Very high k
         ('k=30 baseline', 'baseline', 30, test_params, {}),
         ('k=40 baseline', 'baseline', 40, test_params, {}),
-
-        # Strategy 4: Adaptive resistance
-        ('k=15 + Adaptive(0.3)', 'adaptive', 15, test_params, {'resistance': 0.3}),
-        ('k=15 + Adaptive(0.5)', 'adaptive', 15, test_params, {'resistance': 0.5}),
     ]
 
     # Run in parallel
@@ -204,11 +179,11 @@ if __name__ == '__main__':
         print(f"  At 50k:  {r['at_50k']:.3f}")
         print(f"  Final:   {r['final']:.3f}")
 
-    # Plot comparison - 2x2 layout for different strategies
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    # Plot comparison - 1x3 layout for different strategies
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
     # Plot 1: Memory lag variants
-    ax = axes[0, 0]
+    ax = axes[0]
     ax.plot(results_dict['Utility Model']['fraction_veg'][:10000],
             label='Utility', alpha=0.8, linewidth=2, color='C0')
     ax.plot(results_dict['k=15 baseline']['fraction_veg'][:10000],
@@ -225,7 +200,7 @@ if __name__ == '__main__':
     ax.grid(alpha=0.3)
 
     # Plot 2: Scaling + floor variants
-    ax = axes[0, 1]
+    ax = axes[1]
     ax.plot(results_dict['Utility Model']['fraction_veg'][:10000],
             label='Utility', alpha=0.8, linewidth=2, color='C0')
     ax.plot(results_dict['k=15 baseline']['fraction_veg'][:10000],
@@ -242,7 +217,7 @@ if __name__ == '__main__':
     ax.grid(alpha=0.3)
 
     # Plot 3: High k variants
-    ax = axes[1, 0]
+    ax = axes[2]
     ax.plot(results_dict['Utility Model']['fraction_veg'][:10000],
             label='Utility', alpha=0.8, linewidth=2, color='C0')
     ax.plot(results_dict['k=15 baseline']['fraction_veg'][:10000],
@@ -255,23 +230,6 @@ if __name__ == '__main__':
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
     ax.set_title('Strategy 3: Very High k (0-10k steps)')
-    ax.legend()
-    ax.grid(alpha=0.3)
-
-    # Plot 4: Adaptive variants
-    ax = axes[1, 1]
-    ax.plot(results_dict['Utility Model']['fraction_veg'][:10000],
-            label='Utility', alpha=0.8, linewidth=2, color='C0')
-    ax.plot(results_dict['k=15 baseline']['fraction_veg'][:10000],
-            label='k=15 baseline', alpha=0.8, linewidth=2)
-    ax.plot(results_dict['k=15 + Adaptive(0.3)']['fraction_veg'][:10000],
-            label='Adaptive(0.3)', alpha=0.8, linewidth=2)
-    ax.plot(results_dict['k=15 + Adaptive(0.5)']['fraction_veg'][:10000],
-            label='Adaptive(0.5)', alpha=0.8, linewidth=2)
-    ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3)
-    ax.set_xlabel('t (steps)')
-    ax.set_ylabel('Vegetarian Fraction')
-    ax.set_title('Strategy 4: Adaptive Resistance (0-10k steps)')
     ax.legend()
     ax.grid(alpha=0.3)
 
