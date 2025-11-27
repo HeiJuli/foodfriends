@@ -700,8 +700,11 @@ class Model():
                 self.G1.add_edge(i.i, j)
             
                 self.G1.remove_edge(i.i, random.choice(remove_neighbours))
-                
-        
+
+    def current_veg_fraction(self):
+        """Calculate current fraction of vegetarians in population"""
+        return sum(1 for agent in self.agents if agent.diet == "veg") / len(self.agents)
+
     def run(self):
         
         #print(f"Starting model with agent initation mode: {self.params['agent_ini']}")
