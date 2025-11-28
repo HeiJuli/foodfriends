@@ -45,18 +45,18 @@ from auxillary import network_stats
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 699,
+          "N": 400,
           "erdos_p": 3,
           "steps": 25000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
-          "M": 5, # memory length
+          "M": 10, # memory length
           "veg_f":0.1, #vegetarian fraction
           "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
-          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
+          "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.68, #self dissonance
           "rho": 0.45, #behavioural intentions
