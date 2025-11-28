@@ -45,13 +45,13 @@ from auxillary import network_stats
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 400,
+          "N": 300,
           "erdos_p": 3,
-          "steps": 25000,
+          "steps": 15000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
-          "M": 10, # memory length
+          "M": 7, # memory length
           "veg_f":0.1, #vegetarian fraction
           "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
@@ -227,7 +227,7 @@ class Agent():
         
 
         
-        prob_switch = 1/(1+math.exp(-2.3*(u_s-u_i)))
+        prob_switch = 1/(1+math.exp(-1.7*(u_s-u_i)))
         
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
@@ -260,7 +260,7 @@ class Agent():
 
         # Dissonance activates only with social exposure to alternative
         veg_exposure = sum(1 for d in self.memory if d == "veg") / len(self.memory)
-        exposure_factor = 1 / (1 + np.exp(-20 * (veg_exposure - 0.25)))
+        exposure_factor = 1 / (1 + np.exp(-20 * (veg_exposure)))
         gap = abs(self.theta - self.rho)
 
         return -gap * exposure_factor
