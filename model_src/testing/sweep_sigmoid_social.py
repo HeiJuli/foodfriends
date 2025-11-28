@@ -23,25 +23,31 @@ test_params['N'] = 699
 test_params['agent_ini'] = "twin"
 
 def run_single_config(M_value):
-    """Run model with specific memory value"""
+    """Run model with specific memory value (2 runs, averaged)"""
     # Set M parameter
     params_with_M = copy.deepcopy(test_params)
     params_with_M['M'] = M_value
 
-    # Run model
-    print(f"Running: M={M_value}")
-    model = Model(params_with_M)
-    model.run()
+    # Run model twice and collect trajectories
+    print(f"Running: M={M_value} (2 runs)")
+    trajectories = []
+    for run in range(2):
+        model = Model(params_with_M)
+        model.run()
+        trajectories.append(model.fraction_veg.copy())
 
-    # Calculate metrics
-    initial = model.fraction_veg[0]
-    at_25k = model.fraction_veg[25000]
-    at_50k = model.fraction_veg[50000]
-    final = model.fraction_veg[-1]
+    # Average the trajectories
+    avg_trajectory = np.mean(trajectories, axis=0)
+
+    # Calculate metrics from averaged trajectory
+    initial = avg_trajectory[0]
+    at_25k = avg_trajectory[25000]
+    at_50k = avg_trajectory[50000]
+    final = avg_trajectory[-1]
 
     result = {
         'M': M_value,
-        'trajectory': model.fraction_veg.copy(),
+        'trajectory': avg_trajectory,
         'initial': initial,
         'at_25k': at_25k,
         'at_50k': at_50k,
@@ -88,7 +94,7 @@ if __name__ == '__main__':
     colors = plt.cm.viridis(np.linspace(0, 1, len(memory_values)))
     for M, color in zip(memory_values, colors):
         r = result_dict[M]
-        ax1.plot(r['trajectory'], label=f'M={M}', linewidth=2, color=color, alpha=0.8)
+        ax1.plot(r['trajectory'], label=f'M={M}', linewidth=1, color=color, alpha=0.8)
     ax1.axhline(y=0.016, color='red', linestyle='--', alpha=0.3, linewidth=1, label='Initial')
     ax1.set_xlabel('t (steps)')
     ax1.set_ylabel('Vegetarian Fraction')
