@@ -173,7 +173,8 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         # Draw network
         node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
         nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.3, width=0.05)
-        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=0.5, alpha=0.9)
+        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=2, alpha=0.9,
+                              edgecolors='black', linewidths=0.2)
         
         # Highlight top reducers and add labels
         reductions = np.array(snap['reductions'])
@@ -181,8 +182,9 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             top3_idx = np.argsort(reductions)[-3:]
             top3_nodes = [list(G.nodes())[j] for j in top3_idx if reductions[j] > 0]
             if top3_nodes:
-                nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=net_ax, 
-                                     node_color='#f4a261', node_size=5, alpha=1.0)
+                nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=net_ax,
+                                     node_color='#f4a261', node_size=8, alpha=1.0,
+                                     edgecolors='black', linewidths=0.2)
                 
         
                 # Add reduction labels
@@ -194,7 +196,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                                       fontsize=5, fontweight='bold',
                                       bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
         
-        title = 'Initial' if t == 0 else 'Final' if t == 'final' else f'{t//1000}k steps'
+        title = '$t_0$' if t == 0 else '$t_end$' if t == 'final' else f't = {t//1000}k'
         net_ax.set_title(title, fontsize=12)
         
         # Set consistent bounds and aspect ratio
@@ -224,18 +226,18 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                 hist_ax.set_ylim(1e-3, 1e1)
                 hist_ax.yaxis.set_major_formatter(plt.LogFormatterMathtext())
         else:
-            # Plot absolute count histogram with higher resolution
-            hist_ax.hist(reductions_tonnes, bins=30, density=False, color=COLORS['secondary'],
-                        alpha=0.7, edgecolor='white', linewidth=0.5)
+            # Plot histogram
+            hist_ax.hist(reductions_tonnes, bins=30, density=True, color=COLORS['secondary'],
+                        alpha=0.5, edgecolor='white', linewidth=0.5)
 
-            # Add tail statistics as text
+            # Overlay density plot
+            from scipy.stats import gaussian_kde
             nonzero = reductions_tonnes[reductions_tonnes > 0]
-            if len(nonzero) > 0:
-                p90 = np.percentile(nonzero, 90)
-                tail_frac = np.sum(nonzero > p90) / len(reductions_tonnes) * 100
-                hist_ax.text(0.95, 0.95, f'{tail_frac:.1f}% > P90\n({p90:.1f}t)',
-                           transform=hist_ax.transAxes, ha='right', va='top',
-                           fontsize=6, bbox=dict(boxstyle='round,pad=0.3', fc='white', alpha=0.7))
+            if len(nonzero) > 10:
+                kde = gaussian_kde(nonzero)
+                x_range = np.linspace(nonzero.min(), nonzero.max(), 200)
+                density = kde(x_range)
+                hist_ax.plot(x_range, density, color=COLORS['primary'], linewidth=2, alpha=0.9)
 
             if log_scale == 'y':
                 hist_ax.set_yscale('log')
@@ -251,7 +253,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         hist_ax.spines['right'].set_visible(False)
         
         if i == 0:
-            hist_ax.set_ylabel('Count', fontsize=8)
+            hist_ax.set_ylabel('Density', fontsize=8)
         else:
             hist_ax.set_ylabel('')
             hist_ax.tick_params(labelleft=False)

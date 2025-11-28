@@ -11,7 +11,8 @@ import copy
 from multiprocessing import Pool
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from model_main_single import Model, Agent, params
+from model_main_single import Model, Agent
+from model_runn import DEFAULT_PARAMS
 
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -125,9 +126,9 @@ def run_single_variant(config):
 
 if __name__ == '__main__':
     # Test configuration
-    test_params = copy.deepcopy(params)
-    test_params['steps'] = 100000
-    test_params['N'] = 800
+    test_params = copy.deepcopy(DEFAULT_PARAMS)
+    test_params['steps'] = 400000
+    test_params['N'] = 5602
     test_params['agent_ini'] = "twin"
 
     print("=" * 70)
@@ -180,18 +181,22 @@ if __name__ == '__main__':
         print(f"  Final:   {r['final']:.3f}")
 
     # Plot comparison - 1x3 layout for different strategies
+    # Define distinct colors for each variant
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+              '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22']
+
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
     # Plot 1: Memory lag variants
     ax = axes[0]
     ax.plot(results_dict['Utility Model']['fraction_veg'],
-            label='Utility', alpha=0.8, linewidth=2, color='C0')
+            label='Utility', alpha=0.8, linewidth=2, color=colors[0])
     ax.plot(results_dict['k=15 baseline']['fraction_veg'],
-            label='k=15 baseline', alpha=0.8, linewidth=2, color='C1')
-    for lag in [3, 5, 7]:
+            label='k=15 baseline', alpha=0.8, linewidth=2, color=colors[1])
+    for i, lag in enumerate([3, 5, 7], start=2):
         name = f'k=15 + Lag({lag})'
         ax.plot(results_dict[name]['fraction_veg'],
-                label=name, alpha=0.8, linewidth=2)
+                label=name, alpha=0.8, linewidth=2, color=colors[i])
     ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3, label='Initial')
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
@@ -202,13 +207,13 @@ if __name__ == '__main__':
     # Plot 2: Scaling + floor variants
     ax = axes[1]
     ax.plot(results_dict['Utility Model']['fraction_veg'],
-            label='Utility', alpha=0.8, linewidth=2, color='C0')
+            label='Utility', alpha=0.8, linewidth=2, color=colors[0])
     ax.plot(results_dict['k=15 baseline']['fraction_veg'],
-            label='k=15 baseline', alpha=0.8, linewidth=2, color='C1')
+            label='k=15 baseline', alpha=0.8, linewidth=2, color=colors[1])
     ax.plot(results_dict['k=15 + Scale(0.5) + Floor(0.15)']['fraction_veg'],
-            label='Scale(0.5)+Floor(0.15)', alpha=0.8, linewidth=2)
+            label='Scale(0.5)+Floor(0.15)', alpha=0.8, linewidth=2, color=colors[5])
     ax.plot(results_dict['k=15 + Scale(0.4) + Floor(0.2)']['fraction_veg'],
-            label='Scale(0.4)+Floor(0.2)', alpha=0.8, linewidth=2)
+            label='Scale(0.4)+Floor(0.2)', alpha=0.8, linewidth=2, color=colors[6])
     ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3)
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
@@ -219,13 +224,13 @@ if __name__ == '__main__':
     # Plot 3: High k variants
     ax = axes[2]
     ax.plot(results_dict['Utility Model']['fraction_veg'],
-            label='Utility', alpha=0.8, linewidth=2, color='C0')
+            label='Utility', alpha=0.8, linewidth=2, color=colors[0])
     ax.plot(results_dict['k=15 baseline']['fraction_veg'],
-            label='k=15 baseline', alpha=0.8, linewidth=2)
+            label='k=15 baseline', alpha=0.8, linewidth=2, color=colors[1])
     ax.plot(results_dict['k=30 baseline']['fraction_veg'],
-            label='k=30', alpha=0.8, linewidth=2)
+            label='k=30', alpha=0.8, linewidth=2, color=colors[7])
     ax.plot(results_dict['k=40 baseline']['fraction_veg'],
-            label='k=40', alpha=0.8, linewidth=2)
+            label='k=40', alpha=0.8, linewidth=2, color=colors[8])
     ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3)
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
