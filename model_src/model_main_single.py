@@ -47,11 +47,11 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 300,
           "erdos_p": 3,
-          "steps": 15000,
+          "steps": 25000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
-          "M": 7, # memory length
+          "M": 7, # memory length use 7 or 9 maybe.
           "veg_f":0.1, #vegetarian fraction
           "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
