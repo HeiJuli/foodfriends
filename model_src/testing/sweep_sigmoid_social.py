@@ -94,7 +94,7 @@ if __name__ == '__main__':
     colors = plt.cm.viridis(np.linspace(0, 1, len(memory_values)))
     for M, color in zip(memory_values, colors):
         r = result_dict[M]
-        ax1.plot(r['trajectory'], label=f'M={M}', linewidth=1, color=color, alpha=0.8)
+        ax1.plot(r['trajectory'], label=f'M={M}', linewidth=0.5, color=color, alpha=0.9)
     ax1.axhline(y=0.016, color='red', linestyle='--', alpha=0.3, linewidth=1, label='Initial')
     ax1.set_xlabel('t (steps)')
     ax1.set_ylabel('Vegetarian Fraction')

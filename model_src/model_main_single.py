@@ -45,7 +45,7 @@ from auxillary import network_stats
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 300,
+          "N": 500,
           "erdos_p": 3,
           "steps": 25000,
           "k": 8, #initial edges per node for graph generation
@@ -226,8 +226,8 @@ class Agent():
         u_s = self.calc_utility(other_agent, mode="diff")
         
 
-        
-        prob_switch = 1/(1+math.exp(-1.7*(u_s-u_i)))
+        delta = u_s - u_i - 0.15
+        prob_switch = 1/(1+math.exp(-1.7*delta))
         
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
@@ -260,7 +260,7 @@ class Agent():
 
         # Dissonance activates only with social exposure to alternative
         veg_exposure = sum(1 for d in self.memory if d == "veg") / len(self.memory)
-        exposure_factor = 1 / (1 + np.exp(-20 * (veg_exposure)))
+        exposure_factor = 1 / (1 + np.exp(-15 * (veg_exposure - 0.2)))
         gap = abs(self.theta - self.rho)
 
         return -gap * exposure_factor
