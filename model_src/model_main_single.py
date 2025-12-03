@@ -45,9 +45,9 @@ from auxillary import network_stats
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 500,
+          "N": 600,
           "erdos_p": 3,
-          "steps": 25000,
+          "steps": 150000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
@@ -226,9 +226,12 @@ class Agent():
         u_s = self.calc_utility(other_agent, mode="diff")
         
 
-        delta = u_s - u_i - 0.15
-        prob_switch = 1/(1+math.exp(-1.7*delta))
-        
+        delta = u_s - u_i
+        if delta < -0.5:  # Strong preference for current → minimal switching
+            prob_switch = 0.01
+        else:
+            prob_switch = 1/(1+math.exp(-4.0*delta))  # Steeper sigmoid
+                
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
         if self.diet == 'meat':
@@ -368,7 +371,7 @@ class Agent():
         ratio = mem_same/len(self.memory[-self.params["M"]:])  # Remove unnecessary list wrapping
 
 
-        util = self.beta*(3*ratio-1.5) + self.alpha*self.dissonance_new("simple", mode)
+        util = 0.6*self.beta*(3*ratio-1.5) + 0.4*self.alpha*self.dissonance_new("simple", mode)
 
         return util
     
