@@ -111,6 +111,7 @@ def run_single_model(params):
     model = get_model(params)
     model.run()
     return {
+        'agent_ini': params.get('agent_ini', 'other'),
         'alpha': params.get('alpha', 0), 'beta': 1 - params.get('alpha', 0.35),
         'theta': params.get('theta', 0), 'initial_veg_f': params.get('veg_f', 0),
         'final_veg_f': model.fraction_veg[-1],
@@ -156,19 +157,33 @@ def run_single_trajectory_model(params):
 def run_parameter_analysis_parallel(base_params, alpha_range, beta_range,
                                   theta_range, veg_fractions, runs_per_combo,
                                   record_trajectories, n_cores):
-    """Parallel parameter analysis"""
+    """Parallel parameter analysis. Supports parameterized mode."""
+    # Load survey data if parameterized mode
+    survey_params = {}
+    if base_params.get("agent_ini") == "parameterized":
+        sd = load_survey_data(base_params["survey_file"], ["nomem_encr", "alpha", "theta", "diet"])
+        survey_params = extract_survey_params(sd)
+
     param_list = []
     for a in alpha_range:
         for t in theta_range:
             for vf in veg_fractions:
                 for run in range(runs_per_combo):
                     p = base_params.copy()
-                    p.update({
-                        'alpha': a, 'theta': t, 'veg_f': vf, 'meat_f': 1-vf,
-                        'record_trajectories': record_trajectories,
-                        'parameter_set': f"α={a:.2f}, β={1-a:.2f}, θ={t:.2f}",
-                        'run': run
-                    })
+                    if base_params.get("agent_ini") == "parameterized":
+                        p.update({
+                            **survey_params, 'alpha': a, 'theta': t, 'veg_f': vf, 'meat_f': 1-vf,
+                            'record_trajectories': record_trajectories,
+                            'parameter_set': f"α={a:.2f}, β={1-a:.2f}, θ={t:.2f}",
+                            'run': run
+                        })
+                    else:
+                        p.update({
+                            'alpha': a, 'theta': t, 'veg_f': vf, 'meat_f': 1-vf,
+                            'record_trajectories': record_trajectories,
+                            'parameter_set': f"α={a:.2f}, β={1-a:.2f}, θ={t:.2f}",
+                            'run': run
+                        })
                     param_list.append(p)
 
     print(f"Running {len(param_list)} simulations on {n_cores} cores...")
@@ -230,37 +245,21 @@ def run_veg_growth_analysis(base_params, veg_fractions):
     return df
 
 def run_trajectory_analysis_parallel(base_params, runs_per_combo, n_cores):
-    """Parallel trajectory analysis for parameterized and twin modes"""
+    """Parallel trajectory analysis for twin mode only"""
     param_list = []
 
-    # Load survey data if needed
-    if base_params.get("agent_ini") in ["parameterized", "twin"]:
-        survey_data = load_survey_data(base_params["survey_file"],
-                                     ["nomem_encr", "alpha", "theta", "diet"])
-        survey_means = extract_survey_params(survey_data)
+    # Twin mode - use N from base_params
+    twin_N = base_params["N"]
+    print(f"INFO: Using N={twin_N} for twin mode")
 
-        # Parameterized mode
-        for i in range(runs_per_combo):
-            p = base_params.copy()
-            p.update({
-                "agent_ini": "parameterized",
-                "parameter_set": "Survey Mean Parameters",
-                "run": i, **survey_means
-            })
-            param_list.append(p)
-
-        # Twin mode - use N from base_params
-        twin_N = base_params["N"]
-        print(f"INFO: Using N={twin_N} for twin mode")
-        
-        for i in range(runs_per_combo):
-            p = base_params.copy()
-            p.update({
-                "agent_ini": "twin", "N": twin_N,
-                "parameter_set": "Survey Individual Parameters",
-                "run": i
-            })
-            param_list.append(p)
+    for i in range(runs_per_combo):
+        p = base_params.copy()
+        p.update({
+            "agent_ini": "twin", "N": twin_N,
+            "parameter_set": "Survey Individual Parameters",
+            "run": i
+        })
+        param_list.append(p)
 
     print(f"Running {len(param_list)} trajectory simulations on {n_cores} cores...")
 
