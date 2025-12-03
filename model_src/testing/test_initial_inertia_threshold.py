@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Test initial inertia strategy: increase resistance for meat-eaters
-who start with vegetarian neighbors (using utility model formulation)
+who start with vegetarian neighbors
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -34,34 +34,52 @@ def mark_agents_with_initial_inertia(model):
 
     print(f"  Marked {len(agents_with_inertia)} meat-eaters with initial veg neighbors")
 
-def create_utility_prob_calc(variant='baseline', **kwargs):
-    """Create utility-based probability calculation with optional initial inertia"""
+def create_threshold_prob_calc(k_value=15, variant='baseline', **kwargs):
+    """Create threshold probability calculation function with optional initial inertia"""
     def new_prob_calc(self, other_agent):
-        u_i = self.calc_utility(other_agent, mode="same")
-        u_s = self.calc_utility(other_agent, mode="diff")
+        opposite_diet = "meat" if self.diet == "veg" else "veg"
+        mem = self.memory[-self.params["M"]:]
+        if len(mem) == 0:
+            return 0.0
+        proportion = sum(d == opposite_diet for d in mem) / len(mem)
 
-        delta = u_s - u_i
+        threshold = self.rho
 
-        # VARIANT: Initial inertia - reduce delta for marked agents (increases resistance)
+        # VARIANT: Initial inertia - increase threshold for marked agents
         if variant == 'initial_inertia' and id(self) in agents_with_inertia:
-            inertia_penalty = kwargs.get('inertia_penalty', 0.15)
-            delta -= inertia_penalty
+            inertia_boost = kwargs.get('inertia_boost', 0.15)
+            threshold += inertia_boost
 
-        if delta < -0.5:
-            prob_switch = 0.01
-        else:
-            prob_switch = 1/(1+np.exp(-4.0*delta))
+        dissonance_active = False
 
-        if self.diet == 'meat':
-            return prob_switch
-        else:
-            return prob_switch
+        if self.diet == "meat":
+            has_veg_neighbor = any(n.diet == "veg" for n in self.neighbours)
+            theta_misaligned = self.theta < 0.5
+            dissonance_active = has_veg_neighbor and theta_misaligned
+
+            if dissonance_active:
+                dissonance = abs(self.theta - 1.0)
+                threshold -= self.alpha * dissonance
+
+        else:  # veg
+            theta_misaligned = self.theta > 0.5
+            dissonance_active = theta_misaligned
+
+            if dissonance_active:
+                dissonance = abs(self.theta - 0.0)
+                threshold -= self.alpha * dissonance
+
+        threshold = np.clip(threshold, 0, 1)
+        social_exposure = self.beta * proportion
+        prob_switch = 1 / (1 + np.exp(-k_value * (social_exposure - threshold)))
+
+        return prob_switch
 
     return new_prob_calc
 
 def run_single_variant(config):
     """Worker function to run a single model variant"""
-    variant_name, variant_type, test_params, variant_kwargs = config
+    variant_name, variant_type, k_value, test_params, variant_kwargs = config
 
     print(f"[{variant_name}] Running...")
 
@@ -72,8 +90,8 @@ def run_single_variant(config):
     model = Model(test_params)
 
     # Monkey patch probability calculation BEFORE running
-    if variant_type != 'baseline':
-        Agent.prob_calc = create_utility_prob_calc(variant_type, **variant_kwargs)
+    if variant_type != 'utility':
+        Agent.prob_calc = create_threshold_prob_calc(k_value, variant_type, **variant_kwargs)
 
     # Initialize agents
     model.agent_ini()
@@ -130,15 +148,15 @@ if __name__ == '__main__':
     print("=" * 70)
     print("TESTING: Initial Inertia Strategy")
     print("=" * 70)
-    print("\nStrategy: Reduce utility delta for meat-eaters with veg neighbors at t=0")
+    print("\nStrategy: Increase threshold for meat-eaters with veg neighbors at t=0")
 
     # Configure variants to test
     configs = [
-        ('Baseline', 'baseline', test_params, {}),
-        ('Inertia penalty=0.10', 'initial_inertia', test_params, {'inertia_penalty': 0.10}),
-        ('Inertia penalty=0.15', 'initial_inertia', test_params, {'inertia_penalty': 0.15}),
-        ('Inertia penalty=0.20', 'initial_inertia', test_params, {'inertia_penalty': 0.20}),
-        ('Inertia penalty=0.25', 'initial_inertia', test_params, {'inertia_penalty': 0.25}),
+        ('Utility Model', 'utility', None, test_params, {}),
+        ('k=15 baseline', 'baseline', 15, test_params, {}),
+        ('k=15 + Inertia(0.10)', 'initial_inertia', 15, test_params, {'inertia_boost': 0.10}),
+        ('k=15 + Inertia(0.15)', 'initial_inertia', 15, test_params, {'inertia_boost': 0.15}),
+        ('k=15 + Inertia(0.20)', 'initial_inertia', 15, test_params, {'inertia_boost': 0.20}),
     ]
 
     # Run in parallel
@@ -156,11 +174,11 @@ if __name__ == '__main__':
     print("RESULTS SUMMARY")
     print("=" * 70)
 
-    baseline_5k = results[0]['at_5k']
+    utility_5k = results[0]['at_5k']
     for r in results:
         print(f"\n[{r['variant_name']}]")
         print(f"  Initial: {r['initial']:.3f}")
-        print(f"  At 5k:   {r['at_5k']:.3f}  (ratio vs Baseline: {r['at_5k']/baseline_5k:.2f}x)")
+        print(f"  At 5k:   {r['at_5k']:.3f}  (ratio vs Utility: {r['at_5k']/utility_5k:.2f}x)")
         print(f"  At 25k:  {r['at_25k']:.3f}")
         print(f"  Final:   {r['final']:.3f}")
 
