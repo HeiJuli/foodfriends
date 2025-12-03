@@ -196,7 +196,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                                       fontsize=5, fontweight='bold',
                                       bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
         
-        title = '$t_0$' if t == 0 else '$t_end$' if t == 'final' else f't = {t//1000}k'
+        title = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f't = {t//1000}k'
         net_ax.set_title(title, fontsize=12)
         
         # Set consistent bounds and aspect ratio
