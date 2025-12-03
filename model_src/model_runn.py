@@ -142,33 +142,43 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None):
     print(f"Saved to {filename}")
     return df
 
-def run_parameter_analysis(params=None, alpha_range=None, 
+def run_parameter_analysis(params=None, alpha_range=None,
                           theta_range=None, veg_fractions=None, runs_per_combo=3,
                           record_trajectories=False):
-    """Unified parameter analysis - optionally records full trajectories"""
+    """Unified parameter analysis - optionally records full trajectories. Supports parameterized mode."""
     params = DEFAULT_PARAMS.copy() if params is None else params
     alpha_range = np.linspace(0.1, 0.9, 5) if alpha_range is None else alpha_range
     theta_range = [-0.5, 0, 0.5] if theta_range is None else theta_range
     veg_fractions = [0.2] if veg_fractions is None else veg_fractions
-    
+
+    # Load survey data if parameterized mode
+    survey_params = {}
+    if params.get("agent_ini") == "parameterized":
+        sd = load_survey_data(params["survey_file"], ["nomem_encr", "alpha", "theta", "diet"])
+        survey_params = extract_survey_params(sd)
+
     results = []
     total = len(alpha_range) * len(theta_range) * len(veg_fractions) * runs_per_combo
     count = 0
-    
+
     for a in alpha_range:
         for t in theta_range:
             for vf in veg_fractions:
                 p = params.copy()
-                p.update({"alpha": a, "theta": t, "veg_f": vf, "meat_f": 1-vf})
-                
+                if params.get("agent_ini") == "parameterized":
+                    p.update({**survey_params, "alpha": a, "theta": t, "veg_f": vf, "meat_f": 1-vf})
+                else:
+                    p.update({"alpha": a, "theta": t, "veg_f": vf, "meat_f": 1-vf})
+
                 for run in range(runs_per_combo):
                     count += 1
                     print(f"Run {count}/{total}: α={a:.2f}, θ={t:.2f}, veg_f={vf:.2f}")
-                    
+
                     model = get_model(p)
                     model.run()
-                    
+
                     result = {
+                        'agent_ini': params.get("agent_ini", "other"),
                         'alpha': a, 'beta': 1 - a, 'theta': t,
                         'initial_veg_f': vf, 'final_veg_f': model.fraction_veg[-1],
                         'change': model.fraction_veg[-1] - vf,
@@ -176,14 +186,14 @@ def run_parameter_analysis(params=None, alpha_range=None,
                         'final_CO2': model.system_C[-1], 'run': run,
                         'individual_reductions': model.get_attributes("reduction_out")
                     }
-                    
+
                     if record_trajectories:
                         result.update({
                             'fraction_veg_trajectory': model.fraction_veg,
                             'system_C_trajectory': model.system_C,
                             'parameter_set': f"α={a:.2f}, β={1-a:.2f}, θ={t:.2f}"
                         })
-                    
+
                     results.append(result)
     
     df = pd.DataFrame(results)
@@ -216,47 +226,27 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg=0.6):
     return df
 
 def run_trajectory_analysis(params=None, runs_per_combo=5):
-    """Run trajectory analysis for parameterized and twin modes only"""
+    """Run trajectory analysis for twin mode only"""
     p = DEFAULT_PARAMS.copy() if params is None else params.copy()
     r = []
-    
-    # Load survey data if needed
-    sd = None
-    if p.get("agent_ini") in ["parameterized", "twin"]:
-        sd = load_survey_data(p["survey_file"], ["nomem_encr", "alpha", "theta", "diet"])
-        sm = extract_survey_params(sd)
-    
-    # Parameterized mode
-    if sd is not None:
-        par = p.copy()
-        par.update({"agent_ini": "parameterized", **sm})
-        for i in range(runs_per_combo):
-            model = get_model(par)
-            model.run()
-            r.append({
-                'agent_ini': "parameterized", **sm, 'beta': 1 - sm.get('alpha', 0.35),
-                'initial_veg_f': par["veg_f"], 'final_veg_f': model.fraction_veg[-1],
-                'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
-                'run': i, 'parameter_set': "Survey Mean Parameters"
-            })
-        
-        # Twin mode - use N from params
-        twn = p.copy()
-        twn.update({"agent_ini": "twin"})
-        print(f"INFO: Using N={twn['N']} for twin mode")
-        for i in range(runs_per_combo):
-            model = get_model(twn)
-            model.run()
-            agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'theta']}
-            agent_means['beta'] = 1 - agent_means['alpha']
-            r.append({
-                'agent_ini': "twin", **agent_means,
-                'initial_veg_f': sum(ag.diet=="veg" for ag in model.agents)/len(model.agents),
-                'final_veg_f': model.fraction_veg[-1],
-                'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
-                'snapshots': model.snapshots if hasattr(model, 'snapshots') else None,
-                'run': i, 'parameter_set': "Survey Individual Parameters"
-            })
+
+    # Twin mode - use N from params
+    twn = p.copy()
+    twn.update({"agent_ini": "twin"})
+    print(f"INFO: Using N={twn['N']} for twin mode")
+    for i in range(runs_per_combo):
+        model = get_model(twn)
+        model.run()
+        agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'theta']}
+        agent_means['beta'] = 1 - agent_means['alpha']
+        r.append({
+            'agent_ini': "twin", **agent_means,
+            'initial_veg_f': sum(ag.diet=="veg" for ag in model.agents)/len(model.agents),
+            'final_veg_f': model.fraction_veg[-1],
+            'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
+            'snapshots': model.snapshots if hasattr(model, 'snapshots') else None,
+            'run': i, 'parameter_set': "Survey Individual Parameters"
+        })
     
     df = pd.DataFrame(r)
     
@@ -297,9 +287,9 @@ def main():
     while True:
         print("\n[1] Emissions vs Veg Fraction")
         print("[2] Parameter Analysis (alpha-theta grid, end states)")
-        print("[3] Vegetarian Growth Analysis") 
-        print("[4] Trajectory Analysis (parameterized + twin modes)")
-        print("[5] Parameter Sweep with Trajectories (supplement)")
+        print("[3] Vegetarian Growth Analysis")
+        print("[4] Trajectory Analysis (twin mode only)")
+        print("[5] Parameter Sweep with Trajectories (supplement, includes parameterized)")
         print("[0] Exit")
         
         choice = input("Select: ")

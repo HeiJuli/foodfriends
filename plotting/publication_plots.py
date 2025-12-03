@@ -379,30 +379,17 @@ def plot_individual_reductions_distribution(data=None, file_path=None, save=True
     return plt.gca()
 #%%
 def plot_trajectory_param_twin(data=None, file_path=None, save=True):
+    """Plot twin mode trajectories only"""
     set_publication_style()
-    
+
     if data is None:
         data = load_data(file_path)
         if data is None: return None
-    
-    fig, axs = plt.subplots(1, 2, figsize=(17.8*cm, 8*cm))
 
-    
+    fig, ax = plt.subplots(1, 1, figsize=(9*cm, 8*cm))
+
     lw = 0.8
-    # Parameterized mode
-    param_data = data[data['agent_ini'] == 'parameterized']
-    if len(param_data) > 0:
-        colors = create_color_variations("#ff7f00", len(param_data))
-        for i, (_, row) in enumerate(param_data.iterrows()):
-            trajectory = row['fraction_veg_trajectory']
-            if isinstance(trajectory, list):
-                t_thousands = np.arange(len(trajectory)) / 1000
-                axs[0].plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
-        
-        alpha, beta, theta = param_data.iloc[0][['alpha', 'beta', 'theta']]
-        axs[0].set_title(f"Parameterized: α={alpha:.2f}, β={beta:.2f}, θ={theta:.2f}")
-    
-    # Twin mode  
+    # Twin mode only
     twin_data = data[data['agent_ini'] == 'twin']
     if len(twin_data) > 0:
         colors = create_color_variations("#984ea3", len(twin_data))
@@ -410,77 +397,93 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
                 t_thousands = np.arange(len(trajectory)) / 1000
-                axs[1].plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
-        
-        axs[1].set_title("Twin: Survey Individual Parameters")
-    
-    for ax in axs:
-        ax.set_xlabel("t (thousands)")
-        ax.set_ylabel("Vegetarian Fraction")
-        ax.set_ylim(0, 1)
-        apply_axis_style(ax)
-    
+                ax.plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
+
+        ax.set_title("Twin: Survey Individual Parameters")
+    else:
+        print("WARNING: No twin mode data found")
+
+    ax.set_xlabel("t (thousands)")
+    ax.set_ylabel("Vegetarian Fraction")
+    ax.set_ylim(0, 1)
+    apply_axis_style(ax)
+
     plt.tight_layout()
-    
+
     if save:
         output_dir = ensure_output_dir()
-        plt.savefig(f'{output_dir}/param_twin_trajectories.pdf', dpi=300, bbox_inches='tight')
-        print("Saved param_twin_trajectories.pdf")
-    
+        plt.savefig(f'{output_dir}/twin_trajectories.pdf', dpi=300, bbox_inches='tight')
+        print("Saved twin_trajectories.pdf")
+
     return fig
 #%%
 def plot_parameter_sweep_trajectories(data=None, file_path=None, save=True):
-    """Plot trajectories grouped by parameter combinations for supplement"""
+    """Plot trajectories grouped by parameter combinations for supplement. Supports parameterized mode."""
     set_publication_style()
-    
+
     if data is None:
         data = load_data(file_path)
         if data is None: return None
-    
+
+    # Check if agent_ini column exists
+    if 'agent_ini' in data.columns:
+        agent_modes = data['agent_ini'].unique()
+        print(f"INFO: Found agent modes: {agent_modes}")
+    else:
+        agent_modes = ['other']
+
     # Get unique parameter combinations
     param_sets = data['parameter_set'].unique()
-    
+
     # Create subplot grid
     n_sets = len(param_sets)
     cols = min(3, n_sets)
     rows = (n_sets + cols - 1) // cols
-    
+
     fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows), sharey=True)
     if n_sets == 1: axes = [axes]
     axes = axes.flatten() if n_sets > 1 else axes
-    
+
     for i, param_set in enumerate(param_sets):
         if i >= len(axes): break
-        
+
         ax = axes[i]
         subset = data[data['parameter_set'] == param_set]
-        
+
+        # Color by agent_ini if available
+        if 'agent_ini' in data.columns and 'parameterized' in subset['agent_ini'].values:
+            color_base = "#ff7f00"  # Orange for parameterized
+            label_suffix = " (Parameterized)"
+        else:
+            color_base = COLORS['primary']
+            label_suffix = ""
+
         # Plot all trajectories for this parameter set
-        colors = create_color_variations(COLORS['primary'], len(subset))
+        colors = create_color_variations(color_base, len(subset))
         for j, (_, row) in enumerate(subset.iterrows()):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
-                ax.plot(np.arange(len(trajectory)), trajectory, 
+                ax.plot(np.arange(len(trajectory)), trajectory,
                        color=colors[j % len(colors)], alpha=0.7, linewidth=1)
-        
-        ax.set_title(param_set, fontsize=10)
+
+        ax.set_title(param_set + label_suffix, fontsize=10)
         ax.set_xlabel('Time Steps')
         if i % cols == 0:
             ax.set_ylabel('Vegetarian Fraction')
         ax.set_ylim(0, 1)
         apply_axis_style(ax)
-    
+
     # Hide unused subplots
     for i in range(n_sets, len(axes)):
         axes[i].set_visible(False)
-    
+
     plt.tight_layout()
-    
+
     if save:
         output_dir = ensure_output_dir()
         plt.savefig(f'{output_dir}/parameter_sweep_trajectories.pdf', dpi=300, bbox_inches='tight')
         print("Saved parameter_sweep_trajectories.pdf")
-    
+
     return fig
 #%%
 def select_file(pattern):
@@ -514,7 +517,7 @@ def main():
         print("[3] Emissions vs Vegetarian Fraction")
         print("[4] Vegetarian Growth Analysis")
         print("[5] Individual Reductions Distribution")
-        print("[6] Parameter vs Twin Trajectories")
+        print("[6] Twin Trajectories")
         print("[7] Network Agency Evolution")
         print("[8] Parameter Sweep Trajectories (supplement)")
         print("[0] Exit")
