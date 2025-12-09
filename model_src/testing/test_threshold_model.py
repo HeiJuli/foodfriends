@@ -1,125 +1,84 @@
 #!/usr/bin/env python3
 """
-Test complex contagion threshold model vs utility-based model
-Comparing k=15, k=15+scaled_dissonance, k=15+threshold_floor
+Test threshold model with different w_i weights (5 to 20)
 """
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import os
 import copy
+import argparse
 from multiprocessing import Pool
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from model_main_single import Model, Agent, params
+from model_main_threshold import Model, params
 
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 
-def create_threshold_prob_calc(k_value=15, variant='baseline'):
-    """Create threshold probability calculation function for variant
-
-    Args:
-        k_value: Steepness parameter for sigmoid function
-        variant: 'baseline', 'scaled_diss' (k+0.2*dissonance), 'floor' (k+0.1 floor)
-    """
-    def new_prob_calc(self, other_agent):
-        opposite_diet = "meat" if self.diet == "veg" else "veg"
-        mem = self.memory[-self.params["M"]:]
-        if len(mem) == 0:
-            return 0.0
-        proportion = sum(d == opposite_diet for d in mem) / len(mem)
-
-        threshold = self.rho
-        dissonance_active = False
-
-        if self.diet == "meat":
-            has_veg_neighbor = any(n.diet == "veg" for n in self.neighbours)
-            theta_misaligned = self.theta < 0.5
-            dissonance_active = has_veg_neighbor and theta_misaligned
-
-            if dissonance_active:
-                dissonance = abs(self.theta - 1.0)
-                scaling = 0.2 if variant == 'scaled_diss' else 1.0
-                threshold -= scaling * self.alpha * dissonance
-        else:  # veg
-            theta_misaligned = self.theta > 0.5
-            dissonance_active = theta_misaligned
-
-            if dissonance_active:
-                dissonance = abs(self.theta - 0.0)
-                scaling = 0.2 if variant == 'scaled_diss' else 1.0
-                threshold -= scaling * self.alpha * dissonance
-
-        if variant == 'floor':
-            threshold = np.clip(threshold, 0.1, 1)
-        else:
-            threshold = np.clip(threshold, 0, 1)
-
-        social_exposure = self.beta * proportion
-        prob_switch = 1 / (1 + np.exp(-k_value * (social_exposure - threshold)))
-
-        return prob_switch
-
-    return new_prob_calc
-
 def run_single_variant(config):
-    """Worker function to run a single model variant"""
-    variant_name, variant_type, k_value, test_params = config
+    """Worker function to run a single model variant with averaging over n_runs"""
+    variant_name, w_i_value, test_params, n_runs = config
 
-    print(f"[{variant_name}] Running...")
+    print(f"[{variant_name}] Running {n_runs} replicate(s)...")
 
-    # Monkey patch for threshold variants
-    original_prob_calc = Agent.prob_calc
-    if variant_type != 'utility':
-        Agent.prob_calc = create_threshold_prob_calc(k_value, variant_type)
+    # Update w_i parameter
+    test_params['w_i'] = w_i_value
 
-    # Run model
-    model = Model(test_params)
-    model.run()
+    # Run model n_runs times and collect trajectories
+    all_trajectories = []
+    for run_idx in range(n_runs):
+        model = Model(test_params)
+        model.run()
+        all_trajectories.append(model.fraction_veg.copy())
 
-    # Restore original
-    Agent.prob_calc = original_prob_calc
+    # Average trajectories
+    avg_trajectory = np.mean(all_trajectories, axis=0)
 
-    # Extract metrics
+    # Extract metrics from averaged trajectory
     result = {
         'variant_name': variant_name,
-        'variant_type': variant_type,
-        'fraction_veg': model.fraction_veg.copy(),
-        'initial': model.fraction_veg[0],
-        'at_5k': model.fraction_veg[5000],
-        'at_25k': model.fraction_veg[25000],
-        'at_50k': model.fraction_veg[50000],
-        'final': model.fraction_veg[-1]
+        'w_i': w_i_value,
+        'fraction_veg': avg_trajectory,
+        'initial': avg_trajectory[0],
+        'at_5k': avg_trajectory[5000] if len(avg_trajectory) > 5000 else avg_trajectory[-1],
+        'at_25k': avg_trajectory[25000] if len(avg_trajectory) > 25000 else avg_trajectory[-1],
+        'at_50k': avg_trajectory[50000] if len(avg_trajectory) > 50000 else avg_trajectory[-1],
+        'final': avg_trajectory[-1]
     }
 
-    print(f"  {variant_name} complete: Initial={result['initial']:.3f}, " +
+    print(f"  {variant_name} complete (avg over {n_runs} runs): Initial={result['initial']:.3f}, " +
           f"At 5k={result['at_5k']:.3f}, At 25k={result['at_25k']:.3f}, " +
           f"At 50k={result['at_50k']:.3f}, Final={result['final']:.3f}")
 
     return result
 
 if __name__ == '__main__':
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Test threshold model with different w_i values')
+    parser.add_argument('--n_runs', type=int, default=2, help='Number of runs to average over (default: 1)')
+    args = parser.parse_args()
+
     # Test configuration
     test_params = copy.deepcopy(params)
-    test_params['steps'] = 700000
-    test_params['N'] = 800
+    test_params['steps'] = 150000
+    test_params['N'] = 1000
     test_params['agent_ini'] = "twin"
 
     print("=" * 70)
-    print("TESTING: Threshold Model Variants vs Utility Model")
+    print("TESTING: Threshold Model with w_i weights from 5 to 20")
     print("=" * 70)
 
-    # Test 5 k values from 10 to 20
-    k_values = np.linspace(10, 20, 5)
+    # Test w_i values from 5 to 20
+    w_i_values = np.linspace(5, 11, 8)
 
     # Configure all variants to run
-    configs = [('Utility Model', 'utility', None, test_params)]
-    configs.extend([(f'Threshold k={k:.1f}', 'baseline', k, test_params) for k in k_values])
+    configs = [(f'w_i={w:.1f}', w, copy.deepcopy(test_params), args.n_runs) for w in w_i_values]
 
     # Run in parallel
     n_cores = min(len(configs), os.cpu_count() or 4)
     print(f"\nUsing {n_cores} cores for parallel execution")
-    print(f"Testing k values: {[f'{k:.1f}' for k in k_values]}\n")
+    print(f"Testing w_i values: {[f'{w:.1f}' for w in w_i_values]}")
+    print(f"Averaging over {args.n_runs} run(s) per variant\n")
 
     with Pool(n_cores) as pool:
         results = pool.map(run_single_variant, configs)
@@ -141,38 +100,35 @@ if __name__ == '__main__':
     # Plot comparison - 1x2 layout
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
+    # Add n_runs info to title if averaging
+    title_suffix = f' (avg over {args.n_runs} runs)' if args.n_runs > 1 else ''
+
     # Full trajectory
     ax = axes[0]
-    ax.plot(results_dict['Utility Model']['fraction_veg'], label='Utility Model',
-            alpha=0.8, linewidth=2)
-    for k in k_values:
-        r = results_dict[f'Threshold k={k:.1f}']
-        ax.plot(r['fraction_veg'], label=f'k={k:.1f}', alpha=0.8, linewidth=2)
-    ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3, label='Initial')
+    for w in w_i_values:
+        r = results_dict[f'w_i={w:.1f}']
+        ax.plot(r['fraction_veg'], label=f'w_i={w:.1f}', alpha=0.8, linewidth=2)
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
-    ax.set_title('Full Trajectory (0-100k steps)')
+    ax.set_title(f'Full Trajectory (0-100k steps){title_suffix}')
     ax.legend()
     ax.grid(alpha=0.3)
 
     # Initial 10k steps
     ax = axes[1]
-    ax.plot(results_dict['Utility Model']['fraction_veg'][:10000],
-            label='Utility Model', alpha=0.8, linewidth=2)
-    for k in k_values:
-        r = results_dict[f'Threshold k={k:.1f}']
-        ax.plot(r['fraction_veg'][:10000], label=f'k={k:.1f}', alpha=0.8, linewidth=2)
-    ax.axhline(y=0.016, color='red', linestyle='--', alpha=0.3)
+    for w in w_i_values:
+        r = results_dict[f'w_i={w:.1f}']
+        ax.plot(r['fraction_veg'][:10000], label=f'w_i={w:.1f}', alpha=0.8, linewidth=2)
     ax.set_xlabel('t (steps)')
     ax.set_ylabel('Vegetarian Fraction')
-    ax.set_title('Initial Dynamics (0-10k steps)')
+    ax.set_title(f'Initial Dynamics (0-10k steps){title_suffix}')
     ax.legend()
     ax.grid(alpha=0.3)
 
     plt.tight_layout()
     os.makedirs("visualisations_output", exist_ok=True)
-    plt.savefig('visualisations_output/threshold_variants_comparison.png',
+    plt.savefig('visualisations_output/threshold_w_i_comparison.png',
                 dpi=300, bbox_inches='tight')
     print("\n" + "=" * 70)
-    print("Plot saved to visualisations_output/threshold_variants_comparison.png")
+    print("Plot saved to visualisations_output/threshold_w_i_comparison.png")
     print("=" * 70)
