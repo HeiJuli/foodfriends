@@ -45,7 +45,7 @@ from auxillary import network_stats
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 600,
+          "N": 7800,
           "erdos_p": 3,
           "steps": 150000,
           "k": 8, #initial edges per node for graph generation
@@ -58,10 +58,10 @@ params = {"veg_CO2": 1390,
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.68, #self dissonance
+          "alpha": 0.36, #self dissonance
           "rho": 0.45, #behavioural intentions
-          "theta": 0.58, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": 'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic" 
+          "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
+          "agent_ini": "synthetic",#'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
