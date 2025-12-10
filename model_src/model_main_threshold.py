@@ -260,22 +260,33 @@ class Agent():
         """
         Cognitive dissonance for threshold adjustment
 
-        Returns dissonance magnitude when preference (theta) misaligns with diet.
+        Returns dissonance magnitude when preference (theta) misaligns with diet,
+        weighted by non-linear function of vegetarian presence.
 
         For meat-eaters:
-        - Activate if theta < 0.5 (prefers plants) AND has veg neighbor
-        - dissonance = distance from meat preference (1.0)
+        - Activate if theta < 0.5 (prefers plants)
+        - Scales with veg fraction in memory via sigmoid (inflection at 0.25)
 
         For veg-eaters:
         - Activate if theta > 0.5 (prefers meat)
-        - dissonance = distance from veg preference (0.0)
+        - Returns base misalignment distance
         """
+        # Get recent memory
+        mem = self.memory[-self.params["M"]:]
+        if len(mem) == 0:
+            return 0.0
+
+        # Calculate vegetarian fraction in memory
+        veg_fraction = sum(d == "veg" for d in mem) / len(mem)
+
+        # Sigmoid weighting with inflection at 0.25
+        sigmoid_weight = 1 / (1 + math.exp(-15 * (veg_fraction - 0.25)))
+
         # Meat-eaters: dissonance when prefer plants but eating meat
         if self.diet == "meat":
-            has_veg_neighbor = any(n.diet == "veg" for n in self.neighbours)
             theta_misaligned = self.theta < 0.5
-            if has_veg_neighbor and theta_misaligned:
-                return abs(self.theta - 1.0)
+            if theta_misaligned:
+                return sigmoid_weight * abs(self.theta - 1.0)
 
         # Veg-eaters: dissonance when prefer meat but eating veg
         else:
