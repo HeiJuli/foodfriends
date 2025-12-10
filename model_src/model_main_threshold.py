@@ -686,9 +686,12 @@ class Model():
             else:
                 # Get the neighbours before rewiirng so j is excluded
                 remove_neighbours = list(self.G1.neighbors(i.i))
-    
+
+                if not remove_neighbours:
+                    return
+
                 self.G1.add_edge(i.i, j)
-            
+
                 self.G1.remove_edge(i.i, random.choice(remove_neighbours))
 
     def current_veg_fraction(self):
