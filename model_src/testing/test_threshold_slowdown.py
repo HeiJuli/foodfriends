@@ -36,7 +36,7 @@ def create_threshold_prob_calc(k_value=15, variant='baseline', **kwargs):
 
         if self.diet == "meat":
             has_veg_neighbor = any(n.diet == "veg" for n in self.neighbours)
-            theta_misaligned = self.theta < 0.5
+            theta_misaligned = self.theta > 0.5  # Fixed: was <, now correctly checks if prefers veg
 
             # VARIANT: Memory lag - require sustained exposure
             if variant == 'memory_lag':
@@ -47,7 +47,7 @@ def create_threshold_prob_calc(k_value=15, variant='baseline', **kwargs):
                 dissonance_active = has_veg_neighbor and theta_misaligned
 
             if dissonance_active:
-                dissonance = abs(self.theta - 1.0)
+                dissonance = self.theta  # Fixed: was abs(theta-1.0), now distance from meat end
 
                 # Apply scaling if variant requires it
                 if variant == 'scaled_floor':
@@ -58,11 +58,11 @@ def create_threshold_prob_calc(k_value=15, variant='baseline', **kwargs):
                 threshold -= scaling * self.alpha * dissonance
 
         else:  # veg
-            theta_misaligned = self.theta > 0.5
+            theta_misaligned = self.theta < 0.5  # Fixed: was >, now correctly checks if prefers meat
             dissonance_active = theta_misaligned
 
             if dissonance_active:
-                dissonance = abs(self.theta - 0.0)
+                dissonance = 1 - self.theta  # Fixed: was abs(theta-0.0), now distance from veg end
 
                 if variant == 'scaled_floor':
                     scaling = kwargs.get('diss_scale', 0.5)

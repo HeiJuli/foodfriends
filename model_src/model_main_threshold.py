@@ -317,38 +317,46 @@ class Agent():
         Cognitive dissonance for threshold adjustment
 
         Returns dissonance magnitude when preference (theta) misaligns with diet,
-        weighted by non-linear function of vegetarian presence.
+        weighted by exposure-dependent sigmoid activation.
+
+        Theta scale: 0 = meat preference, 1 = veg preference (high theta = high veg preference)
 
         For meat-eaters:
-        - Activate if theta < 0.5 (prefers plants)
-        - Scales with veg fraction in memory via sigmoid (inflection at 0.25)
+        - Dissonance activates when theta > 0.5 (prefer veg but eating meat)
+        - Magnitude = theta (distance from meat end)
+        - Scales with veg exposure in memory via sigmoid (inflection at 0.25)
 
         For veg-eaters:
-        - Activate if theta > 0.5 (prefers meat)
-        - Returns base misalignment distance
+        - Dissonance activates when theta < 0.5 (prefer meat but eating veg)
+        - Magnitude = 1 - theta (distance from veg end)
+        - Scales with meat exposure in memory via sigmoid (inflection at 0.25)
         """
         # Get recent memory
         mem = self.memory[-self.params["M"]:]
         if len(mem) == 0:
             return 0.0
 
-        # Calculate vegetarian fraction in memory
+        # Calculate diet fractions in memory
         veg_fraction = sum(d == "veg" for d in mem) / len(mem)
+        meat_fraction = 1 - veg_fraction
 
-        # Sigmoid weighting with inflection at 0.25
-        sigmoid_weight = 1 / (1 + math.exp(-15 * (veg_fraction - 0.25)))
+        # Sigmoid weighting with inflection at 0.25 for both directions
+        veg_sigmoid = 1 / (1 + math.exp(-15 * (veg_fraction - 0.25)))
+        meat_sigmoid = 1 / (1 + math.exp(-15 * (meat_fraction - 0.25)))
 
-        # Meat-eaters: dissonance when prefer plants but eating meat
+        # Meat-eaters: dissonance when prefer veg but eating meat
         if self.diet == "meat":
-            theta_misaligned = self.theta < 0.5
+            theta_misaligned = self.theta > 0.5  # Fixed: was <
             if theta_misaligned:
-                return sigmoid_weight * abs(self.theta - 1.0)
+                # Dissonance = distance from meat end (0), weighted by veg exposure
+                return veg_sigmoid * self.theta
 
         # Veg-eaters: dissonance when prefer meat but eating veg
         else:
-            theta_misaligned = self.theta > 0.5
+            theta_misaligned = self.theta < 0.5  # Fixed: was >
             if theta_misaligned:
-                return abs(self.theta - 0.0)
+                # Dissonance = distance from veg end (1), weighted by meat exposure
+                return meat_sigmoid * (1 - self.theta)
 
         return 0.0
     

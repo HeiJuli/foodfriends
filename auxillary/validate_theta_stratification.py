@@ -209,10 +209,12 @@ def check_effective_thresholds(simulation_results):
     print(f"  Average rho:   {meat_eaters['rho'].mean():.3f}")
 
     # Calculate effective thresholds
-    avg_dissonance = 1 - meat_eaters['theta'].mean()
+    # Fixed: For meat-eaters, dissonance = theta when theta > 0.5 (prefer veg but eat meat)
+    # Only misaligned agents (theta > 0.5) experience dissonance
+    avg_dissonance = meat_eaters['theta'].mean()  # Fixed: was 1-theta
     eff_threshold = meat_eaters['rho'].mean() - meat_eaters['alpha'].mean() * avg_dissonance
 
-    print(f"\n  Average dissonance (1-theta): {avg_dissonance:.3f}")
+    print(f"\n  Average dissonance (theta): {avg_dissonance:.3f}")
     print(f"  Dissonance adjustment (alpha*dissonance): {meat_eaters['alpha'].mean() * avg_dissonance:.3f}")
     print(f"  Effective threshold (rho - alpha*dissonance): {eff_threshold:.3f}")
 
