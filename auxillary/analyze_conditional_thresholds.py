@@ -76,7 +76,9 @@ def analyze_conditional_thresholds(df):
     df['theta_bin'] = pd.cut(df['theta'], bins=theta_bins, labels=theta_labels, include_lowest=True)
 
     # Calculate effective thresholds
-    df['dissonance'] = np.where(df['diet'] == 'meat', 1 - df['theta'], df['theta'])
+    # Fixed: For meat-eaters, dissonance = theta (distance from meat end = 0)
+    #        For veg-eaters, dissonance = 1-theta (distance from veg end = 1)
+    df['dissonance'] = np.where(df['diet'] == 'meat', df['theta'], 1 - df['theta'])  # Fixed: was inverted
     df['eff_threshold'] = df['rho'] - df['alpha'] * df['dissonance']
 
     print("\nEffective thresholds by theta bin (all agents):")

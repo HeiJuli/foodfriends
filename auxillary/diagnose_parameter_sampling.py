@@ -249,9 +249,9 @@ def check_rapid_uptake_indicators():
     print(f"  Average theta: {meat_eaters['theta'].mean():.3f}")
 
     # Estimate typical dissonance for meat eaters
-    # Dissonance = 1 - theta (for meat eaters)
-    avg_dissonance = 1 - meat_eaters['theta'].mean()
-    print(f"  Average dissonance: {avg_dissonance:.3f}")
+    # Fixed: Dissonance = theta for meat eaters (distance from meat end = 0)
+    avg_dissonance = meat_eaters['theta'].mean()  # Fixed: was 1-theta
+    print(f"  Average dissonance (theta): {avg_dissonance:.3f}")
     print(f"  Dissonance * alpha: {avg_dissonance * alpha_emp.mean():.3f}")
     print(f"  Effective threshold (rho - alpha*dissonance): {rho_emp.mean() - alpha_emp.mean()*avg_dissonance:.3f}")
 
