@@ -45,15 +45,15 @@ from auxillary import network_stats
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 7800,
+          "N": 780,
           "erdos_p": 3,
-          "steps": 150000,
+          "steps": 50000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
           "M": 7, # memory length use 7 or 9 maybe.
-          "veg_f":0.1, #vegetarian fraction
-          "meat_f": 0.9,  #meat eater fraction
+          "veg_f":0.05, #vegetarian fraction
+          "meat_f": 0.95,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
@@ -61,29 +61,85 @@ params = {"veg_CO2": 1390,
           "alpha": 0.36, #self dissonance
           "rho": 0.45, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "synthetic",#'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": "twin",#"synthetic",#'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic" 
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
 #%% Auxillary/Helpers
 
-def sample_from_pmf(demo_key, pmf_tables, param):
-    """Sample single parameter from PMF"""
-    if pmf_tables and demo_key in pmf_tables[param]:
-        pmf = pmf_tables[param][demo_key]
+def sample_from_pmf(demo_key, pmf_tables, param, theta=None):
+    """Sample parameter from theta-stratified PMF
+
+    Args:
+        demo_key: Tuple of (gender, age_group, incquart, educlevel)
+        pmf_tables: Dict of PMF tables
+        param: Parameter name ('alpha', 'rho', or 'theta')
+        theta: Agent's theta value (required for alpha/rho, ignored for theta)
+    """
+    if not pmf_tables:
+        return 0.5
+
+    # Get metadata
+    metadata = pmf_tables.get('_metadata', {})
+    stratified_params = metadata.get('stratified_params', ['alpha', 'rho'])
+
+    # Build lookup key
+    if param in stratified_params and theta is not None:
+        # Bin theta value
+        theta_bins = metadata.get('theta_bins', [-1.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+        theta_labels = metadata.get('theta_labels', ['(-1.0,0.2)', '[0.2,0.4)', '[0.4,0.6)', '[0.6,0.8)', '[0.8,1.0]'])
+
+        # Find theta bin
+        theta_bin = None
+        for i, (low, high) in enumerate(zip(theta_bins[:-1], theta_bins[1:])):
+            if i == 0:  # First bin includes lower bound
+                if low <= theta < high:
+                    theta_bin = theta_labels[i]
+                    break
+            else:
+                if low <= theta < high:
+                    theta_bin = theta_labels[i]
+                    break
+
+        # Handle edge case: theta exactly equals upper bound
+        if theta_bin is None and theta >= theta_bins[-2]:
+            theta_bin = theta_labels[-1]
+
+        if theta_bin is None:
+            # Theta out of range, use fallback
+            lookup_key = demo_key
+        else:
+            # Create full lookup key with theta bin
+            lookup_key = demo_key + (theta_bin,)
+    else:
+        # Theta or unstratified parameter
+        lookup_key = demo_key
+
+    # Try to find exact match
+    if lookup_key in pmf_tables[param]:
+        pmf = pmf_tables[param][lookup_key]
         vals, probs = pmf['values'], pmf['probabilities']
         nz = [(v,p) for v,p in zip(vals, probs) if p > 0]
         if nz:
             v, p = zip(*nz)
             return np.random.choice(v, p=np.array(p)/sum(p))
-    
-    # Fallback: sample from all values or default
-    if pmf_tables:
-        all_vals = []
-        for cell in pmf_tables[param].values():
-            all_vals.extend(cell['values'])
-        return np.random.choice(all_vals) if all_vals else 0.5
-    return 0.5
+
+    # Fallback 1: Try without theta bin (demographics only) for stratified params
+    if param in stratified_params and len(lookup_key) > 4:
+        demo_only_key = demo_key
+        if demo_only_key in pmf_tables[param]:
+            pmf = pmf_tables[param][demo_only_key]
+            vals, probs = pmf['values'], pmf['probabilities']
+            nz = [(v,p) for v,p in zip(vals, probs) if p > 0]
+            if nz:
+                v, p = zip(*nz)
+                return np.random.choice(v, p=np.array(p)/sum(p))
+
+    # Fallback 2: Sample from all values
+    all_vals = []
+    for cell in pmf_tables[param].values():
+        all_vals.extend(cell['values'])
+    return np.random.choice(all_vals) if all_vals else 0.5
 
 
 
@@ -140,17 +196,17 @@ class Agent():
                     # Use direct alpha from hierarchical matching
                     pass  # self.alpha already set from kwargs
                 else:
-                    # Sample alpha from PMF using demographics
-                    self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha')
-                
-                # Check if we have direct rho match from survey  
+                    # Sample alpha from theta-stratified PMF using demographics AND theta
+                    self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha', theta=self.theta)
+
+                # Check if we have direct rho match from survey
                 if hasattr(self, 'has_rho') and self.has_rho and hasattr(self, 'rho'):
                     # Use direct rho from hierarchical matching
                     pass  # self.rho already set from kwargs
                 else:
-                    # Sample rho from PMF using demographics
-                    self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho')
-                
+                    # Sample rho from theta-stratified PMF using demographics AND theta
+                    self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho', theta=self.theta)
+
                 self.beta = 1 - self.alpha  # Recalculate beta after new alpha
             else:
                 # Existing synthetic fallback
