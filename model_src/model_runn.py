@@ -16,6 +16,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "erdos_p": 3,
           "steps": 30000,
           "w_i": 5, #weight of the replicator function
+          "sigmoid_k": 12, #sigmoid steepness for dissonance scaling
           "immune_n": 0.10,
           "k": 8, #initial edges per node for graph generation
           "M": 10, # memory length
@@ -28,7 +29,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "alpha": 0.36, #self dissonance
           "rho": 0.25, #behavioural intentions,
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic"
           "survey_file": "../data/hierarchical_agents.csv"
           }
 

@@ -56,6 +56,7 @@ params = {"veg_CO2": 1390,
           "steps": 25000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
+          "sigmoid_k": 12, #sigmoid steepness for dissonance scaling
           "immune_n": 0.10,
           "M": 9, # memory length use 7 or 9 maybe.
           "veg_f":0.1, #vegetarian fraction
@@ -67,7 +68,7 @@ params = {"veg_CO2": 1390,
           "alpha": 0.68, #self dissonance
           "rho": 0.45, #behavioural intentions
           "theta": 0.58, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": 'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic" 
+          "agent_ini": 'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic"
           "survey_file": "../data/hierarchical_agents.csv"
           }
 
@@ -341,8 +342,8 @@ class Agent():
         meat_fraction = 1 - veg_fraction
 
         # Sigmoid weighting with inflection at 0.25 for both directions
-        veg_sigmoid = 1 / (1 + math.exp(-15 * (veg_fraction - 0.25)))
-        meat_sigmoid = 1 / (1 + math.exp(-15 * (meat_fraction - 0.25)))
+        veg_sigmoid = 1 / (1 + math.exp(-self.params["sigmoid_k"] * (veg_fraction - 0.25)))
+        meat_sigmoid = 1 / (1 + math.exp(-self.params["sigmoid_k"] * (meat_fraction - 0.25)))
 
         # Meat-eaters: dissonance when prefer veg but eating meat
         if self.diet == "meat":
