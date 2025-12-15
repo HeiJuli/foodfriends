@@ -51,9 +51,9 @@ from auxillary import network_stats
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 800,
+          "N": 600,
           "erdos_p": 3,
-          "steps": 15000,
+          "steps": 25000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
