@@ -108,80 +108,39 @@ if __name__ == '__main__':
             at_5k_vals[i, j] = r['at_5k']
             print(f"[w_i={w}, sigmoid_k={sk}] At 5k={r['at_5k']:.3f}, Final={r['final']:.3f}")
 
-    # Plot results
-    fig = plt.figure(figsize=(20, 12))
+    # Plot results: Grid of trajectories
+    fig = plt.figure(figsize=(25, 20))
 
-    # 1. Heatmap: Final vegetarian fraction
-    ax1 = plt.subplot(2, 3, 1)
-    im1 = ax1.imshow(final_vals, cmap='viridis', aspect='auto')
-    ax1.set_xticks(range(len(w_i_values)))
-    ax1.set_yticks(range(len(sigmoid_k_values)))
-    ax1.set_xticklabels(w_i_values)
-    ax1.set_yticklabels(sigmoid_k_values)
-    ax1.set_xlabel('w_i')
-    ax1.set_ylabel('sigmoid_k')
-    ax1.set_title('Final Veg Fraction')
-    plt.colorbar(im1, ax=ax1)
+    # Grid 1: Fix sigmoid_k, vary w_i (5 subplots, one per sigmoid_k value)
+    for i, sk in enumerate(sigmoid_k_values):
+        ax = plt.subplot(5, 2, 2*i + 1)
+        for w in w_i_values:
+            r = results_dict[f'w_i={w}_sk={sk}']
+            ax.plot(r['fraction_veg'], label=f'w_i={w}', alpha=0.8, linewidth=1.5)
+        ax.set_xlabel('t (steps)' if i == 4 else '')
+        ax.set_ylabel('Veg Fraction')
+        ax.set_title(f'sigmoid_k={sk}, varying w_i')
+        ax.legend(loc='best', fontsize=8)
+        ax.grid(alpha=0.3)
+        ax.set_ylim([-0.05, 1.05])
 
-    # 2. Heatmap: Vegetarian fraction at 5k steps
-    ax2 = plt.subplot(2, 3, 2)
-    im2 = ax2.imshow(at_5k_vals, cmap='viridis', aspect='auto')
-    ax2.set_xticks(range(len(w_i_values)))
-    ax2.set_yticks(range(len(sigmoid_k_values)))
-    ax2.set_xticklabels(w_i_values)
-    ax2.set_yticklabels(sigmoid_k_values)
-    ax2.set_xlabel('w_i')
-    ax2.set_ylabel('sigmoid_k')
-    ax2.set_title('Veg Fraction at 5k Steps')
-    plt.colorbar(im2, ax=ax2)
-
-    # 3. Trajectories for fixed sigmoid_k=12 (varying w_i)
-    ax3 = plt.subplot(2, 3, 3)
-    for w in w_i_values:
-        r = results_dict[f'w_i={w}_sk=12']
-        ax3.plot(r['fraction_veg'], label=f'w_i={w}', alpha=0.8, linewidth=2)
-    ax3.set_xlabel('t (steps)')
-    ax3.set_ylabel('Vegetarian Fraction')
-    ax3.set_title('Trajectories (sigmoid_k=12, varying w_i)')
-    ax3.legend()
-    ax3.grid(alpha=0.3)
-
-    # 4. Trajectories for fixed w_i=10 (varying sigmoid_k)
-    ax4 = plt.subplot(2, 3, 4)
-    for sk in sigmoid_k_values:
-        r = results_dict[f'w_i=10_sk={sk}']
-        ax4.plot(r['fraction_veg'], label=f'sigmoid_k={sk}', alpha=0.8, linewidth=2)
-    ax4.set_xlabel('t (steps)')
-    ax4.set_ylabel('Vegetarian Fraction')
-    ax4.set_title('Trajectories (w_i=10, varying sigmoid_k)')
-    ax4.legend()
-    ax4.grid(alpha=0.3)
-
-    # 5. Initial dynamics for diagonal values (w_i = sigmoid_k)
-    ax5 = plt.subplot(2, 3, 5)
-    for val in [5, 8, 10, 12, 15]:
-        r = results_dict[f'w_i={val}_sk={val}']
-        ax5.plot(r['fraction_veg'][:10000], label=f'w_i=sk={val}', alpha=0.8, linewidth=2)
-    ax5.set_xlabel('t (steps)')
-    ax5.set_ylabel('Vegetarian Fraction')
-    ax5.set_title('Initial Dynamics (0-10k, w_i=sigmoid_k)')
-    ax5.legend()
-    ax5.grid(alpha=0.3)
-
-    # 6. Identify S-curve candidates (final between 0.2-0.8, at_5k < 0.3)
-    ax6 = plt.subplot(2, 3, 6)
-    s_curve_candidates = []
-    for r in results:
-        if 0.2 <= r['final'] <= 0.8 and r['at_5k'] < 0.3:
-            s_curve_candidates.append(r)
-            ax6.plot(r['fraction_veg'], label=r['variant_name'], alpha=0.8, linewidth=2)
-    ax6.set_xlabel('t (steps)')
-    ax6.set_ylabel('Vegetarian Fraction')
-    ax6.set_title(f'S-Curve Candidates (n={len(s_curve_candidates)})')
-    ax6.legend(fontsize=8)
-    ax6.grid(alpha=0.3)
+    # Grid 2: Fix w_i, vary sigmoid_k (5 subplots, one per w_i value)
+    for i, w in enumerate(w_i_values):
+        ax = plt.subplot(5, 2, 2*i + 2)
+        for sk in sigmoid_k_values:
+            r = results_dict[f'w_i={w}_sk={sk}']
+            ax.plot(r['fraction_veg'], label=f'sk={sk}', alpha=0.8, linewidth=1.5)
+        ax.set_xlabel('t (steps)' if i == 4 else '')
+        ax.set_ylabel('Veg Fraction')
+        ax.set_title(f'w_i={w}, varying sigmoid_k')
+        ax.legend(loc='best', fontsize=8)
+        ax.grid(alpha=0.3)
+        ax.set_ylim([-0.05, 1.05])
 
     plt.tight_layout()
+
+    # Identify S-curve candidates for summary
+    s_curve_candidates = [r for r in results if 0.2 <= r['final'] <= 0.8 and r['at_5k'] < 0.3]
     os.makedirs("visualisations_output", exist_ok=True)
     plt.savefig('visualisations_output/phase2_2d_sweep.png', dpi=300, bbox_inches='tight')
 
