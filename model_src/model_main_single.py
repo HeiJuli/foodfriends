@@ -61,8 +61,10 @@ params = {"veg_CO2": 1390,
           "alpha": 0.36, #self dissonance
           "rho": 0.45, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "twin",#"synthetic",#'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic" 
-          "survey_file": "../data/hierarchical_agents.csv"
+          "agent_ini": "twin",#"synthetic",#'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic"
+          "survey_file": "../data/hierarchical_agents.csv",
+          "adjust_veg_fraction": True, #artificially increase veg fraction to match NL demographics
+          "target_veg_fraction": 0.06 #target vegetarian fraction (6% for Netherlands)
           }
 
 #%% Auxillary/Helpers
@@ -588,6 +590,9 @@ class Model():
 
                 self.agents.append(agent)
 
+            # Adjust vegetarian fraction to match Netherlands demographics
+            self.adjust_veg_fraction_to_target()
+
             # Initialize memory after all agents created
             for agent in self.agents:
                 agent.initialize_memory_from_neighbours(self.G1, self.agents)
@@ -600,9 +605,46 @@ class Model():
         
         n_immune = int(self.params["immune_n"] * len(self.agents))
         immune_idx = np.random.choice(len(self.agents), n_immune, replace=False)
-        
+
         for i in immune_idx:
             self.agents[i].immune = True
+
+    def adjust_veg_fraction_to_target(self):
+        """
+        Adjust vegetarian fraction to match Netherlands demographics.
+        Flips meat-eaters with highest theta+rho to vegetarian.
+        Vegans/vegetarians from survey data are kept as-is.
+        """
+        if not self.params.get("adjust_veg_fraction", False):
+            return
+
+        target_fraction = self.params["target_veg_fraction"]
+        current_veg = sum(1 for a in self.agents if a.diet == "veg")
+        current_fraction = current_veg / len(self.agents)
+
+        if current_fraction >= target_fraction:
+            print(f"INFO: Current veg fraction {current_fraction:.3f} already >= target {target_fraction:.3f}")
+            return
+
+        target_count = int(target_fraction * len(self.agents))
+        needed_flips = target_count - current_veg
+
+        print(f"INFO: Adjusting veg fraction from {current_fraction:.3f} to {target_fraction:.3f}")
+        print(f"INFO: Flipping {needed_flips} high-theta/rho meat-eaters to vegetarian")
+
+        # Find meat-eaters sorted by theta + rho (highest vegetarian potential)
+        meat_eaters = [(a, a.theta + a.rho) for a in self.agents if a.diet == "meat"]
+        meat_eaters.sort(key=lambda x: x[1], reverse=True)
+
+        # Flip top N meat-eaters to vegetarian
+        for i in range(min(needed_flips, len(meat_eaters))):
+            agent, score = meat_eaters[i]
+            agent.diet = "veg"
+            agent.C = agent.diet_emissions("veg")
+
+        final_veg = sum(1 for a in self.agents if a.diet == "veg")
+        final_fraction = final_veg / len(self.agents)
+        print(f"INFO: Final veg fraction: {final_fraction:.3f} ({final_veg}/{len(self.agents)} agents)")
 
     def get_attribute(self, attribute):
         """
