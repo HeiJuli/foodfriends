@@ -109,7 +109,7 @@ if __name__ == '__main__':
             print(f"[w_i={w}, sigmoid_k={sk}] At 5k={r['at_5k']:.3f}, Final={r['final']:.3f}")
 
     # Plot results: Grid of trajectories
-    fig = plt.figure(figsize=(25, 20))
+    fig = plt.figure(figsize=(12.5, 10))
 
     # Grid 1: Fix sigmoid_k, vary w_i (5 subplots, one per sigmoid_k value)
     for i, sk in enumerate(sigmoid_k_values):
@@ -117,10 +117,18 @@ if __name__ == '__main__':
         for w in w_i_values:
             r = results_dict[f'w_i={w}_sk={sk}']
             line, = ax.plot(r['fraction_veg'], label=f'w_i={w}', alpha=0.8, linewidth=1.5)
-            # Add arrow at final value on right y-axis
-            ax.annotate('', xy=(len(r['fraction_veg']), r['final']),
-                       xytext=(len(r['fraction_veg'])*0.98, r['final']),
-                       arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
+        # Add arrows after all lines plotted, using actual xlim
+        xlim = ax.get_xlim()
+        x_arrow = xlim[1]
+        for w in w_i_values:
+            r = results_dict[f'w_i={w}_sk={sk}']
+            # Find color of this line
+            for line in ax.get_lines():
+                if line.get_label() == f'w_i={w}':
+                    ax.annotate('', xy=(x_arrow, r['final']),
+                               xytext=(x_arrow*0.98, r['final']),
+                               arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
+                    break
         ax.set_xlabel('t (steps)' if i == 4 else '')
         ax.set_ylabel('Veg Fraction')
         ax.set_title(f'sigmoid_k={sk}, varying w_i')
@@ -134,10 +142,18 @@ if __name__ == '__main__':
         for sk in sigmoid_k_values:
             r = results_dict[f'w_i={w}_sk={sk}']
             line, = ax.plot(r['fraction_veg'], label=f'sk={sk}', alpha=0.8, linewidth=1.5)
-            # Add arrow at final value on right y-axis
-            ax.annotate('', xy=(len(r['fraction_veg']), r['final']),
-                       xytext=(len(r['fraction_veg'])*0.98, r['final']),
-                       arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
+        # Add arrows after all lines plotted, using actual xlim
+        xlim = ax.get_xlim()
+        x_arrow = xlim[1]
+        for sk in sigmoid_k_values:
+            r = results_dict[f'w_i={w}_sk={sk}']
+            # Find color of this line
+            for line in ax.get_lines():
+                if line.get_label() == f'sk={sk}':
+                    ax.annotate('', xy=(x_arrow, r['final']),
+                               xytext=(x_arrow*0.98, r['final']),
+                               arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
+                    break
         ax.set_xlabel('t (steps)' if j == 4 else '')
         ax.set_ylabel('Veg Fraction')
         ax.set_title(f'w_i={w}, varying sigmoid_k')
