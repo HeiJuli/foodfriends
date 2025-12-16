@@ -30,7 +30,9 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "rho": 0.1,
           "theta": 0,
           "agent_ini": "other",
-          "survey_file": "../data/hierarchical_agents.csv"
+          "survey_file": "../data/hierarchical_agents.csv",
+          "adjust_veg_fraction": True,
+          "target_veg_fraction": 0.06
           }
 
 def ensure_output_dir():
