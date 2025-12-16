@@ -63,6 +63,34 @@ def extract_survey_params(survey_data):
         params['meat_f'] = 1 - params['veg_f']
     return params
 
+def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
+    """Load 385 demographically representative complete-case agents"""
+    df = pd.read_csv(filepath)
+    complete = df[df['has_alpha'] & df['has_rho']].copy()
+
+    # Target stratification for n=385 (perfect age representation)
+    age_targets = {
+        '18-29': 56,  # All available (bottleneck)
+        '30-39': 54,
+        '40-49': 56,
+        '50-59': 68,
+        '60-69': 80,
+        '70+': 71
+    }
+
+    sampled = []
+    for age_group, n_target in age_targets.items():
+        group = complete[complete['age_group'] == age_group]
+        if len(group) < n_target:
+            print(f"WARNING: Only {len(group)} agents in {age_group}, need {n_target}")
+            sampled.append(group)
+        else:
+            sampled.append(group.sample(n=n_target, replace=False))
+
+    result = pd.concat(sampled, ignore_index=True)
+    print(f"Sample-max mode: {len(result)} agents with perfect age stratification")
+    return result
+
 def load_pmf_tables(filepath="../data/demographic_pmfs.pkl"):
     """Load PMF tables for alpha/rho sampling"""
     try:
@@ -90,7 +118,7 @@ def sample_from_pmf(demo_key, pmf_tables, param):
     return np.random.choice(all_vals) if all_vals else 0.5
 
 def get_model(params):
-    """Create model with PMF tables if twin mode"""
+    """Create model with PMF tables if twin mode. Sample-max mode doesn't need PMF tables (all complete cases)"""
     if params.get("agent_ini") == "twin":
         pmf_tables = load_pmf_tables()
         return model_main.Model(params, pmf_tables=pmf_tables)
@@ -290,7 +318,7 @@ def main():
     parser = argparse.ArgumentParser(description='Parallel Dietary Contagion Model')
     parser.add_argument('--analysis', choices=['emissions', 'parameter', 'veg_growth', 'trajectory', 'param_trajectories'],
                        required=True, help='Analysis type to run')
-    parser.add_argument('--agent_ini', choices=['synthetic', 'parameterized', 'twin'],
+    parser.add_argument('--agent_ini', choices=['synthetic', 'parameterized', 'twin', 'sample-max'],
                        default='synthetic', help='Agent initialization mode')
     parser.add_argument('--cores', type=int, help='Number of cores (default: 0.75 * available)')
     parser.add_argument('--runs', type=int, default=3, help='Runs per parameter combo')
