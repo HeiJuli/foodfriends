@@ -30,7 +30,9 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "rho": 0.25, #behavioural intentions,
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic"
-          "survey_file": "../data/hierarchical_agents.csv"
+          "survey_file": "../data/hierarchical_agents.csv",
+          "adjust_veg_fraction": True, #artificially increase veg fraction to match NL demographics
+          "target_veg_fraction": 0.06 #target vegetarian fraction (6% for Netherlands)
           }
 
 
