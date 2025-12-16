@@ -116,7 +116,11 @@ if __name__ == '__main__':
         ax = plt.subplot(5, 2, 2*i + 1)
         for w in w_i_values:
             r = results_dict[f'w_i={w}_sk={sk}']
-            ax.plot(r['fraction_veg'], label=f'w_i={w}', alpha=0.8, linewidth=1.5)
+            line, = ax.plot(r['fraction_veg'], label=f'w_i={w}', alpha=0.8, linewidth=1.5)
+            # Add arrow at final value on right y-axis
+            ax.annotate('', xy=(len(r['fraction_veg']), r['final']),
+                       xytext=(len(r['fraction_veg'])*0.98, r['final']),
+                       arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
         ax.set_xlabel('t (steps)' if i == 4 else '')
         ax.set_ylabel('Veg Fraction')
         ax.set_title(f'sigmoid_k={sk}, varying w_i')
@@ -125,12 +129,16 @@ if __name__ == '__main__':
         ax.set_ylim([-0.05, 1.05])
 
     # Grid 2: Fix w_i, vary sigmoid_k (5 subplots, one per w_i value)
-    for i, w in enumerate(w_i_values):
-        ax = plt.subplot(5, 2, 2*i + 2)
+    for j, w in enumerate(w_i_values):
+        ax = plt.subplot(5, 2, 2*j + 2)
         for sk in sigmoid_k_values:
             r = results_dict[f'w_i={w}_sk={sk}']
-            ax.plot(r['fraction_veg'], label=f'sk={sk}', alpha=0.8, linewidth=1.5)
-        ax.set_xlabel('t (steps)' if i == 4 else '')
+            line, = ax.plot(r['fraction_veg'], label=f'sk={sk}', alpha=0.8, linewidth=1.5)
+            # Add arrow at final value on right y-axis
+            ax.annotate('', xy=(len(r['fraction_veg']), r['final']),
+                       xytext=(len(r['fraction_veg'])*0.98, r['final']),
+                       arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
+        ax.set_xlabel('t (steps)' if j == 4 else '')
         ax.set_ylabel('Veg Fraction')
         ax.set_title(f'w_i={w}, varying sigmoid_k')
         ax.legend(loc='best', fontsize=8)
