@@ -397,7 +397,12 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
                 t_thousands = np.arange(len(trajectory)) / 1000
-                ax.plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
+                line, = ax.plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
+                # Add arrow at final value on right y-axis
+                final_val = trajectory[-1]
+                ax.annotate('', xy=(t_thousands[-1], final_val),
+                           xytext=(t_thousands[-1]*0.98, final_val),
+                           arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
 
         ax.set_title("Twin: Survey Individual Parameters")
     else:
@@ -463,8 +468,13 @@ def plot_parameter_sweep_trajectories(data=None, file_path=None, save=True):
         for j, (_, row) in enumerate(subset.iterrows()):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
-                ax.plot(np.arange(len(trajectory)), trajectory,
+                line, = ax.plot(np.arange(len(trajectory)), trajectory,
                        color=colors[j % len(colors)], alpha=0.7, linewidth=1)
+                # Add arrow at final value on right y-axis
+                final_val = trajectory[-1]
+                ax.annotate('', xy=(len(trajectory), final_val),
+                           xytext=(len(trajectory)*0.98, final_val),
+                           arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
 
         ax.set_title(param_set + label_suffix, fontsize=10)
         ax.set_xlabel('Time Steps')
