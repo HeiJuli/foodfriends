@@ -150,7 +150,33 @@ def sample_from_pmf(demo_key, pmf_tables, param, theta=None):
         all_vals.extend(cell['values'])
     return np.random.choice(all_vals) if all_vals else 0.5
 
+def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
+    """Load 385 demographically representative complete-case agents"""
+    df = pd.read_csv(filepath)
+    complete = df[df['has_alpha'] & df['has_rho']].copy()
 
+    # Target stratification for n=385 (perfect age representation)
+    age_targets = {
+        '18-29': 56,  # All available (bottleneck)
+        '30-39': 54,
+        '40-49': 56,
+        '50-59': 68,
+        '60-69': 80,
+        '70+': 71
+    }
+
+    sampled = []
+    for age_group, n_target in age_targets.items():
+        group = complete[complete['age_group'] == age_group]
+        if len(group) < n_target:
+            print(f"WARNING: Only {len(group)} agents in {age_group}, need {n_target}")
+            sampled.append(group)
+        else:
+            sampled.append(group.sample(n=n_target, replace=False))
+
+    result = pd.concat(sampled, ignore_index=True)
+    print(f"Sample-max mode: {len(result)} agents with perfect age stratification")
+    return result
 
 
 # %% Agent
@@ -280,13 +306,13 @@ class Agent():
         
     def prob_calc(self, other_agent):
         """
-        THRESHOLD MODEL WITH DISSONANCE: Switch when social exposure exceeds adjusted threshold
+        THRESHOLD MODEL WITH DISSONANCE: Additive social + internal pressure
 
         Mechanism:
         - Base threshold from rho (behavioral intentions)
-        - Dissonance modulates threshold: lower when preference misaligned with diet
-        - Social exposure weighted by beta (social influence weight)
-        - Sigmoid transition with w_i steepness parameter
+        - Social pressure: beta-weighted proportion (conformity/social influence)
+        - Internal pressure: alpha-weighted dissonance (independence/internal conflict)
+        - Combined signal compared to threshold via sigmoid
         """
         # Get proportion of opposite diet in recent memory
         opposite_diet = "meat" if self.diet == "veg" else "veg"
@@ -297,21 +323,19 @@ class Agent():
 
         proportion = sum(d == opposite_diet for d in mem) / len(mem)
 
-        # Base threshold from behavioral intentions
+        # Beta-weighted social pressure (pull from neighbors)
+        social_pressure = self.beta * proportion
+
+        # Alpha-weighted internal pressure (push from dissonance)
+        dissonance = self.dissonance_new()
+        internal_pressure = self.alpha * dissonance
+
+        # Combined signal vs threshold
+        total_signal = social_pressure + internal_pressure
         threshold = self.rho
 
-        # Adjust threshold with dissonance
-        dissonance = self.dissonance_new()
-        #threshold -= self.alpha * dissonance
-
-        # Clamp threshold to valid range
-        threshold = np.clip(threshold, 0, 1)
-
-        # Beta-weighted social exposure
-        social_exposure = self.beta * proportion
-
-        # Sigmoid: high probability when social_exposure exceeds threshold
-        prob_switch = 1 / (1 + math.exp(-self.params["w_i"] * (social_exposure - threshold)))
+        # Sigmoid: high probability when total signal exceeds threshold
+        prob_switch = 1 / (1 + math.exp(-self.params["w_i"] * (total_signal - threshold)))
 
         return prob_switch
 
@@ -495,33 +519,31 @@ class Agent():
 #%% Model 
 class Model():
     def __init__(self, params, pmf_tables = None):
-        
-        
+
+
         self.pmf_tables = pmf_tables
         self.params = params
         self.snapshots = {}  # Store network snapshots
         self.snapshot_times = [int(params["steps"] * r) for r in [0.33, 0.66]]
-            
-        if params['topology'] == "complete":
-            
-            self.G1 = nx.complete_graph(params["N"])
-        elif params['topology'] == "BA":  
-            self.G1 = nx.erdos_renyi_graph(
-                self.params["N"], self.params["erdos_p"])
-        
-        elif params['topology'] == "CSF":  
-             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, params["tc"])
-             
-        elif params['topology'] == "WS":  
-             self.G1 = nx.watts_strogatz_graph(params["N"], 6, params["tc"])
-        
-        #MM stands for majority class, mm for minority, tc is triadic closure
-        elif params['topology'] == "PATCH":
-            self.G1 = PATCH(params["N"], params["k"], float(params["veg_f"]), h_MM=0.6, tc=params["tc"], h_mm=0.7)
-            self.G1.generate()
-            
+
+        self._generate_network()
+
         self.system_C = []
-        self.fraction_veg = []  
+        self.fraction_veg = []
+
+    def _generate_network(self):
+        """Generate network topology based on params"""
+        if self.params['topology'] == "complete":
+            self.G1 = nx.complete_graph(self.params["N"])
+        elif self.params['topology'] == "BA":
+            self.G1 = nx.erdos_renyi_graph(self.params["N"], self.params["erdos_p"])
+        elif self.params['topology'] == "CSF":
+            self.G1 = nx.powerlaw_cluster_graph(self.params["N"], 6, self.params["tc"])
+        elif self.params['topology'] == "WS":
+            self.G1 = nx.watts_strogatz_graph(self.params["N"], 6, self.params["tc"])
+        elif self.params['topology'] == "PATCH":
+            self.G1 = PATCH(self.params["N"], self.params["k"], float(self.params["veg_f"]), h_MM=0.6, tc=self.params["tc"], h_mm=0.7)
+            self.G1.generate()  
     
     def record_fraction(self):
         fraction_veg = sum(i == "veg" for i in self.get_attributes("diet"))/self.params["N"]
@@ -542,10 +564,21 @@ class Model():
     
 
     def agent_ini(self):
-        
-        
-        if self.params["agent_ini"] == "twin":
-            self.survey_data = pd.read_csv(self.params["survey_file"])
+
+
+        if self.params["agent_ini"] in ["twin", "sample-max"]:
+            if self.params["agent_ini"] == "sample-max":
+                # Load pre-stratified 385 complete cases
+                self.survey_data = load_sample_max_agents(self.params["survey_file"])
+                # Override N to match sample-max size and regenerate network
+                if self.params["N"] != len(self.survey_data):
+                    old_N = self.params["N"]
+                    self.params["N"] = len(self.survey_data)
+                    print(f"INFO: Overriding N={old_N} to {len(self.survey_data)} for sample-max mode")
+                    print(f"INFO: Regenerating network with correct size")
+                    self._generate_network()
+            else:
+                self.survey_data = pd.read_csv(self.params["survey_file"])
             
             # Handle case where N is smaller than survey data
             if len(self.survey_data) > self.params["N"]:
