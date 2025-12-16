@@ -393,16 +393,21 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
     twin_data = data[data['agent_ini'] == 'twin']
     if len(twin_data) > 0:
         colors = create_color_variations("#984ea3", len(twin_data))
+        trajectories_data = []
         for i, (_, row) in enumerate(twin_data.iterrows()):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
                 t_thousands = np.arange(len(trajectory)) / 1000
                 line, = ax.plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
-                # Add arrow at final value on right y-axis
-                final_val = trajectory[-1]
-                ax.annotate('', xy=(t_thousands[-1], final_val),
-                           xytext=(t_thousands[-1]*0.98, final_val),
-                           arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
+                trajectories_data.append((line, trajectory[-1]))
+
+        # Add arrows after all lines plotted, using actual xlim
+        xlim = ax.get_xlim()
+        x_arrow = xlim[1]
+        for line, final_val in trajectories_data:
+            ax.annotate('', xy=(x_arrow, final_val),
+                       xytext=(x_arrow*0.98, final_val),
+                       arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
 
         ax.set_title("Twin: Survey Individual Parameters")
     else:
@@ -465,16 +470,21 @@ def plot_parameter_sweep_trajectories(data=None, file_path=None, save=True):
 
         # Plot all trajectories for this parameter set
         colors = create_color_variations(color_base, len(subset))
+        trajectories_data = []
         for j, (_, row) in enumerate(subset.iterrows()):
             trajectory = row['fraction_veg_trajectory']
             if isinstance(trajectory, list):
                 line, = ax.plot(np.arange(len(trajectory)), trajectory,
                        color=colors[j % len(colors)], alpha=0.7, linewidth=1)
-                # Add arrow at final value on right y-axis
-                final_val = trajectory[-1]
-                ax.annotate('', xy=(len(trajectory), final_val),
-                           xytext=(len(trajectory)*0.98, final_val),
-                           arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
+                trajectories_data.append((line, trajectory[-1]))
+
+        # Add arrows after all lines plotted, using actual xlim
+        xlim = ax.get_xlim()
+        x_arrow = xlim[1]
+        for line, final_val in trajectories_data:
+            ax.annotate('', xy=(x_arrow, final_val),
+                       xytext=(x_arrow*0.98, final_val),
+                       arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.5))
 
         ax.set_title(param_set + label_suffix, fontsize=10)
         ax.set_xlabel('Time Steps')
