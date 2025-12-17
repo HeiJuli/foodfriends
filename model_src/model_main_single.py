@@ -47,7 +47,7 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 780,
           "erdos_p": 3,
-          "steps": 50000,
+          "steps": 10000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
@@ -56,12 +56,12 @@ params = {"veg_CO2": 1390,
           "meat_f": 0.95,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
-          "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
+          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.36, #self dissonance
           "rho": 0.45, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "twin",#"synthetic",#'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic"
+          "agent_ini": "sample-max",#"synthetic",#'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic"
           "survey_file": "../data/hierarchical_agents.csv",
           "adjust_veg_fraction": True, #artificially increase veg fraction to match NL demographics
           "target_veg_fraction": 0.06 #target vegetarian fraction (6% for Netherlands)
@@ -879,7 +879,7 @@ class Model():
 # %%
 if __name__ == '__main__': 
 	
-	n_trajectories = 2
+	n_trajectories = 5
 	
 	params.update({'topology': 'PATCH'})
 	

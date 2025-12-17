@@ -53,7 +53,7 @@ params = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 600,
           "erdos_p": 3,
-          "steps": 25000,
+          "steps": 10000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "sigmoid_k": 12, #sigmoid steepness for dissonance scaling
@@ -68,7 +68,7 @@ params = {"veg_CO2": 1390,
           "alpha": 0.68, #self dissonance
           "rho": 0.45, #behavioural intentions
           "theta": 0.58, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": 'twin', #'synthetic', #choose between "twin" "parameterized" or "synthetic"
+          "agent_ini": 'sample-max', #'synthetic', #choose between "twin" "parameterized" or "synthetic"
           "survey_file": "../data/hierarchical_agents.csv",
           "adjust_veg_fraction": True, #artificially increase veg fraction to match NL demographics
           "target_veg_fraction": 0.06 #target vegetarian fraction (6% for Netherlands)
