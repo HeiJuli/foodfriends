@@ -109,7 +109,7 @@ if __name__ == '__main__':
             print(f"[w_i={w}, sigmoid_k={sk}] At 5k={r['at_5k']:.3f}, Final={r['final']:.3f}")
 
     # Plot results: Grid of trajectories
-    fig = plt.figure(figsize=(12.5, 10))
+    fig = plt.figure(figsize=(8, 10))
 
     # Grid 1: Fix sigmoid_k, vary w_i (5 subplots, one per sigmoid_k value)
     for i, sk in enumerate(sigmoid_k_values):
