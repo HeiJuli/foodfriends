@@ -27,6 +27,7 @@ import sys
 import os
 sys.path.append('..')
 from auxillary import network_stats
+from auxillary.sampling_utils import stratified_sample_agents
 
 # Fix for Windows numpy randint issue with netin
 # Only patch once to avoid recursion on module reload
@@ -582,10 +583,15 @@ class Model():
             
             # Handle case where N is smaller than survey data
             if len(self.survey_data) > self.params["N"]:
-                print(f"WARNING: Survey data has {len(self.survey_data)} participants but N={self.params['N']}")
-                print(f"WARNING: Randomly sampling {self.params['N']} participants from survey data")
-                self.survey_data = self.survey_data.sample(n=self.params["N"], random_state=42).reset_index(drop=True)
-                print(f"WARNING: Using {len(self.survey_data)} sampled participants for twin mode")
+                print(f"INFO: Survey data has {len(self.survey_data)} participants but N={self.params['N']}")
+                print(f"INFO: Using stratified sampling to preserve demographic distributions")
+                self.survey_data = stratified_sample_agents(
+                    self.survey_data,
+                    n_target=self.params["N"],
+                    strata_cols=['gender', 'age_group', 'incquart', 'educlevel'],
+                    random_state=42,
+                    verbose=True
+                ).reset_index(drop=True)
             elif len(self.survey_data) < self.params["N"]:
                 raise ValueError(f"Cannot create {self.params['N']} agents from only {len(self.survey_data)} survey participants. "
                                f"Either reduce N or provide more survey data.")
