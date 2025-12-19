@@ -51,7 +51,7 @@ params = {"veg_CO2": 1390,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
-          "M": 7, # memory length use 7 or 9 maybe.
+          "M": 9, # memory length use 7 or 9 maybe.
           "veg_f":0.05, #vegetarian fraction
           "meat_f": 0.95,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
@@ -165,7 +165,7 @@ def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
             print(f"WARNING: Only {len(group)} agents in {age_group}, need {n_target}")
             sampled.append(group)
         else:
-            sampled.append(group.sample(n=n_target, replace=False))
+            sampled.append(group.sample(n=n_target, replace=False, random_state=42))
 
     result = pd.concat(sampled, ignore_index=True)
     print(f"Sample-max mode: {len(result)} agents with perfect age stratification")
@@ -311,10 +311,10 @@ class Agent():
         
 
         delta = u_s - u_i
-        if delta < -0.5:  # Strong preference for current → minimal switching
-            prob_switch = 0.01
-        else:
-            prob_switch = 1/(1+math.exp(-4.0*delta))  # Steeper sigmoid
+        # if delta < -0.5:  # Strong preference for current → minimal switching
+        #     prob_switch = 0.01
+        # else:
+        prob_switch = 1/(1+math.exp(-5.0*delta))  # Steeper sigmoid
                 
 
         #scale by readiness to switch - only applies to meat-eaters (belief-action gap)
@@ -347,7 +347,7 @@ class Agent():
 
         # Dissonance activates only with social exposure to alternative
         veg_exposure = sum(1 for d in self.memory if d == "veg") / len(self.memory)
-        exposure_factor = 1 / (1 + np.exp(-15 * (veg_exposure - 0.2)))
+        exposure_factor = 1 / (1 + np.exp(-12 * (veg_exposure - 0.2)))
         gap = abs(self.theta - self.rho)
 
         return -gap * exposure_factor
