@@ -378,8 +378,13 @@ def plot_individual_reductions_distribution(data=None, file_path=None, save=True
     
     return plt.gca()
 #%%
-def plot_trajectory_param_twin(data=None, file_path=None, save=True):
-    """Plot twin mode trajectories only"""
+def plot_trajectory_param_twin(data=None, file_path=None, save=True, xlim_max=None):
+    """Plot twin mode trajectories only
+
+    Args:
+        xlim_max: Maximum x-axis limit in thousands (e.g., 20 for 20k timesteps).
+                  If None, uses full data range. Arrows always show steady state.
+    """
     set_publication_style()
 
     if data is None:
@@ -401,7 +406,11 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
                 line, = ax.plot(t_thousands, trajectory, color=colors[i % len(colors)], alpha=0.7, linewidth=lw)
                 trajectories_data.append((line, trajectory[-1]))
 
-        # Add arrows after all lines plotted, using actual xlim
+        # Set x-axis limits if specified
+        if xlim_max is not None:
+            ax.set_xlim(0, xlim_max)
+
+        # Add arrows at right edge showing steady state values
         xlim = ax.get_xlim()
         x_arrow = xlim[1]
         for line, final_val in trajectories_data:
@@ -427,8 +436,13 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True):
 
     return fig
 #%%
-def plot_parameter_sweep_trajectories(data=None, file_path=None, save=True):
-    """Plot trajectories grouped by parameter combinations for supplement. Supports parameterized mode."""
+def plot_parameter_sweep_trajectories(data=None, file_path=None, save=True, xlim_max=None):
+    """Plot trajectories grouped by parameter combinations for supplement. Supports parameterized mode.
+
+    Args:
+        xlim_max: Maximum x-axis limit in timesteps (e.g., 20000 for 20k timesteps).
+                  If None, uses full data range. Arrows always show steady state.
+    """
     set_publication_style()
 
     if data is None:
@@ -478,7 +492,11 @@ def plot_parameter_sweep_trajectories(data=None, file_path=None, save=True):
                        color=colors[j % len(colors)], alpha=0.7, linewidth=1)
                 trajectories_data.append((line, trajectory[-1]))
 
-        # Add arrows after all lines plotted, using actual xlim
+        # Set x-axis limits if specified
+        if xlim_max is not None:
+            ax.set_xlim(0, xlim_max)
+
+        # Add arrows at right edge showing steady state values
         xlim = ax.get_xlim()
         x_arrow = xlim[1]
         for line, final_val in trajectories_data:
@@ -561,10 +579,13 @@ def main():
             if file_path: plot_individual_reductions_distribution(file_path=file_path)
         elif choice == '6':
             file_path = select_file('trajectory_analysis')
-            if file_path: plot_trajectory_param_twin(file_path=file_path)
+            if file_path:
+                xlim_input = input("X-axis max limit in thousands (e.g., 20 for 20k) [Enter for auto]: ")
+                xlim_max = float(xlim_input) if xlim_input else None
+                plot_trajectory_param_twin(file_path=file_path, xlim_max=xlim_max)
         elif choice == '7':
             file_path = select_file('trajectory_analysis')
-            if file_path: 
+            if file_path:
                 data = load_data(file_path)
                 if data is not None and 'is_median_twin' in data.columns:
                     plot_network_agency_evolution(file_path=file_path, log_scale="loglog")
@@ -572,10 +593,12 @@ def main():
                     print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
         elif choice == '8':
             file_path = select_file('parameter_trajectories')
-            if file_path: 
+            if file_path:
+                xlim_input = input("X-axis max limit in timesteps (e.g., 20000 for 20k) [Enter for auto]: ")
+                xlim_max = float(xlim_input) if xlim_input else None
                 data = load_data(file_path)
                 if data is not None:
-                    plot_parameter_sweep_trajectories(data=data)
+                    plot_parameter_sweep_trajectories(data=data, xlim_max=xlim_max)
                 else:
                     print("No parameter sweep trajectory data found.")
         elif choice == '0':

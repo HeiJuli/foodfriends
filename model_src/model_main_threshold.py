@@ -51,7 +51,7 @@ from auxillary import network_stats
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 600,
+          "N": 5602,
           "erdos_p": 3,
           "steps": 10000,
           "k": 8, #initial edges per node for graph generation
@@ -63,14 +63,14 @@ params = {"veg_CO2": 1390,
           "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
-          "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
+          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.68, #self dissonance
           "rho": 0.45, #behavioural intentions
           "theta": 0.58, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": 'sample-max', #'synthetic', #choose between "twin" "parameterized" or "synthetic"
           "survey_file": "../data/hierarchical_agents.csv",
-          "adjust_veg_fraction": True, #artificially increase veg fraction to match NL demographics
+          "adjust_veg_fraction": False, #artificially increase veg fraction to match NL demographics
           "target_veg_fraction": 0.06 #target vegetarian fraction (6% for Netherlands)
           }
 
@@ -172,7 +172,7 @@ def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
             print(f"WARNING: Only {len(group)} agents in {age_group}, need {n_target}")
             sampled.append(group)
         else:
-            sampled.append(group.sample(n=n_target, replace=False))
+            sampled.append(group.sample(n=n_target, replace=False, random_state=42))
 
     result = pd.concat(sampled, ignore_index=True)
     print(f"Sample-max mode: {len(result)} agents with perfect age stratification")

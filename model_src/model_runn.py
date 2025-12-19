@@ -6,7 +6,8 @@ import pandas as pd
 import time
 import pickle
 from datetime import date
-import model_main_single as model_main
+#import model_main_single as model_main
+import model_main_threshold as model_main
 
 #%%
 DEFAULT_PARAMS = {"veg_CO2": 1390,
@@ -140,7 +141,8 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None):
     
     df = pd.DataFrame(results)
     ensure_output_dir()
-    filename = f'../model_output/emissions_{date.today().strftime("%Y%m%d")}.pkl'
+    agent_ini = params.get('agent_ini', 'other')
+    filename = f'../model_output/emissions_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved to {filename}")
     return df
@@ -202,7 +204,8 @@ def run_parameter_analysis(params=None, alpha_range=None,
     df = pd.DataFrame(results)
     ensure_output_dir()
     suffix = "trajectories" if record_trajectories else "analysis"
-    filename = f'../model_output/parameter_{suffix}_{date.today().strftime("%Y%m%d")}.pkl'
+    agent_ini = params.get('agent_ini', 'other')
+    filename = f'../model_output/parameter_{suffix}_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved to {filename}")
     return df
@@ -223,7 +226,8 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg=0.6):
     
     df = pd.DataFrame(results)
     ensure_output_dir()
-    filename = f'../model_output/veg_growth_{date.today().strftime("%Y%m%d")}.pkl'
+    agent_ini = params.get('agent_ini', 'other')
+    filename = f'../model_output/veg_growth_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved to {filename}")
     return df
@@ -263,7 +267,8 @@ def run_trajectory_analysis(params=None, runs_per_combo=5):
         print(f"Twin median trajectory: run {df.loc[median_idx, 'run']} with final_veg_f = {df.loc[median_idx, 'final_veg_f']:.3f}")
     
     ensure_output_dir()
-    filename = f'../model_output/trajectory_analysis_{date.today().strftime("%Y%m%d")}.pkl'
+    agent_ini = p.get('agent_ini', 'other')
+    filename = f'../model_output/trajectory_analysis_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved {len(r)} trajectories to {filename}")
     return df

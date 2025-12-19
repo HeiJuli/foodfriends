@@ -7,24 +7,25 @@ import time
 import argparse
 from datetime import date
 from multiprocessing import Pool
-import model_main_single as model_main
+#import model_main_single as model_main
+import model_main_threshold as model_main
 
 DEFAULT_PARAMS = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 100,
+          "N": 5602,
           "erdos_p": 3,
-          "steps": 30000,
+          "steps": 20000,
           "w_i": 5,
           "sigmoid_k": 12,
           "immune_n": 0.10,
           "k": 8,
-          "M": 10,
+          "M": 9,
           "veg_f":0.5,
           "meat_f": 0.5,
           "p_rewire": 0.1,
           "rewire_h": 0.1,
-          "tc": 0.2,
+          "tc": 0.3,
           'topology': "PATCH",
           "alpha": 0.35,
           "rho": 0.1,
@@ -85,7 +86,7 @@ def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
             print(f"WARNING: Only {len(group)} agents in {age_group}, need {n_target}")
             sampled.append(group)
         else:
-            sampled.append(group.sample(n=n_target, replace=False))
+            sampled.append(group.sample(n=n_target, replace=False, random_state=42))
 
     result = pd.concat(sampled, ignore_index=True)
     print(f"Sample-max mode: {len(result)} agents with perfect age stratification")
@@ -126,13 +127,18 @@ def get_model(params):
         return model_main.Model(params)
 
 def run_basic_model(params=None):
+    # Set seeds for reproducible sampling
+    np.random.seed(42)
+    import random
+    random.seed(42)
+
     params = params or DEFAULT_PARAMS.copy()
     if params["agent_ini"] == "parameterized":
-        survey_data = load_survey_data(params["survey_file"], 
+        survey_data = load_survey_data(params["survey_file"],
                                      ["nomem_encr", "alpha", "theta", "diet"])
         survey_params = extract_survey_params(survey_data)
         params.update(survey_params)
-    
+
     model = get_model(params)
     model.run()
     return model
@@ -158,6 +164,13 @@ def run_single_model(params):
 
 def run_single_trajectory_model(params):
     """Worker function for trajectory analysis"""
+    # Set seeds based on run ID for reproducible but distinct trajectories
+    run_id = params.get('run', 0)
+    seed = 42 + run_id  # Different seed for each trajectory, but reproducible
+    np.random.seed(seed)
+    import random
+    random.seed(seed)
+
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"],
                                      ["nomem_encr", "alpha", "theta", "diet"])
@@ -225,7 +238,8 @@ def run_parameter_analysis_parallel(base_params, alpha_range, beta_range,
     df = pd.DataFrame(results)
     ensure_output_dir()
     suffix = "trajectories" if record_trajectories else "analysis"
-    filename = f'../model_output/parameter_{suffix}_{date.today().strftime("%Y%m%d")}.pkl'
+    agent_ini = base_params.get('agent_ini', 'other')
+    filename = f'../model_output/parameter_{suffix}_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved to {filename}")
     return df
@@ -250,7 +264,8 @@ def run_emissions_analysis_parallel(base_params, num_runs, veg_fractions, n_core
 
     df = pd.DataFrame(results)
     ensure_output_dir()
-    filename = f'../model_output/emissions_{date.today().strftime("%Y%m%d")}.pkl'
+    agent_ini = base_params.get('agent_ini', 'other')
+    filename = f'../model_output/emissions_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved to {filename}")
     return df
@@ -270,7 +285,8 @@ def run_veg_growth_analysis(base_params, veg_fractions):
 
     df = pd.DataFrame(results)
     ensure_output_dir()
-    filename = f'../model_output/veg_growth_{date.today().strftime("%Y%m%d")}.pkl'
+    agent_ini = base_params.get('agent_ini', 'other')
+    filename = f'../model_output/veg_growth_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved to {filename}")
     return df
@@ -309,7 +325,8 @@ def run_trajectory_analysis_parallel(base_params, runs_per_combo, n_cores):
         print(f"Twin median trajectory: run {df.loc[median_idx, 'run']} with final_veg_f = {df.loc[median_idx, 'final_veg_f']:.3f}")
 
     ensure_output_dir()
-    filename = f'../model_output/trajectory_analysis_{date.today().strftime("%Y%m%d")}.pkl'
+    agent_ini = base_params.get('agent_ini', 'other')
+    filename = f'../model_output/trajectory_analysis_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved {len(results)} trajectories to {filename}")
     return df
