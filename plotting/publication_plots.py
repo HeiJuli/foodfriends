@@ -137,10 +137,16 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # Get median twin trajectory
     median_row = data[data['is_median_twin']].iloc[0]
     snapshots = median_row['snapshots']
+
+    # Diagnostic: print initial conditions
+    trajectory = median_row['fraction_veg_trajectory']
+    if isinstance(trajectory, list) and len(trajectory) > 0:
+        print(f"INFO: Initial veg fraction = {trajectory[0]:.3f}, Final = {trajectory[-1]:.3f}")
+        print(f"INFO: Trajectory length = {len(trajectory)} timesteps")
     
-    # Create figure
-    fig = plt.figure(figsize=(17.8*cm, 10*cm)) 
-    gs = fig.add_gridspec(2, 4, height_ratios=[2.5, 1], hspace=0.05, wspace=0.05)
+    # Create figure with 3 rows: networks, histograms, trajectories
+    fig = plt.figure(figsize=(17.8*cm, 13*cm))
+    gs = fig.add_gridspec(3, 4, height_ratios=[2.5, 1, 0.7], hspace=0.3, wspace=0.05)
     
     # Network layout
     G = snapshots['final']['graph']
@@ -156,13 +162,16 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     x_min, x_max = pos_array[:, 0].min(), pos_array[:, 0].max()
     y_min, y_max = pos_array[:, 1].min(), pos_array[:, 1].max()
     
-    # Get 4 time points
-    all_times = sorted([t for t in snapshots.keys() if isinstance(t, int)])
+    # Get 4 time points: t0, tmax/3, 2*tmax/3, tfinal
+    # Exclude 0 from all_times since we add it explicitly
+    all_times = sorted([t for t in snapshots.keys() if isinstance(t, int) and t > 0])
     if len(all_times) >= 2:
-        time_points = [0, all_times[len(all_times)//3], all_times[2*len(all_times)//3], 'final']
+        # Use actual timestep values from snapshots (should be steps/3 and 2*steps/3)
+        time_points = [0, all_times[0], all_times[1], 'final']
     else:
         time_points = [0] + all_times + ['final']
     time_points = time_points[:4]
+    print(f"INFO: Plotting snapshots at times: {time_points}")
     
     # Plot networks and histograms
     for i, t in enumerate(time_points):
@@ -176,25 +185,26 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=2, alpha=0.9,
                               edgecolors='black', linewidths=0.2)
         
-        # Highlight top reducers and add labels
+        # Highlight top 10% reducers and add label to top reducer only
         reductions = np.array(snap['reductions'])
         if np.max(reductions) > 0:
-            top3_idx = np.argsort(reductions)[-3:]
-            top3_nodes = [list(G.nodes())[j] for j in top3_idx if reductions[j] > 0]
-            if top3_nodes:
-                nx.draw_networkx_nodes(G, pos, nodelist=top3_nodes, ax=net_ax,
-                                     node_color='#f4a261', node_size=8, alpha=1.0,
+            n_top = max(1, int(0.1 * len(reductions)))
+            top_idx = np.argsort(reductions)[-n_top:]
+            top_nodes = [list(G.nodes())[j] for j in top_idx if reductions[j] > 0]
+            if top_nodes:
+                nx.draw_networkx_nodes(G, pos, nodelist=top_nodes, ax=net_ax,
+                                     node_color='#f4a261', node_size=5, alpha=1.0,
                                      edgecolors='black', linewidths=0.2)
-                
-        
-                # Add reduction labels
-                for j, node in zip(top3_idx, top3_nodes):
-                    if reductions[j] > 0:
-                        x, y = pos[node]
-                        net_ax.annotate(f'{reductions[j]:.0f}', (x, y), 
-                                      xytext=(8, 8), textcoords='offset points',
-                                      fontsize=5, fontweight='bold',
-                                      bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
+
+                # Add label only for the top reducer
+                top_reducer_idx = top_idx[-1]
+                top_reducer_node = list(G.nodes())[top_reducer_idx]
+                if reductions[top_reducer_idx] > 0:
+                    x, y = pos[top_reducer_node]
+                    net_ax.annotate(f'{reductions[top_reducer_idx]:.0f}', (x, y),
+                                  xytext=(8, 8), textcoords='offset points',
+                                  fontsize=5, fontweight='bold',
+                                  bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
         
         title = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f't = {t//1000}k'
         net_ax.set_title(title, fontsize=12)
@@ -237,7 +247,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                 kde = gaussian_kde(nonzero)
                 x_range = np.linspace(nonzero.min(), nonzero.max(), 200)
                 density = kde(x_range)
-                hist_ax.plot(x_range, density, color=COLORS['primary'], linewidth=2, alpha=0.9)
+                hist_ax.plot(x_range, density, color=COLORS['primary'], linewidth=1.0, alpha=0.9)
 
             if log_scale == 'y':
                 hist_ax.set_yscale('log')
@@ -251,16 +261,60 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         # Clean axis styling
         hist_ax.spines['top'].set_visible(False)
         hist_ax.spines['right'].set_visible(False)
-        
+
+        # Reduce tick label size
+        hist_ax.tick_params(axis='both', labelsize=7)
+
         if i == 0:
             hist_ax.set_ylabel('Density', fontsize=8)
         else:
             hist_ax.set_ylabel('')
             hist_ax.tick_params(labelleft=False)
-        
+
         if i == 1 or i == 2:  # Only middle plots get x-label
             hist_ax.set_xlabel('Reduction [tonnes CO₂]', fontsize=8)
-    
+
+        # Trajectory subplot (third row)
+        traj_ax = fig.add_subplot(gs[2, i])
+        trajectory = median_row['fraction_veg_trajectory']
+
+        if isinstance(trajectory, list):
+            # Determine end index for this timepoint
+            if t == 0:
+                end_idx = 1
+            elif t == 'final':
+                end_idx = len(trajectory)
+            else:
+                end_idx = t
+
+            # Plot trajectory up to this timepoint
+            t_range = np.arange(end_idx) / 1000  # Convert to thousands
+            traj_ax.plot(t_range, trajectory[:end_idx], color=COLORS['vegetation'],
+                        linewidth=1.2, alpha=0.9)
+            traj_ax.scatter(t_range[-1], trajectory[end_idx-1], color=COLORS['vegetation'],
+                          s=15, zorder=5, edgecolors='black', linewidths=0.3)
+
+            # Styling
+            traj_ax.set_ylim(0, 0.5)
+            traj_ax.spines['top'].set_visible(False)
+            traj_ax.spines['right'].set_visible(False)
+
+            if i == 0:
+                traj_ax.set_ylabel('$F_{veg}$', fontsize=8)
+            else:
+                traj_ax.set_ylabel('')
+                traj_ax.tick_params(labelleft=False)
+
+            # All trajectory plots get x-labels (bottom row)
+            traj_ax.set_xlabel('t [thousands]', fontsize=8)
+
+            # Reduce tick label size to prevent overlap
+            traj_ax.tick_params(axis='both', labelsize=7)
+
+            # Consistent x-axis across all panels
+            max_t = len(trajectory) / 1000
+            traj_ax.set_xlim(0, max_t)
+
     # Legend
     from matplotlib.patches import Patch
     legend_elements = [
@@ -271,7 +325,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.99), ncol=3)
     
     plt.tight_layout()
-    plt.subplots_adjust(top=0.92)
+    plt.subplots_adjust(top=0.94)
     
     if save:
         output_dir = ensure_output_dir()

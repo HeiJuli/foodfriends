@@ -27,7 +27,7 @@ import sys
 import os
 sys.path.append('..')
 from auxillary import network_stats
-from auxillary.sampling_utils import stratified_sample_agents
+from auxillary.sampling_utils import stratified_sample_agents, load_sample_max_agents
 
 # Fix for Windows numpy randint issue with netin
 # Only patch once to avoid recursion on module reload
@@ -52,7 +52,7 @@ from auxillary.sampling_utils import stratified_sample_agents
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 5602,
+          "N": 150,
           "erdos_p": 3,
           "steps": 10000,
           "k": 8, #initial edges per node for graph generation
@@ -156,6 +156,9 @@ def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
     df = pd.read_csv(filepath)
     complete = df[df['has_alpha'] & df['has_rho']].copy()
 
+    # Sort by nomem_encr to ensure stable row ordering across runs
+    complete = complete.sort_values('nomem_encr').reset_index(drop=True)
+
     # Target stratification for n=385 (perfect age representation)
     age_targets = {
         '18-29': 56,  # All available (bottleneck)
@@ -168,7 +171,7 @@ def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
 
     sampled = []
     for age_group, n_target in age_targets.items():
-        group = complete[complete['age_group'] == age_group]
+        group = complete[complete['age_group'] == age_group].reset_index(drop=True)
         if len(group) < n_target:
             print(f"WARNING: Only {len(group)} agents in {age_group}, need {n_target}")
             sampled.append(group)
@@ -185,13 +188,13 @@ def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
 class Agent():
     
     def __init__(self, i, params, **kwargs):
-        
+
+        self.i = i  # Set ID first for debugging
         self.params = params
         # types can be vegetarian or meat eater
         self.set_params(**kwargs)
         self.C = self.diet_emissions(self.diet)
         self.memory = []
-        self.i = i
         self.survey_id = kwargs.get('survey_id', i)  # Original survey ID if available
         self.reduction_out = 0
         self.diet_duration = 0  # Track how long agent maintains current diet
@@ -206,49 +209,46 @@ class Agent():
     
     
     def set_params(self, **kwargs):
-        
-        #TODO: need to change these "synthetic" distibutions to have the right form 
+
+        #TODO: need to change these "synthetic" distibutions to have the right form
         # e.g theta is not normally distributed, but has a left-skewed distribution
         # thinking of not doing this
-        if self.params["agent_ini"] != "twin":
+        if self.params["agent_ini"] not in ["twin", "sample-max"]:
             self.diet = self.choose_diet()
             self.rho = self.choose_alpha_beta(self.params["rho"])
             self.theta = st.truncnorm.rvs(-1, 1, loc=self.params["theta"])
             self.alpha = self.choose_alpha_beta(self.params["alpha"])
             self.beta = 1-self.alpha
         else:
-            # Twin mode: set theta/diet from survey, sample alpha/rho from PMF
+            # Twin/sample-max mode: set theta/diet from survey, sample alpha/rho from PMF if needed
             for key, value in kwargs.items():
                 setattr(self, key, value)
-                # Ensure alpha-beta complementarity for hierarchical CSV
-                
+
             if hasattr(self, 'alpha') and not hasattr(self, 'beta'):
                 self.beta = 1 - self.alpha
-                
+
+            # Check if this is a complete case (has all survey parameters)
+            is_complete_case = (hasattr(self, 'has_alpha') and self.has_alpha and
+                               hasattr(self, 'has_rho') and self.has_rho)
+
             # Use hierarchical matching first, then PMF for gaps, finally synthetic fallback
-            if hasattr(self, 'demographics') and hasattr(self, 'pmf_tables') and self.pmf_tables:
-                # Check if we have direct alpha match from survey
-                if hasattr(self, 'has_alpha') and self.has_alpha and hasattr(self, 'alpha'):
-                    # Use direct alpha from hierarchical matching
-                    pass  # self.alpha already set from kwargs
-                else:
-                    # Sample alpha from theta-stratified PMF using demographics AND theta
+            if is_complete_case:
+                # Complete case: use survey values directly, no PMF needed
+                self.beta = 1 - self.alpha
+            elif hasattr(self, 'demographics') and hasattr(self, 'pmf_tables') and self.pmf_tables:
+                # Partial case with PMF tables: use survey values where available, sample from PMF for gaps
+                if not (hasattr(self, 'has_alpha') and self.has_alpha and hasattr(self, 'alpha')):
                     self.alpha = sample_from_pmf(self.demographics, self.pmf_tables, 'alpha', theta=self.theta)
 
-                # Check if we have direct rho match from survey
-                if hasattr(self, 'has_rho') and self.has_rho and hasattr(self, 'rho'):
-                    # Use direct rho from hierarchical matching
-                    pass  # self.rho already set from kwargs
-                else:
-                    # Sample rho from theta-stratified PMF using demographics AND theta
+                if not (hasattr(self, 'has_rho') and self.has_rho and hasattr(self, 'rho')):
                     self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho', theta=self.theta)
-                
-                self.beta = 1 - self.alpha  # Recalculate beta after new alpha
+
+                self.beta = 1 - self.alpha
             else:
-                # Existing synthetic fallback
+                # No survey data and no PMF tables: use synthetic fallback
                 self.rho = st.truncnorm.rvs(-1, 1, loc=0.48, scale=0.31)
                 self.alpha = st.truncweibull_min.rvs(248.69, 0, 1, loc=-47.38, scale=48.2)
-                self.beta = 1 - self.alpha  # Recalculate beta after new alpha
+                self.beta = 1 - self.alpha
                 
         
     def choose_diet(self):
@@ -525,7 +525,7 @@ class Model():
         self.pmf_tables = pmf_tables
         self.params = params
         self.snapshots = {}  # Store network snapshots
-        self.snapshot_times = [int(params["steps"] * r) for r in [0.33, 0.66]]
+        self.snapshot_times = [params["steps"] // 3, 2 * params["steps"] // 3]
 
         self._generate_network()
 
@@ -870,7 +870,7 @@ class Model():
 
             # Select random agent
             i = np.random.choice(range(len(self.agents)))
-
+            
             # Update based on pairwise interaction
             self.agents[i].step(self.G1, self.agents, t)
             self.rewire(self.agents[i],)
@@ -893,7 +893,7 @@ class Model():
 # %%
 if __name__ == '__main__': 
 	
-	n_trajectories = 2
+	n_trajectories = 6
 	
 	params.update({'topology': 'PATCH'})
 	

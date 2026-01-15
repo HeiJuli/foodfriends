@@ -81,3 +81,34 @@ def stratified_sample_agents(df, n_target, strata_cols=['gender', 'age_group', '
         print(f"INFO: Maximum demographic deviation: {max_diff*100:.2f}%")
 
     return result
+
+def load_sample_max_agents(filepath):
+    """Load 385 demographically representative complete-case agents (has_alpha=True & has_rho=True)"""
+    df = pd.read_csv(filepath)
+    complete = df[df['has_alpha'] & df['has_rho']].copy()
+
+    # Sort by nomem_encr to ensure stable row ordering across runs
+    complete = complete.sort_values('nomem_encr').reset_index(drop=True)
+
+    # Target stratification for n=385 (perfect age representation)
+    age_targets = {
+        '18-29': 56,  # All available (bottleneck)
+        '30-39': 54,
+        '40-49': 56,
+        '50-59': 68,
+        '60-69': 80,
+        '70+': 71
+    }
+
+    sampled = []
+    for age_group, n_target in age_targets.items():
+        group = complete[complete['age_group'] == age_group].reset_index(drop=True)
+        if len(group) < n_target:
+            print(f"WARNING: Only {len(group)} agents in {age_group}, need {n_target}")
+            sampled.append(group)
+        else:
+            sampled.append(group.sample(n=n_target, replace=False, random_state=42))
+
+    result = pd.concat(sampled, ignore_index=True)
+    print(f"Sample-max mode: {len(result)} agents with perfect age stratification")
+    return result
