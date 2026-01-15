@@ -478,7 +478,7 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True, xlim_max=No
 
     ax.set_xlabel("t (thousands)")
     ax.set_ylabel("Vegetarian Fraction")
-    ax.set_ylim(0, 1)
+    ax.set_ylim(0, 0.5)
     apply_axis_style(ax)
 
     plt.tight_layout()
