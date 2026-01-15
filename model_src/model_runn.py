@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Streamlined model running script"""
 import os
+import sys
 import numpy as np
 import pandas as pd
 import time
@@ -8,6 +9,8 @@ import pickle
 from datetime import date
 #import model_main_single as model_main
 import model_main_threshold as model_main
+sys.path.append('..')
+from auxillary.sampling_utils import load_sample_max_agents
 
 #%%
 DEFAULT_PARAMS = {"veg_CO2": 1390,
@@ -15,22 +18,22 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 150,
           "erdos_p": 3,
-          "steps": 30000,
+          "steps": 5000,
           "w_i": 5, #weight of the replicator function
           "sigmoid_k": 12, #sigmoid steepness for dissonance scaling
           "immune_n": 0.10,
           "k": 8, #initial edges per node for graph generation
-          "M": 10, # memory length
-          "veg_f":0.5, #vegetarian fraction
-          "meat_f": 0.5,  #meat eater fraciton
+          "M": 9, # memory length
+          "veg_f":0.1, #vegetarian fraction
+          "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet2
-          "tc": 0.2, #probability of triadic closure for CSF, PATCH network gens
+          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
           'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.36, #self dissonance
           "rho": 0.25, #behavioural intentions,
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "other", #choose between "twin" "parameterized" or "synthetic"
+          "agent_ini": "sample-max", #choose between "twin" "parameterized" or "synthetic"
           "survey_file": "../data/hierarchical_agents.csv",
           "adjust_veg_fraction": True, #artificially increase veg fraction to match NL demographics
           "target_veg_fraction": 0.06 #target vegetarian fraction (6% for Netherlands)
@@ -68,10 +71,13 @@ def load_survey_data(filepath, variables):
     return data
 
 def get_model(params):
-    """Create model with PMF tables if twin mode"""
+    """Create model with PMF tables if twin mode (sample-max doesn't need them)"""
     if params.get("agent_ini") == "twin":
         pmf_tables = load_pmf_tables()
         return model_main.Model(params, pmf_tables=pmf_tables)
+    elif params.get("agent_ini") == "sample-max":
+        # Sample-max uses only complete cases, no PMF imputation needed
+        return model_main.Model(params, pmf_tables=None)
     else:
         return model_main.Model(params)
     
@@ -233,41 +239,40 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg=0.6):
     return df
 
 def run_trajectory_analysis(params=None, runs_per_combo=5):
-    """Run trajectory analysis for twin mode only"""
+    """Run trajectory analysis for twin or sample-max mode"""
     p = DEFAULT_PARAMS.copy() if params is None else params.copy()
     r = []
 
-    # Twin mode - use N from params
+    # Use agent_ini from params (twin or sample-max)
     twn = p.copy()
-    twn.update({"agent_ini": "twin"})
-    print(f"INFO: Using N={twn['N']} for twin mode")
+    agent_ini = twn.get("agent_ini", "twin")
+    print(f"INFO: Using N={twn['N']} for {agent_ini} mode")
     for i in range(runs_per_combo):
         model = get_model(twn)
         model.run()
         agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'theta']}
         agent_means['beta'] = 1 - agent_means['alpha']
         r.append({
-            'agent_ini': "twin", **agent_means,
+            'agent_ini': agent_ini, **agent_means,
             'initial_veg_f': sum(ag.diet=="veg" for ag in model.agents)/len(model.agents),
             'final_veg_f': model.fraction_veg[-1],
             'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
             'snapshots': model.snapshots if hasattr(model, 'snapshots') else None,
             'run': i, 'parameter_set': "Survey Individual Parameters"
         })
-    
+
     df = pd.DataFrame(r)
-    
-    # Find median twin trajectory for network plots
-    twin_data = df[df['agent_ini'] == 'twin']
-    if len(twin_data) > 0:
-        final_veg = twin_data['final_veg_f'].values
-        median_idx = twin_data.index[np.argmin(np.abs(final_veg - np.median(final_veg)))]
+
+    # Find median trajectory for network plots
+    mode_data = df[df['agent_ini'] == agent_ini]
+    if len(mode_data) > 0:
+        final_veg = mode_data['final_veg_f'].values
+        median_idx = mode_data.index[np.argmin(np.abs(final_veg - np.median(final_veg)))]
         df['is_median_twin'] = False
         df.loc[median_idx, 'is_median_twin'] = True
-        print(f"Twin median trajectory: run {df.loc[median_idx, 'run']} with final_veg_f = {df.loc[median_idx, 'final_veg_f']:.3f}")
-    
+        print(f"{agent_ini} median trajectory: run {df.loc[median_idx, 'run']} with final_veg_f = {df.loc[median_idx, 'final_veg_f']:.3f}")
+
     ensure_output_dir()
-    agent_ini = p.get('agent_ini', 'other')
     filename = f'../model_output/trajectory_analysis_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved {len(r)} trajectories to {filename}")
@@ -275,20 +280,20 @@ def run_trajectory_analysis(params=None, runs_per_combo=5):
 
 def main():
     print("===== Streamlined Dietary Contagion Model Analysis =====")
-    
+
     # Agent initialization mode
-    print("\n[1] Synthetic [2] Parameterized [3] Twin")
-    init_choice = input("Select initialization (1-3, default 1): ")
-    
-    agent_ini = {"2": "parameterized", "3": "twin"}.get(init_choice, "synthetic")
+    print("\n[1] Synthetic [2] Parameterized [3] Twin [4] Sample-max")
+    init_choice = input("Select initialization (1-4, default 1): ")
+
+    agent_ini = {"2": "parameterized", "3": "twin", "4": "sample-max"}.get(init_choice, "synthetic")
     params = DEFAULT_PARAMS.copy()
     params["agent_ini"] = agent_ini
-    
-    if agent_ini in ["parameterized", "twin"]:
+
+    if agent_ini in ["parameterized", "twin", "sample-max"]:
         survey_file = input(f"Survey file ({params['survey_file']}): ") or params['survey_file']
         params["survey_file"] = survey_file
-        
-    if agent_ini == "twin":
+
+    if agent_ini in ["twin", "sample-max"]:
         pmf_tables = load_pmf_tables()
         params["pmf_tables"] = pmf_tables
         
@@ -313,7 +318,7 @@ def main():
             timer(run_veg_growth_analysis, params=params,
                   veg_fractions=np.linspace(0.1, 0.6, 10))
         elif choice == '4':
-            timer(run_trajectory_analysis, params=params, runs_per_combo=4)
+            timer(run_trajectory_analysis, params=params, runs_per_combo=10)
         elif choice == '5':
             timer(run_parameter_analysis, params=params,
                   alpha_range=np.linspace(0.1, 0.9, 3),

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Production parallel model runner with CLI interface"""
 import os
+import sys
 import numpy as np
 import pandas as pd
 import time
@@ -9,6 +10,8 @@ from datetime import date
 from multiprocessing import Pool
 #import model_main_single as model_main
 import model_main_threshold as model_main
+sys.path.append('..')
+from auxillary.sampling_utils import load_sample_max_agents
 
 DEFAULT_PARAMS = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
@@ -64,34 +67,6 @@ def extract_survey_params(survey_data):
         params['meat_f'] = 1 - params['veg_f']
     return params
 
-def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
-    """Load 385 demographically representative complete-case agents"""
-    df = pd.read_csv(filepath)
-    complete = df[df['has_alpha'] & df['has_rho']].copy()
-
-    # Target stratification for n=385 (perfect age representation)
-    age_targets = {
-        '18-29': 56,  # All available (bottleneck)
-        '30-39': 54,
-        '40-49': 56,
-        '50-59': 68,
-        '60-69': 80,
-        '70+': 71
-    }
-
-    sampled = []
-    for age_group, n_target in age_targets.items():
-        group = complete[complete['age_group'] == age_group]
-        if len(group) < n_target:
-            print(f"WARNING: Only {len(group)} agents in {age_group}, need {n_target}")
-            sampled.append(group)
-        else:
-            sampled.append(group.sample(n=n_target, replace=False, random_state=42))
-
-    result = pd.concat(sampled, ignore_index=True)
-    print(f"Sample-max mode: {len(result)} agents with perfect age stratification")
-    return result
-
 def load_pmf_tables(filepath="../data/demographic_pmfs.pkl"):
     """Load PMF tables for alpha/rho sampling"""
     try:
@@ -119,8 +94,8 @@ def sample_from_pmf(demo_key, pmf_tables, param):
     return np.random.choice(all_vals) if all_vals else 0.5
 
 def get_model(params):
-    """Create model with PMF tables if twin mode. Sample-max mode doesn't need PMF tables (all complete cases)"""
-    if params.get("agent_ini") == "twin":
+    """Create model with PMF tables if twin or sample-max mode"""
+    if params.get("agent_ini") in ["twin", "sample-max"]:
         pmf_tables = load_pmf_tables()
         return model_main.Model(params, pmf_tables=pmf_tables)
     else:
@@ -292,17 +267,17 @@ def run_veg_growth_analysis(base_params, veg_fractions):
     return df
 
 def run_trajectory_analysis_parallel(base_params, runs_per_combo, n_cores):
-    """Parallel trajectory analysis for twin mode only"""
+    """Parallel trajectory analysis for twin or sample-max mode"""
     param_list = []
 
-    # Twin mode - use N from base_params
-    twin_N = base_params["N"]
-    print(f"INFO: Using N={twin_N} for twin mode")
+    # Use agent_ini from base_params
+    agent_ini = base_params.get("agent_ini", "twin")
+    target_N = base_params["N"]
+    print(f"INFO: Using N={target_N} for {agent_ini} mode")
 
     for i in range(runs_per_combo):
         p = base_params.copy()
         p.update({
-            "agent_ini": "twin", "N": twin_N,
             "parameter_set": "Survey Individual Parameters",
             "run": i
         })
@@ -315,17 +290,16 @@ def run_trajectory_analysis_parallel(base_params, runs_per_combo, n_cores):
 
     df = pd.DataFrame(results)
 
-    # Mark median twin trajectory
-    twin_data = df[df['agent_ini'] == 'twin']
-    if len(twin_data) > 0:
-        final_veg = twin_data['final_veg_f'].values
-        median_idx = twin_data.index[np.argmin(np.abs(final_veg - np.median(final_veg)))]
+    # Mark median trajectory
+    mode_data = df[df['agent_ini'] == agent_ini]
+    if len(mode_data) > 0:
+        final_veg = mode_data['final_veg_f'].values
+        median_idx = mode_data.index[np.argmin(np.abs(final_veg - np.median(final_veg)))]
         df['is_median_twin'] = False
         df.loc[median_idx, 'is_median_twin'] = True
-        print(f"Twin median trajectory: run {df.loc[median_idx, 'run']} with final_veg_f = {df.loc[median_idx, 'final_veg_f']:.3f}")
+        print(f"{agent_ini} median trajectory: run {df.loc[median_idx, 'run']} with final_veg_f = {df.loc[median_idx, 'final_veg_f']:.3f}")
 
     ensure_output_dir()
-    agent_ini = base_params.get('agent_ini', 'other')
     filename = f'../model_output/trajectory_analysis_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
     df.to_pickle(filename)
     print(f"Saved {len(results)} trajectories to {filename}")
