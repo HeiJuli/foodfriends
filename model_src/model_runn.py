@@ -7,8 +7,8 @@ import pandas as pd
 import time
 import pickle
 from datetime import date
-#import model_main_single as model_main
-import model_main_threshold as model_main
+import model_main_single as model_main
+#import model_main_threshold as model_main
 sys.path.append('..')
 from auxillary.sampling_utils import load_sample_max_agents
 
@@ -18,24 +18,24 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 150,
           "erdos_p": 3,
-          "steps": 5000,
+          "steps": 250000,
           "w_i": 5, #weight of the replicator function
           "sigmoid_k": 12, #sigmoid steepness for dissonance scaling
           "immune_n": 0.10,
           "k": 8, #initial edges per node for graph generation
-          "M": 9, # memory length
+          "M": 8, # memory length
           "veg_f":0.1, #vegetarian fraction
           "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet2
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
-          'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "homophilic_emp", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.36, #self dissonance
           "rho": 0.25, #behavioural intentions,
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
           "agent_ini": "sample-max", #choose between "twin" "parameterized" or "synthetic"
           "survey_file": "../data/hierarchical_agents.csv",
-          "adjust_veg_fraction": True, #artificially increase veg fraction to match NL demographics
+          "adjust_veg_fraction": False, #artificially increase veg fraction to match NL demographics
           "target_veg_fraction": 0.06 #target vegetarian fraction (6% for Netherlands)
           }
 
@@ -54,15 +54,6 @@ def timer(func, *args, **kwargs):
     print(f"Runtime: {int(elapsed/60)} mins {elapsed%60:.1f}s")
     return result
 
-def load_pmf_tables():
-    try:
-        import pickle
-        with open("../data/demographic_pmfs.pkl", 'rb') as f:
-            return pickle.load(f)
-    except FileNotFoundError:
-        print("Warning: demographic_pmfs.pkl not found, using synthetic for alpha/rho")
-        return None
-    
 def load_survey_data(filepath, variables):
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Survey file not found: {filepath}")
