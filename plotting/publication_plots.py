@@ -146,7 +146,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     
     # Create figure with 3 rows: networks, histograms, trajectories
     fig = plt.figure(figsize=(17.8*cm, 13*cm))
-    gs = fig.add_gridspec(3, 4, height_ratios=[2.5, 1, 0.7], hspace=0.3, wspace=0.05)
+    gs = fig.add_gridspec(3, 4, height_ratios=[2.5, 1, 0.7], hspace=0.15, wspace=0.05)
     
     # Network layout
     G = snapshots['final']['graph']
@@ -185,43 +185,53 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=2, alpha=0.9,
                               edgecolors='black', linewidths=0.2)
         
-        # Highlight top 10% reducers and add label to top reducer only
+        # Highlight top 10% reducers and store top reducer info
         reductions = np.array(snap['reductions'])
+        top_reducer_value = 0
         if np.max(reductions) > 0:
             n_top = max(1, int(0.1 * len(reductions)))
             top_idx = np.argsort(reductions)[-n_top:]
-            top_nodes = [list(G.nodes())[j] for j in top_idx if reductions[j] > 0]
-            if top_nodes:
-                nx.draw_networkx_nodes(G, pos, nodelist=top_nodes, ax=net_ax,
-                                     node_color='#f4a261', node_size=5, alpha=1.0,
+
+            # Draw top 10% reducers (excluding the top reducer)
+            top_10_nodes = [list(G.nodes())[j] for j in top_idx[:-1] if reductions[j] > 0]
+            if top_10_nodes:
+                nx.draw_networkx_nodes(G, pos, nodelist=top_10_nodes, ax=net_ax,
+                                     node_color='#00CC66', node_size=5, alpha=1.0,
                                      edgecolors='black', linewidths=0.2)
 
-                # Add label only for the top reducer
-                top_reducer_idx = top_idx[-1]
-                top_reducer_node = list(G.nodes())[top_reducer_idx]
-                if reductions[top_reducer_idx] > 0:
-                    x, y = pos[top_reducer_node]
-                    net_ax.annotate(f'{reductions[top_reducer_idx]:.0f}', (x, y),
-                                  xytext=(8, 8), textcoords='offset points',
-                                  fontsize=5, fontweight='bold',
-                                  bbox=dict(boxstyle='round,pad=0.2', fc='white', alpha=0.8))
+            # Draw top reducer in lighter green
+            top_reducer_idx = top_idx[-1]
+            top_reducer_node = list(G.nodes())[top_reducer_idx]
+            if reductions[top_reducer_idx] > 0:
+                nx.draw_networkx_nodes(G, pos, nodelist=[top_reducer_node], ax=net_ax,
+                                     node_color='#33FF88', node_size=5, alpha=1.0,
+                                     edgecolors='black', linewidths=0.2)
+                top_reducer_value = reductions[top_reducer_idx]
         
         title = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f't = {t//1000}k'
         net_ax.set_title(title, fontsize=12)
-        
+
         # Set consistent bounds and aspect ratio
         padding = 0.02
         net_ax.set_xlim(x_min - padding, x_max + padding)
         net_ax.set_ylim(y_min - padding, y_max + padding)
         net_ax.set_aspect('equal', adjustable='box')
         net_ax.axis('off')
+
+        # Add text box below network showing top reducer value
+        if top_reducer_value > 0:
+            net_ax.text(0.5, -0.05, f'{top_reducer_value/1000:.1f} tonnes CO₂e',
+                       transform=net_ax.transAxes, ha='center', va='top',
+                       fontsize=6, fontweight='bold',
+                       bbox=dict(boxstyle='round,pad=0.3', fc='white',
+                                edgecolor='#33FF88', linewidth=1.0, linestyle=(0, (5, 2)), alpha=0.9))
         
         # Histogram subplot
         hist_ax = fig.add_subplot(gs[1, i])
         reductions_tonnes = reductions / 1000  # Convert to tonnes
-        
+
         if np.max(reductions) == 0:
-            hist_ax.text(0.5, 0.5, 'No reductions yet', ha='center', va='center', 
+            hist_ax.text(0.5, 0.5, 'No reductions yet', ha='center', va='center',
                         transform=hist_ax.transAxes, fontsize=8, color='gray')
             # Apply consistent scaling even for empty plots
             if log_scale == 'loglog':
@@ -240,14 +250,18 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             hist_ax.hist(reductions_tonnes, bins=30, density=True, color=COLORS['secondary'],
                         alpha=0.5, edgecolor='white', linewidth=0.5)
 
-            # Overlay density plot
-            from scipy.stats import gaussian_kde
-            nonzero = reductions_tonnes[reductions_tonnes > 0]
-            if len(nonzero) > 10:
-                kde = gaussian_kde(nonzero)
-                x_range = np.linspace(nonzero.min(), nonzero.max(), 200)
-                density = kde(x_range)
-                hist_ax.plot(x_range, density, color=COLORS['primary'], linewidth=1.0, alpha=0.9)
+            # Add percentile lines
+            n_top = max(1, int(0.1 * len(reductions)))
+            top_10_threshold = np.sort(reductions_tonnes)[-n_top] if n_top < len(reductions_tonnes) else 0
+            top_1_value = np.max(reductions_tonnes)
+
+            ylim = hist_ax.get_ylim()
+            if top_10_threshold > 0:
+                hist_ax.axvline(top_10_threshold, color='#00CC66', linestyle=(0, (5, 2)), linewidth=1.0,
+                              alpha=0.9, zorder=10)
+            if top_1_value > 0 and top_1_value != top_10_threshold:
+                hist_ax.axvline(top_1_value, color='#33FF88', linestyle=(0, (5, 2)), linewidth=1.0,
+                              alpha=0.9, zorder=10)
 
             if log_scale == 'y':
                 hist_ax.set_yscale('log')
@@ -269,10 +283,10 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             hist_ax.set_ylabel('Density', fontsize=8)
         else:
             hist_ax.set_ylabel('')
-            hist_ax.tick_params(labelleft=False)
+            hist_ax.tick_params(labelleft=False, left=False)
 
-        if i == 1 or i == 2:  # Only middle plots get x-label
-            hist_ax.set_xlabel('Reduction [tonnes CO₂]', fontsize=8)
+        # All histogram plots get x-label for visibility
+        hist_ax.set_xlabel('Reduction [tonnes CO₂e]', fontsize=8)
 
         # Trajectory subplot (third row)
         traj_ax = fig.add_subplot(gs[2, i])
@@ -303,7 +317,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                 traj_ax.set_ylabel('$F_{veg}$', fontsize=8)
             else:
                 traj_ax.set_ylabel('')
-                traj_ax.tick_params(labelleft=False)
+                traj_ax.tick_params(labelleft=False, left=False)
 
             # All trajectory plots get x-labels (bottom row)
             traj_ax.set_xlabel('t [thousands]', fontsize=8)
@@ -317,12 +331,15 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     # Legend
     from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
     legend_elements = [
         Patch(facecolor='#2a9d8f', label='Vegetarian'),
         Patch(facecolor='#e76f51', label='Meat Eater'),
-        Patch(facecolor='#f4a261', label='Top Reducers')
+        Patch(facecolor='#00CC66', label='Top 10% Reducers'),
+        Line2D([0], [0], color='#00CC66', linestyle=(0, (5, 2)), linewidth=1.5, label='Top 10% threshold'),
+        Line2D([0], [0], color='#33FF88', linestyle=(0, (5, 2)), linewidth=1.5, label='Top reducer')
     ]
-    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.99), ncol=3)
+    fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, 0.99), ncol=5, fontsize=7)
     
     plt.tight_layout()
     plt.subplots_adjust(top=0.94)

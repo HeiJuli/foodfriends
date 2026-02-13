@@ -22,6 +22,7 @@ import os
 sys.path.append('..')
 from auxillary import network_stats
 from auxillary.sampling_utils import stratified_sample_agents
+from auxillary.homophily_network_v2 import generate_homophily_network_v2
 
 # Fix for Windows numpy randint issue with netin
 # Only patch once to avoid recursion on module reload
@@ -46,19 +47,19 @@ from auxillary.sampling_utils import stratified_sample_agents
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 380,
+          "N": 350,
           "erdos_p": 3,
-          "steps": 10000,
+          "steps": 120000,
           "k": 8, #initial edges per node for graph generation
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.10,
-          "M": 9, # memory length use 7 or 9 maybe.
+          "M": 8, # memory length use 7 or 9 maybe.
           "veg_f":0.05, #vegetarian fraction
           "meat_f": 0.95,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
           "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
-          'topology': "PATCH", #can either be barabasi albert with "BA", or fully connected with "complete"
+          'topology': "homophilic_emp", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.36, #self dissonance
           "rho": 0.45, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
@@ -539,7 +540,10 @@ class Model():
             self.G1 = nx.watts_strogatz_graph(self.params["N"], 6, self.params["tc"])
         elif self.params['topology'] == "PATCH":
             self.G1 = PATCH(self.params["N"], self.params["k"], float(self.params["veg_f"]), h_MM=0.6, tc=self.params["tc"], h_mm=0.7)
-            self.G1.generate()  
+            self.G1.generate()
+        elif self.params['topology'] == "homophilic_emp":
+            # Placeholder - will be generated in agent_ini() after loading survey data
+            self.G1 = nx.empty_graph(self.params["N"])  
     
     def record_fraction(self):
         fraction_veg = sum(i == "veg" for i in self.get_attributes("diet"))/self.params["N"]
@@ -633,6 +637,19 @@ class Model():
 
             # Adjust vegetarian fraction to match Netherlands demographics
             self.adjust_veg_fraction_to_target()
+
+            # Generate homophilic network if requested
+            if self.params['topology'] == "homophilic_emp":
+                print(f"INFO: Generating empirical homophily network (Option A: moderate homophily)")
+                # Option A weights: [gender, age, income, edu, theta] = [0.20, 0.35, 0.18, 0.32, 0.05]
+                self.G1 = generate_homophily_network_v2(
+                    N=self.params["N"],
+                    avg_degree=8,
+                    agents_df=self.survey_data,
+                    attribute_weights=np.array([0.20, 0.35, 0.18, 0.32, 0.05]),
+                    seed=self.params.get("seed", 42)
+                )
+                print(f"INFO: Generated homophily network with {self.G1.number_of_edges()} edges, mean degree {np.mean([d for n,d in self.G1.degree()]):.2f}")
 
             # Initialize memory after all agents created
             for agent in self.agents:
@@ -838,10 +855,11 @@ class Model():
             else:
                 # Get the neighbours before rewiirng so j is excluded
                 remove_neighbours = list(self.G1.neighbors(i.i))
-    
-                self.G1.add_edge(i.i, j)
-            
-                self.G1.remove_edge(i.i, random.choice(remove_neighbours))
+
+                # Only rewire if agent has neighbors to remove
+                if remove_neighbours:
+                    self.G1.add_edge(i.i, j)
+                    self.G1.remove_edge(i.i, random.choice(remove_neighbours))
 
     def current_veg_fraction(self):
         """Calculate current fraction of vegetarians in population"""
@@ -887,7 +905,7 @@ if __name__ == '__main__':
 	
 	n_trajectories = 5
 	
-	params.update({'topology': 'PATCH'})
+	#params.update({'topology': 'PATCH'})
 	
 	all_trajectories = []
 	
