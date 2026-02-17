@@ -18,7 +18,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 150,
           "erdos_p": 3,
-          "steps": 250000,
+          "steps": 120000,
           "w_i": 5, #weight of the replicator function
           "sigmoid_k": 12, #sigmoid steepness for dissonance scaling
           "immune_n": 0.10,
@@ -28,7 +28,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet2
-          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
+          "tc": 0.7, #probability of triadic closure (tc~0.7 gives clustering C~0.3)
           'topology': "homophilic_emp", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.36, #self dissonance
           "rho": 0.25, #behavioural intentions,

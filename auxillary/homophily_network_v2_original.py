@@ -18,7 +18,6 @@ Date: 2025-01-20
 import numpy as np
 import pandas as pd
 import networkx as nx
-from collections import defaultdict
 from typing import Tuple, Dict, Optional
 import matplotlib.pyplot as plt
 
@@ -142,143 +141,110 @@ def compute_similarity_matrix_v2(attr_matrix: np.ndarray,
     return sim_matrix
 
 
-def _homophily_target(source, target_set, sim_matrix):
-    """Select target from target_set weighted by similarity to source."""
-    targets = np.array(list(target_set))
-    if len(targets) == 0:
-        return None
-    sims = sim_matrix[source, targets]
-    s = sims.sum()
-    if s <= 0:
-        return int(np.random.choice(targets))
-    return int(np.random.choice(targets, p=sims / s))
-
-
-def _tc_target(source, special_targets, sim_matrix):
-    """Select target from FOF accumulator weighted by count * similarity."""
-    if not special_targets:
-        return None
-    targets = np.array(list(special_targets.keys()))
-    counts = np.array([special_targets[t] for t in targets], dtype=float)
-    sims = sim_matrix[source, targets]
-    weights = counts * sims
-    s = weights.sum()
-    if s <= 0:
-        return int(np.random.choice(targets))
-    return int(np.random.choice(targets, p=weights / s))
-
-
 def generate_homophily_network_v2(
     N: int,
     avg_degree: int,
     agents_df: pd.DataFrame,
     attribute_weights: Optional[np.ndarray] = None,
-    seed: Optional[int] = None,
-    tc: float = 0.95,
-    target_clustering: Optional[float] = None
+    seed: Optional[int] = None
 ) -> nx.Graph:
     """
-    Generate homophily-based social network with triadic closure.
-    Follows Holme-Kim (2002) incremental growth model with homophily
-    replacing preferential attachment:
+    Generate homophily-based social network using Lackner et al. algorithm.
+    VERSION 2: Uses demographics + theta only.
 
-    1. Nodes arrive one at a time, each adding m = avg_degree // 2 edges
-    2. First edge per node: similarity-weighted selection from existing nodes
-    3. Subsequent edges: with probability tc, select from FOF accumulator
-       (weighted by occurrence count * similarity); otherwise homophily
-    4. FOF accumulator tracks friends-of-friends across ALL current neighbors
+    From Lackner et al. Equation B.2:
+    P(vi, vj) = σ(vi, vj) / Σ_n σ(vi, vn)
+
+    Each agent forms connections based on similarity.
 
     Parameters
     ----------
     N : int
         Number of agents
     avg_degree : int
-        Target average degree (m = avg_degree // 2 edges per arriving node)
+        Target average degree
     agents_df : pd.DataFrame
         Agent data with demographics and theta
     attribute_weights : np.ndarray, optional
         Weights for 5 attributes: [gender, age, income, education, theta]
+        Default: equal weights
     seed : int, optional
         Random seed for reproducibility
-    tc : float
-        Triadic closure probability (0-1). Higher = more clustering. Default 0.95.
-    target_clustering : float, optional
-        If provided, print warning if achieved clustering differs by >0.05.
 
     Returns
     -------
     G : nx.Graph
-        NetworkX graph with N nodes, homophilic edges, and triadic closure
+        NetworkX graph with N nodes and homophilic edges
     """
     if seed is not None:
         np.random.seed(seed)
 
+    # Ensure we have N agents
     if len(agents_df) != N:
         raise ValueError(f"agents_df has {len(agents_df)} rows but N={N}")
 
-    m = max(1, avg_degree // 2)  # edges per arriving node
-
+    # Normalize attributes (demographics + theta only)
     attr_matrix, df_norm = normalize_attributes_v2(agents_df)
+
+    # Compute similarity matrix (with optional weights)
     sim_matrix = compute_similarity_matrix_v2(attr_matrix, attribute_weights)
 
+    # Initialize graph
     G = nx.Graph()
     G.add_nodes_from(range(N))
 
     # Add agent attributes to nodes
     for i in range(N):
-        for col in ('gender', 'age_group', 'incquart', 'educlevel', 'theta', 'diet'):
-            G.nodes[i][col] = agents_df.iloc[i][col]
+        G.nodes[i]['gender'] = agents_df.iloc[i]['gender']
+        G.nodes[i]['age_group'] = agents_df.iloc[i]['age_group']
+        G.nodes[i]['incquart'] = agents_df.iloc[i]['incquart']
+        G.nodes[i]['educlevel'] = agents_df.iloc[i]['educlevel']
+        G.nodes[i]['theta'] = agents_df.iloc[i]['theta']
+        G.nodes[i]['diet'] = agents_df.iloc[i]['diet']
 
-    # Seed network: first m nodes form a clique (Holme-Kim initialisation)
-    m0 = min(m + 1, N)  # need at least m+1 nodes for the seed
-    for i in range(m0):
-        for j in range(i + 1, m0):
-            G.add_edge(i, j)
+    # Network generation: each agent forms connections based on similarity
+    for i in range(N):
+        # Get similarity scores to all other agents
+        similarities = sim_matrix[i].copy()
 
-    # Incremental node arrival (Holme-Kim growth model)
-    for source in range(m0, N):
-        # Available targets: all nodes with id < source, excluding self
-        target_set = {t for t in range(source) if not G.has_edge(source, t)}
-        special_targets = defaultdict(int)  # FOF accumulator
+        # Exclude self
+        similarities[i] = 0
 
-        for idx in range(min(m, len(target_set))):
-            target = None
+        # Exclude already connected neighbors
+        for neighbor in G.neighbors(i):
+            similarities[neighbor] = 0
 
-            # First edge: always homophily. Subsequent: try TC with prob tc.
-            if idx > 0 and special_targets and np.random.random() < tc:
-                # Filter special_targets to only non-connected nodes
-                valid_st = {t: c for t, c in special_targets.items()
-                            if t in target_set}
-                if valid_st:
-                    target = _tc_target(source, valid_st, sim_matrix)
+        # Normalize to get probabilities
+        sim_sum = similarities.sum()
+        if sim_sum > 0:
+            probs = similarities / sim_sum
+        else:
+            # If no similarity, uniform random
+            probs = np.ones(N) / N
+            probs[i] = 0
+            probs = probs / probs.sum()
 
-            # Fallback to homophily if TC wasn't attempted or failed
-            if target is None:
-                target = _homophily_target(source, target_set, sim_matrix)
+        # Number of connections to make (accounting for existing degree)
+        current_degree = G.degree(i)
+        n_to_add = max(0, avg_degree - current_degree)
 
-            if target is None:
-                break
+        # Sample connections
+        if n_to_add > 0:
+            available_nodes = [j for j in range(N) if j != i and not G.has_edge(i, j)]
+            n_to_add = min(n_to_add, len(available_nodes))
 
-            # Add edge
-            G.add_edge(source, target)
+            if n_to_add > 0:
+                # Sample without replacement
+                chosen = np.random.choice(
+                    available_nodes,
+                    size=n_to_add,
+                    replace=False,
+                    p=probs[available_nodes] / probs[available_nodes].sum()
+                )
 
-            # Update FOF accumulator (netin-style): add all neighbors of
-            # the newly connected target as candidates, increment counts
-            target_set.discard(target)
-            if target in special_targets:
-                del special_targets[target]
-            # Only accumulate if more edges to add (per Holme-Kim)
-            if idx < m - 1:
-                for neighbor in G.neighbors(target):
-                    if neighbor != source and not G.has_edge(source, neighbor):
-                        special_targets[neighbor] += 1
-
-    if target_clustering is not None:
-        achieved = nx.average_clustering(G)
-        if abs(achieved - target_clustering) > 0.05:
-            print(f"WARNING: clustering {achieved:.3f} differs from target "
-                  f"{target_clustering:.3f} by "
-                  f"{abs(achieved - target_clustering):.3f}")
+                # Add edges
+                for j in chosen:
+                    G.add_edge(i, j)
 
     return G
 
@@ -362,30 +328,38 @@ def compute_homophily_coefficients_v2(G: nx.Graph, agents_df: pd.DataFrame) -> D
 
 
 if __name__ == "__main__":
-    print("Testing homophily network module V2 (with triadic closure)...")
+    # Test module
+    print("Testing homophily network module V2...")
     print("(demographics + theta only, excludes diet/alpha/rho)")
 
+    # Load data
     agents_df = pd.read_csv('../data/hierarchical_agents.csv')
+
+    # Test with full sample (no need for complete cases - theta is always present)
     N_test = 500
     agents_sample = agents_df.sample(n=N_test, random_state=42).reset_index(drop=True)
 
-    # Test multiple tc values
-    for tc_val in [0.0, 0.5, 0.8, 0.95]:
-        print(f"\n--- tc={tc_val} ---")
-        print(f"Generating network with N={N_test}, avg_degree=8, tc={tc_val}...")
-        G = generate_homophily_network_v2(
-            N=N_test, avg_degree=8, agents_df=agents_sample,
-            seed=42, tc=tc_val
-        )
-        stats = get_network_stats_v2(G)
-        print(f"  Clustering: {stats['clustering']:.4f}")
-        print(f"  Mean degree: {stats['mean_degree']:.2f}")
-        print(f"  Components: {stats['n_components']}")
+    print(f"\nGenerating network with N={N_test}, avg_degree=8...")
+    G = generate_homophily_network_v2(
+        N=N_test,
+        avg_degree=8,
+        agents_df=agents_sample,
+        seed=42
+    )
 
-        if tc_val == 0.95:
-            homophily = compute_homophily_coefficients_v2(G, agents_sample)
-            print("  Homophily coefficients:")
-            for key, val in homophily.items():
-                print(f"    {key}: {val:.4f}")
+    # Compute statistics
+    stats = get_network_stats_v2(G)
+    print("\nNetwork Statistics:")
+    for key, val in stats.items():
+        if isinstance(val, float):
+            print(f"  {key}: {val:.4f}")
+        else:
+            print(f"  {key}: {val}")
+
+    # Compute homophily
+    homophily = compute_homophily_coefficients_v2(G, agents_sample)
+    print("\nHomophily Coefficients:")
+    for key, val in homophily.items():
+        print(f"  {key}: {val:.4f}")
 
     print("\nModule test complete!")
