@@ -65,7 +65,7 @@ params = {"veg_CO2": 1390,
           "meat_f": 0.9,  #meat eater fraction
           "p_rewire": 0.1, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
-          "tc": 0.3, #probability of triadic closure for CSF, PATCH network gens
+          "tc": 0.7, #probability of triadic closure (tc~0.7 gives clustering C~0.3)
           'topology': "homophilic_emp", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.68, #self dissonance
           "rho": 0.45, #behavioural intentions
@@ -652,7 +652,8 @@ class Model():
                     avg_degree=8,
                     agents_df=self.survey_data,
                     attribute_weights=np.array([0.20, 0.35, 0.18, 0.32, 0.05]),
-                    seed=self.params.get("seed", 42)
+                    seed=self.params.get("seed", 42),
+                    tc=self.params.get("tc", 0.7)
                 )
                 print(f"INFO: Generated homophily network with {self.G1.number_of_edges()} edges, mean degree {np.mean([d for n,d in self.G1.degree()]):.2f}")
 

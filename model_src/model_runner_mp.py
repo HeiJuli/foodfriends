@@ -8,15 +8,15 @@ import time
 import argparse
 from datetime import date
 from multiprocessing import Pool
-#import model_main_single as model_main
-import model_main_threshold as model_main
+import model_main_single as model_main
+#import model_main_threshold as model_main
 sys.path.append('..')
 from auxillary.sampling_utils import load_sample_max_agents
 
 DEFAULT_PARAMS = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 5602,
+          "N": 2000,
           "erdos_p": 3,
           "steps": 20000,
           "w_i": 5,
@@ -28,14 +28,14 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_f": 0.5,
           "p_rewire": 0.1,
           "rewire_h": 0.1,
-          "tc": 0.3,
-          'topology': "PATCH",
+          "tc": 0.7,
+          'topology': "homophilic_emp",
           "alpha": 0.35,
           "rho": 0.1,
           "theta": 0,
-          "agent_ini": "other",
+          "agent_ini": "sample-max",
           "survey_file": "../data/hierarchical_agents.csv",
-          "adjust_veg_fraction": True,
+          "adjust_veg_fraction": False,
           "target_veg_fraction": 0.06
           }
 
