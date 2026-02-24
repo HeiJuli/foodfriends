@@ -142,30 +142,31 @@ def compute_similarity_matrix_v2(attr_matrix: np.ndarray,
     return sim_matrix
 
 
-def _homophily_target(source, target_set, sim_matrix):
-    """Select target from target_set weighted by similarity to source."""
+def _homophily_target(source, target_set, sim_matrix, G):
+    """Select target weighted by similarity * (degree + epsilon), ala PATCH."""
     targets = np.array(list(target_set))
     if len(targets) == 0:
         return None
+    EPSILON = 1e-5
     sims = sim_matrix[source, targets]
-    s = sims.sum()
-    if s <= 0:
-        return int(np.random.choice(targets))
-    return int(np.random.choice(targets, p=sims / s))
-
-
-def _tc_target(source, special_targets, sim_matrix):
-    """Select target from FOF accumulator weighted by count * similarity."""
-    if not special_targets:
-        return None
-    targets = np.array(list(special_targets.keys()))
-    counts = np.array([special_targets[t] for t in targets], dtype=float)
-    sims = sim_matrix[source, targets]
-    weights = counts * sims
+    degrees = np.array([G.degree(t) + EPSILON for t in targets])
+    weights = sims * degrees
     s = weights.sum()
     if s <= 0:
         return int(np.random.choice(targets))
     return int(np.random.choice(targets, p=weights / s))
+
+
+def _tc_target(source, special_targets):
+    """Select target from FOF accumulator weighted by encounter count only (ala PATCH)."""
+    if not special_targets:
+        return None
+    targets = np.array(list(special_targets.keys()))
+    counts = np.array([special_targets[t] for t in targets], dtype=float)
+    s = counts.sum()
+    if s <= 0:
+        return int(np.random.choice(targets))
+    return int(np.random.choice(targets, p=counts / s))
 
 
 def generate_homophily_network_v2(
@@ -209,6 +210,8 @@ def generate_homophily_network_v2(
     -------
     G : nx.Graph
         NetworkX graph with N nodes, homophilic edges, and triadic closure
+    sim_matrix : np.ndarray
+        Pairwise similarity matrix (N x N), for use in rewiring
     """
     if seed is not None:
         np.random.seed(seed)
@@ -250,11 +253,11 @@ def generate_homophily_network_v2(
                 valid_st = {t: c for t, c in special_targets.items()
                             if t in target_set}
                 if valid_st:
-                    target = _tc_target(source, valid_st, sim_matrix)
+                    target = _tc_target(source, valid_st)
 
-            # Fallback to homophily if TC wasn't attempted or failed
+            # Fallback to homophily+PA if TC wasn't attempted or failed
             if target is None:
-                target = _homophily_target(source, target_set, sim_matrix)
+                target = _homophily_target(source, target_set, sim_matrix, G)
 
             if target is None:
                 break
@@ -280,7 +283,7 @@ def generate_homophily_network_v2(
                   f"{target_clustering:.3f} by "
                   f"{abs(achieved - target_clustering):.3f}")
 
-    return G
+    return G, sim_matrix
 
 
 def get_network_stats_v2(G: nx.Graph) -> Dict[str, float]:
@@ -373,7 +376,7 @@ if __name__ == "__main__":
     for tc_val in [0.0, 0.5, 0.8, 0.95]:
         print(f"\n--- tc={tc_val} ---")
         print(f"Generating network with N={N_test}, avg_degree=8, tc={tc_val}...")
-        G = generate_homophily_network_v2(
+        G, _ = generate_homophily_network_v2(
             N=N_test, avg_degree=8, agents_df=agents_sample,
             seed=42, tc=tc_val
         )

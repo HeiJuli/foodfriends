@@ -2,15 +2,15 @@
 """Streamlined model running script"""
 import os
 import sys
+import random
 import numpy as np
 import pandas as pd
 import time
 import pickle
 from datetime import date
+sys.path.append('..')
 import model_main_single as model_main
 #import model_main_threshold as model_main
-sys.path.append('..')
-from auxillary.sampling_utils import load_sample_max_agents
 
 #%%
 DEFAULT_PARAMS = {"veg_CO2": 1390,
@@ -18,25 +18,26 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "meat_CO2": 2054,
           "N": 150,
           "erdos_p": 3,
-          "steps": 120000,
-          "w_i": 5, #weight of the replicator function
-          "sigmoid_k": 12, #sigmoid steepness for dissonance scaling
-          "immune_n": 0.10,
+          "steps": 70000,
+          "w_t": 27, # weight of the social threshold function
+          "immune_n": 0,
           "k": 8, #initial edges per node for graph generation
           "M": 8, # memory length
           "veg_f":0.1, #vegetarian fraction
           "meat_f": 0.9,  #meat eater fraction
-          "p_rewire": 0.1, #probability of rewire step
-          "rewire_h": 0.1, # slightly preference for same diet2
-          "tc": 0.7, #probability of triadic closure (tc~0.7 gives clustering C~0.3)
-          'topology': "homophilic_emp", #can either be barabasi albert with "BA", or fully connected with "complete"
+          "p_rewire": 0.02, #probability of rewire step
+          "rewire_h": 0.1, # slightly preference for same diet
+          "tc": 0.3, #probability of triadic closure (tc~0.7 gives clustering C~0.3)
+          'topology': "homophilic_emp",
           "alpha": 0.36, #self dissonance
-          "rho": 0.25, #behavioural intentions,
+          "rho": 0.25, #behavioural intentions
           "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "sample-max", #choose between "twin" "parameterized" or "synthetic"
+          "agent_ini": "sample-max",
           "survey_file": "../data/hierarchical_agents.csv",
-          "adjust_veg_fraction": False, #artificially increase veg fraction to match NL demographics
-          "target_veg_fraction": 0.06 #target vegetarian fraction (6% for Netherlands)
+          "adjust_veg_fraction": False,
+          "target_veg_fraction": 0.06,
+          "tau": 0.035, # annual exogenous conversion rate
+          "steps_per_year": None, # computed at runtime as 52*N
           }
 
 
@@ -107,7 +108,9 @@ def sample_from_pmf(demo_key, pmf_tables, param):
         all_vals.extend(cell['values'])
     return np.random.choice(all_vals) if all_vals else 0.5
 
-def run_basic_model(params=None):
+def run_basic_model(params=None, seed=42):
+    np.random.seed(seed)
+    random.seed(seed)
     params = params or DEFAULT_PARAMS.copy()
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"], 
@@ -128,8 +131,8 @@ def run_emissions_analysis(params=None, num_runs=3, veg_fractions=None):
         p = params.copy()
         p.update({"veg_f": veg_f, "meat_f": 1.0 - veg_f})
         
-        for _ in range(num_runs):
-            model = run_basic_model(p)
+        for run in range(num_runs):
+            model = run_basic_model(p, seed=42 + run)
             results.append({
                 'veg_fraction': veg_f, 'final_CO2': model.system_C[-1],
                 'final_veg_fraction': model.fraction_veg[-1],
@@ -174,6 +177,9 @@ def run_parameter_analysis(params=None, alpha_range=None,
 
                 for run in range(runs_per_combo):
                     count += 1
+                    seed = 42 + run
+                    np.random.seed(seed)
+                    random.seed(seed)
                     print(f"Run {count}/{total}: α={a:.2f}, θ={t:.2f}, veg_f={vf:.2f}")
 
                     model = get_model(p)
@@ -212,10 +218,10 @@ def run_veg_growth_analysis(params=None, veg_fractions=None, max_veg=0.6):
     veg_fractions = np.linspace(0.1, max_veg, 10) if veg_fractions is None else veg_fractions
     
     results = []
-    for vf in veg_fractions:
+    for i, vf in enumerate(veg_fractions):
         p = params.copy()
         p.update({"veg_f": vf, "meat_f": 1-vf})
-        model = run_basic_model(p)
+        model = run_basic_model(p, seed=42 + i)
         results.append({
             'initial_veg_fraction': vf,
             'final_veg_fraction': model.fraction_veg[-1]
@@ -239,6 +245,9 @@ def run_trajectory_analysis(params=None, runs_per_combo=5):
     agent_ini = twn.get("agent_ini", "twin")
     print(f"INFO: Using N={twn['N']} for {agent_ini} mode")
     for i in range(runs_per_combo):
+        seed = 42 + i
+        np.random.seed(seed)
+        random.seed(seed)
         model = get_model(twn)
         model.run()
         agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'theta']}

@@ -59,12 +59,17 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     gs_top = outer_gs[0].subgridspec(1, 4, wspace=0.08)
     gs_bot = outer_gs[1].subgridspec(1, 2, wspace=0.35, width_ratios=[1.2, 1])
 
-    # Network layout (fixed across all snapshots)
-    G = snapshots['final']['graph']
-    try:
-        pos = nx.spectral_layout(G, seed=42)
-    except Exception:
-        pos = nx.spring_layout(G, k=0.5, iterations=100, seed=42)
+    # Network layout: giant component only (fixed across all snapshots)
+    G_full = snapshots['final']['graph']
+    giant_nodes = max(nx.connected_components(G_full), key=len)
+    G = G_full.subgraph(giant_nodes).copy()
+    N_gc = G.number_of_nodes()
+    giant_list = list(G.nodes())
+    print(f"INFO: Network full N={G_full.number_of_nodes()}, giant component={N_gc} nodes, "
+          f"{G.number_of_edges()} edges, "
+          f"{nx.number_connected_components(G_full)} components")
+
+    pos = nx.spring_layout(G, k=4/N_gc**0.5, iterations=80, seed=42)
 
     pos_array = np.array(list(pos.values()))
     x_min, x_max = pos_array[:, 0].min(), pos_array[:, 0].max()
@@ -88,11 +93,15 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # === Row 0: Network snapshots ===
     for i, t in enumerate(time_points):
         snap = snapshots[t]
-        reductions = np.array(snap['reductions'])
+        all_diets = snap['diets']
+        all_red   = np.array(snap['reductions'])
         net_ax = fig.add_subplot(gs_top[0, i])
 
-        node_colors = ['#2a9d8f' if d == 'veg' else '#e76f51' for d in snap['diets']]
-        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.3, width=0.05)
+        # Index by node id into the full diet/reduction arrays
+        node_colors = ['#2a9d8f' if all_diets[n] == 'veg' else '#e76f51' for n in giant_list]
+        reductions  = np.array([all_red[n] for n in giant_list])
+
+        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.25, width=0.05)
         nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=2,
                               alpha=0.9, edgecolors='#333', linewidths=0.15)
 
@@ -100,9 +109,8 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         if np.max(reductions) > 0:
             n_top = max(1, int(0.1 * len(reductions)))
             top_idx = np.argsort(reductions)[-n_top:]
-            nodes_list = list(G.nodes())
 
-            top_10_nodes = [nodes_list[j] for j in top_idx[:-1] if reductions[j] > 0]
+            top_10_nodes = [giant_list[j] for j in top_idx[:-1] if reductions[j] > 0]
             if top_10_nodes:
                 nx.draw_networkx_nodes(G, pos, nodelist=top_10_nodes, ax=net_ax,
                                      node_color=COL_TOP10, node_size=5, alpha=0.9,
@@ -110,7 +118,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
             top_reducer_idx = top_idx[-1]
             if reductions[top_reducer_idx] > 0:
-                nx.draw_networkx_nodes(G, pos, nodelist=[nodes_list[top_reducer_idx]], ax=net_ax,
+                nx.draw_networkx_nodes(G, pos, nodelist=[giant_list[top_reducer_idx]], ax=net_ax,
                                      node_color=COL_TOP1, node_size=6, alpha=1.0,
                                      edgecolors='#333', linewidths=0.3)
                 top_reducer_value = reductions[top_reducer_idx]

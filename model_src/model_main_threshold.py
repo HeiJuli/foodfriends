@@ -57,15 +57,15 @@ params = {"veg_CO2": 1390,
           "erdos_p": 3,
           "steps": 50000,
           "k": 8, #initial edges per node for graph generation
-          "w_i": 5, #weight of the replicator function
+          "w_i": 8, #weight of the replicator function
           "sigmoid_k": 12, #sigmoid steepness for dissonance scaling
           "immune_n": 0.10,
           "M": 8, # memory length use 7 or 9 maybe.
           "veg_f":0.1, #vegetarian fraction
           "meat_f": 0.9,  #meat eater fraction
-          "p_rewire": 0.1, #probability of rewire step
+          "p_rewire": 0.02, #probability of rewire step
           "rewire_h": 0.1, # slightly preference for same diet
-          "tc": 0.7, #probability of triadic closure (tc~0.7 gives clustering C~0.3)
+          "tc": 0.5, #probability of triadic closure (tc~0.7 gives clustering C~0.3)
           'topology': "homophilic_emp", #can either be barabasi albert with "BA", or fully connected with "complete"
           "alpha": 0.68, #self dissonance
           "rho": 0.45, #behavioural intentions
@@ -647,7 +647,7 @@ class Model():
             if self.params['topology'] == "homophilic_emp":
                 print(f"INFO: Generating empirical homophily network (Option A: moderate homophily)")
                 # Option A weights: [gender, age, income, edu, theta] = [0.20, 0.35, 0.18, 0.32, 0.05]
-                self.G1 = generate_homophily_network_v2(
+                self.G1, self.sim_matrix = generate_homophily_network_v2(
                     N=self.params["N"],
                     avg_degree=8,
                     agents_df=self.survey_data,
@@ -844,30 +844,60 @@ class Model():
         return np.random.random() < p
 
     def rewire(self, i):
-        
-        # Think about characteristic rewire timescale 
-        if self.flip(self.params["p_rewire"]):
-            
-            non_neighbors = [k for k in nx.non_neighbors(self.G1, i.i)]
-            if not non_neighbors:
-                return
-            
-            
-            j = random.choice(non_neighbors)
-            
-            if self.agents[j].diet != i.diet:
-                if self.flip(0.10):
-                    return
-            else:
-                # Get the neighbours before rewiirng so j is excluded
-                remove_neighbours = list(self.G1.neighbors(i.i))
+        """Rewire using same mechanics as network generation (PATCH-style).
 
-                if not remove_neighbours:
-                    return
+        Target selection: TC (encounter count) with prob tc, else homophily * (degree + eps).
+        Edge removal: preferentially drop edges with no triangle support.
+        """
+        if not self.flip(self.params["p_rewire"]):
+            return
 
-                self.G1.add_edge(i.i, j)
+        neighbors = set(self.G1.neighbors(i.i))
+        if not neighbors:
+            return
 
-                self.G1.remove_edge(i.i, random.choice(remove_neighbours))
+        # Build FOF candidates
+        fof = {}
+        for nb in neighbors:
+            for nn in self.G1.neighbors(nb):
+                if nn != i.i and nn not in neighbors:
+                    fof[nn] = fof.get(nn, 0) + 1
+
+        EPSILON = 1e-5
+        tc = self.params.get("tc", 0.7)
+        j = None
+
+        # TC branch: weight by encounter count only (ala PATCH)
+        if fof and random.random() < tc:
+            candidates = np.array(list(fof.keys()))
+            weights = np.array([fof[c] for c in candidates], dtype=float)
+            j = int(np.random.choice(candidates, p=weights / weights.sum()))
+        # Fallback: homophily * (degree + eps)
+        elif hasattr(self, 'sim_matrix'):
+            non_nb = np.array([n for n in self.G1.nodes() if n != i.i and n not in neighbors])
+            if len(non_nb) > 0:
+                sims = self.sim_matrix[i.i, non_nb]
+                degrees = np.array([self.G1.degree(n) + EPSILON for n in non_nb])
+                weights = sims * degrees
+                s = weights.sum()
+                j = int(np.random.choice(non_nb, p=weights / s)) if s > 0 else int(np.random.choice(non_nb))
+        else:
+            non_nb = [n for n in self.G1.nodes() if n != i.i and n not in neighbors]
+            if non_nb:
+                j = random.choice(non_nb)
+
+        if j is None:
+            return
+
+        # Remove edge: prefer edges with no triangle support (preserves clustering)
+        nb_list = list(neighbors)
+        triangle_counts = [len(neighbors & set(self.G1.neighbors(nb)) - {i.i}) for nb in nb_list]
+        min_tri = min(triangle_counts)
+        candidates_rm = [nb for nb, tc_ in zip(nb_list, triangle_counts) if tc_ == min_tri]
+        remove_target = random.choice(candidates_rm)
+
+        self.G1.add_edge(i.i, j)
+        self.G1.remove_edge(i.i, remove_target)
 
     def current_veg_fraction(self):
         """Calculate current fraction of vegetarians in population"""
