@@ -10,10 +10,16 @@ Core idea: cognitive dissonance = energy (Hamiltonian), attention = inverse
 temperature. Agents probabilistically select the diet state that minimizes
 total dissonance (individual + social) via Boltzmann/softmax updating.
 
-H_state = (1 - w) * d_individual(state) + w * d_social(state)
-P(state) = exp(-beta * H_state) / Z
+Hamiltonian per agent i for diet state s:
+  H_i(s) = (1 - w_i) * d_individual(s, theta_i)
+          + w_i * d_social(s, memory)
+          - rho_i(s)                              [external field / behavioral intention]
 
-No explicit threshold parameter -- S-curves emerge from the energy landscape.
+  w_i = beta_i = 1 - alpha_i                     [per-agent, from survey]
+  attention_i = attention_base * alpha_i / mean(alpha) [per-agent, scaled by stubbornness]
+  rho_i(s) = rho if s is the "intended" direction, else (1-rho)
+
+P(switch) = exp(-attention_i * H_switch) / Z
 
 @author: everall
 """
@@ -53,17 +59,17 @@ params = {"veg_CO2": 1390,
           "tc": 0.6,
           'topology': "homophilic_emp",
           # --- Boltzmann model parameters (Galesic et al. 2021) ---
-          # w: weight of social vs individual dissonance [0,1]
-          #   w=0 -> pure individual (agents only care about internal consistency)
-          #   w=1 -> pure social (agents only care about conformity)
-          #   Galesic et al. found w~0.57 for GM food beliefs
-          "w": 0.42,  # social weight (= beta from survey; 1-alpha)
-          # attention: inverse temperature / decision sharpness
-          #   low (~1-5)  -> noisy/stochastic switching
-          #   mid (~10-25) -> gradual S-curves
+          # w_i per agent = beta_i = 1 - alpha_i (from survey data)
+          #   high alpha -> low w_i -> individual dissonance dominates
+          #   low alpha  -> high w_i -> social conformity dominates
+          # attention_base: base inverse temperature, scaled per-agent by alpha
+          #   attention_i = attention_base * (alpha_i / mean(alpha))
+          #   high-alpha agents are more deterministic (attentive to dissonance)
+          #   low (~5)  -> noisy/stochastic switching
+          #   mid (~15-25) -> gradual S-curves
           #   high (~50+)  -> sharp/deterministic transitions
           #   Galesic et al.: 23 for GM food, 10-50 range across scenarios
-          "attention": 15,
+          "attention_base": 15,
           # social_rule: how agents aggregate neighbor beliefs
           #   "averaging" -> weighted mean of neighbor diets (Galesic default)
           #   "memory"    -> fraction of opposite diet in memory buffer (matches existing model)
@@ -137,17 +143,42 @@ def social_dissonance_neighbors(diet_state, neighbors, agents):
     return (diet_numeric - h_soc) ** 2
 
 
-def total_dissonance(diet_state, theta, w, memory, M, neighbors=None, agents=None, social_rule="memory"):
-    """Total dissonance for a given diet state (Galesic et al. 2021 eq. 2).
+def rho_field(diet_state, rho, current_diet):
+    """External field from behavioral intentions (Ising t_i term).
 
-    H = (1 - w) * d_individual + w * d_social
+    Rho represents intention to adopt veg diet. Acts as an asymmetric bias
+    that lowers the energy of the "intended" state:
+      - Meat-eater considering veg: field = rho (high rho -> strong pull toward veg)
+      - Veg-eater considering meat: field = 1 - rho (low rho -> strong pull back to meat)
+
+    Returns negative value (energy reduction) for the favored state.
+    """
+    if diet_state == current_diet:
+        return 0.0  # no field bias for staying
+    # Switching: how much does rho favor this direction?
+    if current_diet == "meat":  # considering veg
+        return -rho  # high rho -> large negative -> lower energy for veg
+    else:  # considering meat
+        return -(1 - rho)  # low rho -> large negative -> lower energy for meat
+
+
+def total_dissonance(diet_state, theta, w, memory, M, rho=0.5, current_diet=None,
+                     neighbors=None, agents=None, social_rule="memory"):
+    """Total dissonance (Hamiltonian) for a given diet state.
+
+    H = (1 - w) * d_individual + w * d_social + rho_field
+
+    Extends Galesic et al. 2021 eq. 2 with external field term for
+    behavioral intentions (rho), following the Ising model formulation
+    from Galesic & Stein 2019.
     """
     d_ind = individual_dissonance(diet_state, theta)
     if social_rule == "memory":
         d_soc = social_dissonance_memory(diet_state, memory, M)
     else:
         d_soc = social_dissonance_neighbors(diet_state, neighbors, agents)
-    return (1 - w) * d_ind + w * d_soc
+    field = rho_field(diet_state, rho, current_diet) if current_diet else 0.0
+    return (1 - w) * d_ind + w * d_soc + field
 
 
 def sample_from_pmf(demo_key, pmf_tables, param, theta=None):
