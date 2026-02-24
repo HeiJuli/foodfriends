@@ -8,10 +8,9 @@ import time
 import argparse
 from datetime import date
 from multiprocessing import Pool
+sys.path.append('..')
 import model_main_single as model_main
 #import model_main_threshold as model_main
-sys.path.append('..')
-from auxillary.sampling_utils import load_sample_max_agents
 
 DEFAULT_PARAMS = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
@@ -19,8 +18,7 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "N": 2000,
           "erdos_p": 3,
           "steps": 20000,
-          "w_i": 5,
-          "sigmoid_k": 12,
+          "w_t": 27,
           "immune_n": 0.10,
           "k": 8,
           "M": 9,
@@ -36,7 +34,9 @@ DEFAULT_PARAMS = {"veg_CO2": 1390,
           "agent_ini": "sample-max",
           "survey_file": "../data/hierarchical_agents.csv",
           "adjust_veg_fraction": False,
-          "target_veg_fraction": 0.06
+          "target_veg_fraction": 0.06,
+          "tau": 0.035,
+          "steps_per_year": None,
           }
 
 def ensure_output_dir():
@@ -120,6 +120,10 @@ def run_basic_model(params=None):
 
 def run_single_model(params):
     """Worker function - runs one model instance"""
+    seed = 42 + params.get('run', 0)
+    np.random.seed(seed)
+    import random
+    random.seed(seed)
     model = get_model(params)
     model.run()
     return {

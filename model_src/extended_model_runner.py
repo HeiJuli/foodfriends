@@ -47,7 +47,7 @@ def run_emissions_vs_vegetarian_fraction(base_params, num_runs=3, veg_fractions=
                 'final_CO2': model.system_C[-1],
                 'final_veg_fraction': model.fraction_veg[-1],
                 'alpha': params['alpha'],
-                'beta': params['beta'],
+                'beta': 1 - params['alpha'],
                 'topology': params['topology']
             })
     
@@ -209,7 +209,7 @@ def run_targeted_interventions(base_params, veg_fraction=0.2, steps=25000, num_i
                 i = np.random.choice(range(len(model.agents)))
 
                 # Update based on pairwise interaction
-                model.agents[i].step(model.G1, model.agents)
+                model.agents[i].step(model.G1, model.agents, t)
                 
                 # Record system state
                 model.system_C.append(model.get_attribute("C")/params["N"])

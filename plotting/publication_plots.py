@@ -158,10 +158,16 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     # Network layout (fixed across all snapshots)
     G = snapshots['final']['graph']
-    try:
-        pos = nx.spectral_layout(G, seed=42)
-    except Exception:
-        pos = nx.spring_layout(G, k=0.5, iterations=100, seed=42)
+    pos = nx.spectral_layout(G)
+    # Clip outlier positions to 90th percentile radius to avoid peripheral scatter
+    pos_arr = np.array([pos[n] for n in G.nodes()])
+    center = pos_arr.mean(axis=0)
+    dists = np.linalg.norm(pos_arr - center, axis=1)
+    clip_r = np.percentile(dists, 90)
+    for n in G.nodes():
+        d = np.linalg.norm(pos[n] - center)
+        if d > clip_r:
+            pos[n] = center + (pos[n] - center) * (clip_r / d)
 
     pos_array = np.array(list(pos.values()))
     x_min, x_max = pos_array[:, 0].min(), pos_array[:, 0].max()
