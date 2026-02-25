@@ -9,36 +9,38 @@ import time
 import pickle
 from datetime import date
 sys.path.append('..')
-import model_main_single as model_main
-#import model_main_threshold as model_main
+import model_main
 
 #%%
-DEFAULT_PARAMS = {"veg_CO2": 1390,
-          "vegan_CO2": 1054,
-          "meat_CO2": 2054,
-          "N": 150,
-          "erdos_p": 3,
-          "steps": 70000,
-          "w_t": 27, # weight of the social threshold function
-          "immune_n": 0,
-          "k": 8, #initial edges per node for graph generation
-          "M": 8, # memory length
-          "veg_f":0.1, #vegetarian fraction
-          "meat_f": 0.9,  #meat eater fraction
-          "p_rewire": 0.02, #probability of rewire step
-          "rewire_h": 0.1, # slightly preference for same diet
-          "tc": 0.3, #probability of triadic closure (tc~0.7 gives clustering C~0.3)
-          'topology': "homophilic_emp",
-          "alpha": 0.36, #self dissonance
-          "rho": 0.25, #behavioural intentions
-          "theta": 0.44, #intrinsic preference (- is for meat, + for vego)
-          "agent_ini": "sample-max",
-          "survey_file": "../data/hierarchical_agents.csv",
-          "adjust_veg_fraction": False,
-          "target_veg_fraction": 0.06,
-          "tau": 0.035, # annual exogenous conversion rate
-          "steps_per_year": None, # computed at runtime as 52*N
-          }
+DEFAULT_PARAMS = {
+    "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
+    "N": 650,              # population size
+    "erdos_p": 3,          # ER graph edge prob
+    "steps": 70000,        # simulation timesteps
+    "k": 8,                # avg degree (PATCH/WS)
+    "immune_n": 0,         # fraction of immune agents
+    "M": 9,                # memory buffer length
+    "veg_f": 0.1,          # initial veg fraction
+    "meat_f": 0.9,         # initial meat fraction
+    "p_rewire": 0.02,      # rewire probability per step
+    "rewire_h": 0.1,       # homophily bias in rewiring
+    "tc": 0.7,             # triadic closure probability
+    "topology": "homophilic_emp",  # network type
+    "beta": 27,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp)
+    "alpha": 0.36,         # individual weight (stubbornness)
+    "rho": 0.45,           # behavioral intention
+    "theta": 0.44,         # intrinsic preference [-1=meat, +1=veg]
+    "agent_ini": "sample-max",
+    "survey_file": "../data/hierarchical_agents.csv",
+    "adjust_veg_fraction": False,  # flip meat->veg to hit target
+    "target_veg_fraction": 0.06,   # NL demographics target
+    "tau": 0.035,          # external field strength
+    "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
+    "theta_gate_k": 35,    # gate steepness
+    "alpha_min": 0.15,     # alpha compression lower bound
+    "alpha_max": 0.85,     # alpha compression upper bound
+    "mu": 0.2,             # status-quo bias strength
+}
 
 
 

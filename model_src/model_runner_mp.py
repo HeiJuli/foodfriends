@@ -9,35 +9,37 @@ import argparse
 from datetime import date
 from multiprocessing import Pool
 sys.path.append('..')
-import model_main_single as model_main
-#import model_main_threshold as model_main
+import model_main
 
-DEFAULT_PARAMS = {"veg_CO2": 1390,
-          "vegan_CO2": 1054,
-          "meat_CO2": 2054,
-          "N": 2000,
-          "erdos_p": 3,
-          "steps": 20000,
-          "w_t": 27,
-          "immune_n": 0.10,
-          "k": 8,
-          "M": 9,
-          "veg_f":0.5,
-          "meat_f": 0.5,
-          "p_rewire": 0.1,
-          "rewire_h": 0.1,
-          "tc": 0.7,
-          'topology': "homophilic_emp",
-          "alpha": 0.35,
-          "rho": 0.1,
-          "theta": 0,
-          "agent_ini": "sample-max",
-          "survey_file": "../data/hierarchical_agents.csv",
-          "adjust_veg_fraction": False,
-          "target_veg_fraction": 0.06,
-          "tau": 0.035,
-          "steps_per_year": None,
-          }
+DEFAULT_PARAMS = {
+    "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
+    "N": 2000,             # population size
+    "erdos_p": 3,          # ER graph edge prob
+    "steps": 20000,        # simulation timesteps
+    "k": 8,                # avg degree (PATCH/WS)
+    "immune_n": 0.10,      # fraction of immune agents
+    "M": 9,                # memory buffer length
+    "veg_f": 0.5,          # initial veg fraction
+    "meat_f": 0.5,         # initial meat fraction
+    "p_rewire": 0.1,       # rewire probability per step
+    "rewire_h": 0.1,       # homophily bias in rewiring
+    "tc": 0.7,             # triadic closure probability
+    "topology": "homophilic_emp",  # network type
+    "beta": 27,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp)
+    "alpha": 0.35,         # individual weight (stubbornness)
+    "rho": 0.45,           # behavioral intention
+    "theta": 0,            # intrinsic preference [-1=meat, +1=veg]
+    "agent_ini": "sample-max",
+    "survey_file": "../data/hierarchical_agents.csv",
+    "adjust_veg_fraction": False,  # flip meat->veg to hit target
+    "target_veg_fraction": 0.06,   # NL demographics target
+    "tau": 0.035,          # external field strength
+    "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
+    "theta_gate_k": 35,    # gate steepness
+    "alpha_min": 0.15,     # alpha compression lower bound
+    "alpha_max": 0.85,     # alpha compression upper bound
+    "mu": 0.2,             # status-quo bias strength
+}
 
 def ensure_output_dir():
     if not os.path.exists('../model_output'):

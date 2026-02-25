@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import random
-import model_main_single as model_main
+import model_main
 
 
 #%%
