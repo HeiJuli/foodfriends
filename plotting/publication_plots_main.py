@@ -243,10 +243,10 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True, xlim_max=No
                                 alpha=0.6, linewidth=0.8)
             trajectories_data.append((line, trajectory[-1]))
 
-    # Arrows at right edge — offset left by 0.5k so t=0 is visible
+    # Arrows at right edge — offset left by 1.5k so t=0 is visible
     xlim = ax_traj.get_xlim()
     x_right = xlim_max if xlim_max is not None else xlim[1]
-    ax_traj.set_xlim(-0.5, x_right)
+    ax_traj.set_xlim(-1.5, x_right)
     x_arrow = x_right
     for line, final_val in trajectories_data:
         ax_traj.annotate('', xy=(x_arrow, final_val), xytext=(x_arrow*0.98, final_val),
