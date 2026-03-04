@@ -152,7 +152,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # Figure layout: 4 networks top, trajectory + CCDF bottom
     fig = plt.figure(figsize=(17.8*cm, 11*cm))
     outer_gs = fig.add_gridspec(2, 1, height_ratios=[2.8, 1.2],
-                                hspace=0.35, top=0.93, bottom=0.08, left=0.08, right=0.97)
+                                hspace=0.18, top=0.93, bottom=0.08, left=0.08, right=0.97)
     gs_top = outer_gs[0].subgridspec(1, 4, wspace=0.08)
     gs_bot = outer_gs[1].subgridspec(1, 2, wspace=0.35, width_ratios=[1.2, 1])
 
@@ -254,7 +254,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                           s=14, zorder=5, edgecolors='#333', linewidths=0.4)
             time_labels.append((t_k, t))
 
-    traj_ax.set_ylim(0, traj_y_max)
+    traj_ax.set_ylim(0, 1.0)
     traj_ax.set_xlim(0, len(trajectory) / 1000)
     traj_ax.set_ylabel('$F_{veg}$', fontsize=8)
     traj_ax.set_xlabel('$t$ [thousands]', fontsize=7)
