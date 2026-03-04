@@ -55,7 +55,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # Figure layout: 4 networks top, trajectory + CCDF bottom
     fig = plt.figure(figsize=(17.8*cm, 11*cm))
     outer_gs = fig.add_gridspec(2, 1, height_ratios=[2.8, 1.2],
-                                hspace=0.35, top=0.93, bottom=0.08, left=0.08, right=0.97)
+                                hspace=0.18, top=0.93, bottom=0.08, left=0.08, right=0.97)
     gs_top = outer_gs[0].subgridspec(1, 4, wspace=0.08)
     gs_bot = outer_gs[1].subgridspec(1, 2, wspace=0.35, width_ratios=[1.2, 1])
 
@@ -159,8 +159,8 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                           s=14, zorder=5, edgecolors='#333', linewidths=0.4)
             time_labels.append((t_k, t))
 
-    traj_ax.set_ylim(0, traj_y_max)
-    traj_ax.set_xlim(0, len(trajectory) / 1000)
+    traj_ax.set_ylim(0, 1.0)
+    traj_ax.set_xlim(-0.5, len(trajectory) / 1000)
     traj_ax.set_ylabel('$F_{veg}$', fontsize=8)
     traj_ax.set_xlabel('$t$ [thousands]', fontsize=7)
     traj_ax.spines['top'].set_visible(False)
@@ -243,12 +243,11 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True, xlim_max=No
                                 alpha=0.6, linewidth=0.8)
             trajectories_data.append((line, trajectory[-1]))
 
-    if xlim_max is not None:
-        ax_traj.set_xlim(0, xlim_max)
-
-    # Arrows at right edge
+    # Arrows at right edge — offset left by 0.5k so t=0 is visible
     xlim = ax_traj.get_xlim()
-    x_arrow = xlim[1]
+    x_right = xlim_max if xlim_max is not None else xlim[1]
+    ax_traj.set_xlim(-0.5, x_right)
+    x_arrow = x_right
     for line, final_val in trajectories_data:
         ax_traj.annotate('', xy=(x_arrow, final_val), xytext=(x_arrow*0.98, final_val),
                         arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.2))
