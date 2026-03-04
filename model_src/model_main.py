@@ -41,9 +41,9 @@ params = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 650,              # population size
     "erdos_p": 3,          # ER graph edge prob
-    "steps": 110000,       # simulation timesteps
+    "steps": 35000,       # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
-    "immune_n": 0,         # fraction of immune agents
+    "immune_n": 0.10,         # fraction of immune agents
     "M": 9,                # memory buffer length
     "veg_f": 0,            # initial veg fraction
     "meat_f": 0.95,        # initial meat fraction
@@ -51,19 +51,19 @@ params = {
     "rewire_h": 0.1,       # homophily bias in rewiring
     "tc": 0.7,             # triadic closure probability
     "topology": "homophilic_emp",  # network type
-    "beta": 27,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp)
+    "beta": 21,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp) 21, 19
     "alpha": 0.36,         # individual weight (stubbornness)
     "rho": 0.45,           # behavioral intention
     "theta": 0.44,         # intrinsic preference [-1=meat, +1=veg]
     "agent_ini": "sample-max",
     "survey_file": "../data/hierarchical_agents.csv",
-    "adjust_veg_fraction": False,  # flip meat->veg to hit target
+    "adjust_veg_fraction": True,  # flip meat->veg to hit target
     "target_veg_fraction": 0.06,   # NL demographics target
-    "tau": 0.035,          # external field strength (Galesic & Stein 2019)
+    "tau": 0.015,          # external field strength (Galesic & Stein 2019)
     "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
-    "theta_gate_k": 35,    # gate steepness
-    "alpha_min": 0.15,     # alpha compression lower bound
-    "alpha_max": 0.85,     # alpha compression upper bound
+    "theta_gate_k": 25,    # gate steepness
+    "alpha_min": 0.05,     # alpha compression lower bound
+    "alpha_max": 0.80,     # alpha compression upper bound
     "mu": 0.2,             # status-quo bias strength
 }
 
@@ -71,9 +71,10 @@ params = {
 # %% Helpers
 
 def _status_quo_bias(s, s_cur, p_opp, mu):
-    """Inertia term (Samuelson & Zeckhauser 1988): erodes with opposite-diet exposure."""
-    return mu * (1 - p_opp) * (s - s_cur) ** 2
-
+    """Inertia term (Samuelson & Zeckhauser 1988): erodes with opposite-diet exposure.
+    Ignore this for now"""
+    #return mu * (s - s_cur) ** 2
+    #return mu * (1 - p_opp) * (s - s_cur) ** 2
 
 def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
                 theta_gate_c=0.3, theta_gate_k=10, tau=0.0, mu=0.1):
@@ -89,8 +90,7 @@ def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
     s, s_cur = s_num, 1.0 if current_diet == "veg" else 0.0
     
     h_ind = (1 - gate) * rho + gate * (theta + 1.0) / 2.0
-    return ((1 - w) * (s - h_ind)**2 + w * (s - h_soc)**2
-            - tau * s + _status_quo_bias(s, s_cur, p_opp, mu))
+    return ((1 - w) * (s - h_ind)**2 + w * (s - h_soc)**2)
 
 
 def boltzmann_prob(H_switch, H_stay, beta):
@@ -327,8 +327,13 @@ class Model():
         print(f"INFO: beta={self.params['beta']}")
         n_immune = int(self.params["immune_n"] * len(self.agents))
         if n_immune > 0:
-            for i in np.random.choice(len(self.agents), n_immune, replace=False):
+            # immunise agents with most extreme convictions (both tails of theta+rho)
+            scores = np.array([(a.theta + a.rho) / 2 for a in self.agents])
+            n_lo, n_hi = n_immune // 2, n_immune - n_immune // 2
+            idx = np.concatenate([np.argsort(scores)[:n_lo], np.argsort(scores)[-n_hi:]])
+            for i in idx:
                 self.agents[i].immune = True
+            print(f"INFO: {n_immune} immune agents ({n_lo} low-tail, {n_hi} high-tail)")
 
     def _init_survey_agents(self):
         """Initialize agents from survey data (twin/sample-max mode)."""
@@ -403,20 +408,21 @@ class Model():
     def adjust_veg_fraction_to_target(self):
         if not self.params.get("adjust_veg_fraction", False):
             return
-        target = self.params["target_veg_fraction"]
+        # Pre-equilibrate high-rho meat-eaters, then top up to target if needed
+        target = self.params.get("target_veg_fraction", 0.06)
         current_veg = sum(1 for a in self.agents if a.diet == "veg")
-        current_frac = current_veg / len(self.agents)
-        if current_frac >= target:
-            print(f"INFO: Veg fraction {current_frac:.3f} already >= target {target:.3f}")
-            return
-        needed = int(target * len(self.agents)) - current_veg
-        print(f"INFO: Flipping {needed} meat-eaters to veg ({current_frac:.3f} -> {target:.3f})")
-        meat_ranked = sorted(((a, a.theta + a.rho) for a in self.agents if a.diet == "meat"),
-                             key=lambda x: x[1], reverse=True)
-        for agent, _ in meat_ranked[:needed]:
-            agent.diet = "veg"
-            agent.C = agent.diet_emissions("veg")
-        print(f"INFO: Final veg fraction: {sum(1 for a in self.agents if a.diet=='veg')/len(self.agents):.3f}")
+        # First: flip rho~1 + high-alpha agents (would switch instantly anyway)
+        candidates = sorted(
+            (a for a in self.agents if a.diet == "meat" and not a.immune),
+            key=lambda a: (a.rho, a.alpha), reverse=True)
+        needed = max(0, int(target * len(self.agents)) - current_veg)
+        flipped = 0
+        for a in candidates[:needed]:
+            a.diet = "veg"
+            a.C = a.diet_emissions("veg")
+            flipped += 1
+        frac = sum(1 for a in self.agents if a.diet == "veg") / len(self.agents)
+        print(f"INFO: Flipped {flipped} meat-eaters -> veg (target: {target:.3f}, actual: {frac:.3f})")
 
     def get_attribute(self, attribute):
         return sum(getattr(a, attribute) for a in self.agents)
@@ -530,7 +536,7 @@ class Model():
 
         for t in range(self.params["steps"]):
             i = np.random.choice(len(self.agents))
-            if self.flip(0.2):
+            if self.flip(0.50):
                 self.agents[i].step(self.G1, self.agents, t)
                 self.rewire(self.agents[i])
 
