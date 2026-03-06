@@ -62,7 +62,7 @@ params = {
     "alpha_min": 0.05,
     "alpha_max": 0.80,
     "mu": 0.45,
-    "gamma": 0.45,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
+    "gamma": 0.5,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
 }
 
 
@@ -175,6 +175,7 @@ class Agent():
         self.i = i
         self.params = params
         self.set_params(**kwargs)
+        self.C_base = {"veg": self.params["veg_CO2"], "meat": self.params["meat_CO2"]}
         self.C = self.diet_emissions(self.diet)
         self.memory = []  # list of (diet, source_id) tuples
         self.survey_id = kwargs.get('survey_id', i)
@@ -184,7 +185,7 @@ class Agent():
         self.last_change_time = 0
         self.immune = False
         self.influence_parent = None
-        self.influenced_agents = []
+        self.influenced_agents = set()
         self.change_time = None
 
     def set_params(self, **kwargs):
@@ -242,9 +243,8 @@ class Agent():
         self.memory = mem
 
     def diet_emissions(self, diet):
-        veg, meat = (st.norm.rvs(loc=x, scale=0.1*x)
-                     for x in (self.params["veg_CO2"], self.params["meat_CO2"]))
-        return {"veg": veg, "meat": meat}[diet]
+        base = self.params["veg_CO2"] if diet == "veg" else self.params["meat_CO2"]
+        return st.norm.rvs(loc=base, scale=0.1 * base)
 
     def choose_alpha_beta(self, mean):
         return st.truncnorm.rvs(0, 1, loc=mean, scale=mean*0.2)
@@ -259,19 +259,19 @@ class Agent():
         H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
-    def reduction_tracker(self, old_c, influencer, agents_list,
-                          cascade_depth=1, decay=0.7, max_depth=5, visited=None):
+    def _cascade_attribute(self, delta, influencer, agents_list, sign=1,
+                           cascade_depth=1, decay=0.7, max_depth=5, visited=None):
+        """Propagate emission delta up the influence chain with decay.
+        sign=+1 for meat->veg (credit), sign=-1 for veg->meat (debit)."""
         if visited is None:
             visited = set()
         if cascade_depth > max_depth or influencer.i in visited:
             return
         visited.add(influencer.i)
-        delta = old_c - self.C
-        if delta > 0:
-            influencer.reduction_out += delta * (decay ** (cascade_depth - 1))
-            if influencer.influence_parent is not None:
-                self.reduction_tracker(old_c, agents_list[influencer.influence_parent],
-                                       agents_list, cascade_depth + 1, decay, max_depth, visited)
+        influencer.reduction_out += sign * delta * (decay ** (cascade_depth - 1))
+        if influencer.influence_parent is not None:
+            self._cascade_attribute(delta, agents_list[influencer.influence_parent],
+                                    agents_list, sign, cascade_depth + 1, decay, max_depth, visited)
 
     def step(self, G, agents, t):
         """Step agent forward one timestep via pairwise interaction."""
@@ -282,16 +282,29 @@ class Agent():
         self.memory.append((other_agent.diet, other_agent.i))
 
         if not self.immune and self.flip(self.prob_calc(other_agent)):
-            old_C, old_diet = self.C, self.diet
+            old_diet = self.diet
             self.diet = "meat" if self.diet == "veg" else "veg"
             self.C = self.diet_emissions(self.diet)
+            # Use base emissions for stable attribution delta
+            delta = self.C_base["meat"] - self.C_base["veg"]
+
             if old_diet == "meat" and self.diet == "veg":
+                # meat -> veg: credit the influence chain
                 self.influence_parent = other_agent.i
                 self.change_time = t
-                other_agent.influenced_agents.append(self.i)
-                self.reduction_tracker(old_C, other_agent, agents, cascade_depth=1)
+                other_agent.influenced_agents.add(self.i)
+                self._cascade_attribute(delta, other_agent, agents, sign=1)
+
+            elif old_diet == "veg" and self.diet == "meat":
+                # veg -> meat: debit the influence chain, then detach
+                if self.influence_parent is not None:
+                    parent = agents[self.influence_parent]
+                    self._cascade_attribute(delta, parent, agents, sign=-1)
+                    parent.influenced_agents.discard(self.i)
+                    self.influence_parent = None
+                    self.change_time = None
         else:
-            self.C = np.random.normal(self.C, 0.1 * self.C)
+            self.C = np.random.normal(self.C_base[self.diet], 0.1 * self.C_base[self.diet])
 
     def flip(self, p):
         return np.random.random() < p
