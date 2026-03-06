@@ -22,18 +22,27 @@ TWIN = '../model_output/trajectory_analysis_twin_20260306.pkl'
 SMAX = '../model_output/trajectory_analysis_sample-max_20260306.pkl'
 DIRECT_REDUCTION_KG = 664  # 2054 - 1390
 
+def _resolve_snapshot(snapshots, t_cutoff=None):
+    """Return the snapshot key to use as 'final'.
+    Priority: explicit t_cutoff > auto-detected 'steady' > true 'final'."""
+    if t_cutoff is not None:
+        int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
+        return min(int_times, key=lambda t: abs(t - t_cutoff)) if int_times else 'final'
+    return 'steady' if 'steady' in snapshots else 'final'
+
 def load(path):
     d = pd.read_pickle(path)
     median = d[d['is_median_twin']].iloc[0] if d['is_median_twin'].any() else d.iloc[0]
     return d, median
 
-def analysis_1_powerlaw(median_row, label='twin'):
+def analysis_1_powerlaw(median_row, label='twin', t_cutoff=None):
     """Fit heavy-tail distribution to emission reductions CCDF."""
+    snap_key = _resolve_snapshot(median_row['snapshots'], t_cutoff)
     print(f"\n{'='*60}")
-    print(f"  1. HEAVY-TAIL CHARACTERIZATION  [{label}, N={len(median_row['snapshots']['final']['reductions'])}]")
+    print(f"  1. HEAVY-TAIL CHARACTERIZATION  [{label}, N={len(median_row['snapshots'][snap_key]['reductions'])}, t={snap_key}]")
     print(f"{'='*60}")
 
-    reds = np.array(median_row['snapshots']['final']['reductions'])
+    reds = np.array(median_row['snapshots'][snap_key]['reductions'])
     pos = reds[reds > 0] / 1000  # tonnes
 
     try:
@@ -70,14 +79,18 @@ def analysis_1_powerlaw(median_row, label='twin'):
     print(f"  Skewness = {pd.Series(pos).skew():.2f}")
 
 
-def analysis_2_gini(median_row, all_data, label='twin'):
+def analysis_2_gini(median_row, all_data, label='twin', t_cutoff=None):
     """Gini coefficient and concentration ratios across snapshots."""
     print(f"\n{'='*60}")
     print(f"  2. GINI COEFFICIENT & CONCENTRATION  [{label}]")
     print(f"{'='*60}")
 
     snapshots = median_row['snapshots']
-    times = sorted([t for t in snapshots if isinstance(t, int) and t > 0]) + ['final']
+    snap_key = _resolve_snapshot(snapshots, t_cutoff)
+    int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
+    if t_cutoff is not None:
+        int_times = [t for t in int_times if t <= t_cutoff]
+    times = int_times + [snap_key]
 
     for t in times:
         reds = np.array(snapshots[t]['reductions'])
@@ -103,10 +116,11 @@ def analysis_2_gini(median_row, all_data, label='twin'):
         print(f"    Top 10% accounts for {top10_frac*100:.1f}% of total reductions")
         print(f"    Median agent: {median_kg:.0f} kg CO2")
 
-    # Ensemble Gini (final snapshot across all runs)
+    # Ensemble Gini (resolved snapshot across all runs)
     ginis = []
     for _, row in all_data.iterrows():
-        reds = np.array(row['snapshots']['final']['reductions'])
+        sk = _resolve_snapshot(row['snapshots'], t_cutoff)
+        reds = np.array(row['snapshots'][sk]['reductions'])
         pos = reds[reds > 0]
         if len(pos) < 2:
             continue
@@ -120,13 +134,14 @@ def analysis_2_gini(median_row, all_data, label='twin'):
     print(f"    Gini median = {np.median(ginis):.3f}, IQR = [{np.percentile(ginis,25):.3f}, {np.percentile(ginis,75):.3f}]")
 
 
-def analysis_4_degree_scaling(median_row, label='twin'):
+def analysis_4_degree_scaling(median_row, label='twin', t_cutoff=None):
     """Fit amplification ~ k^gamma scaling."""
+    snap_key = _resolve_snapshot(median_row['snapshots'], t_cutoff)
     print(f"\n{'='*60}")
-    print(f"  4. DEGREE-AMPLIFICATION SCALING  [{label}]")
+    print(f"  4. DEGREE-AMPLIFICATION SCALING  [{label}, t={snap_key}]")
     print(f"{'='*60}")
 
-    snap = median_row['snapshots']['final']
+    snap = median_row['snapshots'][snap_key]
     G = snap['graph']
     nodes = list(G.nodes())
     reds = np.array(snap['reductions'])
@@ -223,23 +238,28 @@ def analysis_5_inflection(all_data, label='twin'):
 
 
 def main():
+    import sys
+    t_cutoff = int(sys.argv[1]) if len(sys.argv) > 1 else None
+    if t_cutoff:
+        print(f"Using t_cutoff={t_cutoff} for distribution/scaling analyses")
+
     print("Loading data...")
     twin_all, twin_med = load(TWIN)
     smax_all, smax_med = load(SMAX)
 
     # --- Run all analyses on twin (primary) ---
-    analysis_1_powerlaw(twin_med, 'twin')
-    analysis_2_gini(twin_med, twin_all, 'twin')
-    analysis_4_degree_scaling(twin_med, 'twin')
+    analysis_1_powerlaw(twin_med, 'twin', t_cutoff)
+    analysis_2_gini(twin_med, twin_all, 'twin', t_cutoff)
+    analysis_4_degree_scaling(twin_med, 'twin', t_cutoff)
     analysis_5_inflection(twin_all, 'twin')
 
     # --- Robustness: sample-max ---
     print(f"\n\n{'#'*60}")
     print(f"  ROBUSTNESS: sample-max (N=385, n=10)")
     print(f"{'#'*60}")
-    analysis_1_powerlaw(smax_med, 'sample-max')
-    analysis_2_gini(smax_med, smax_all, 'sample-max')
-    analysis_4_degree_scaling(smax_med, 'sample-max')
+    analysis_1_powerlaw(smax_med, 'sample-max', t_cutoff)
+    analysis_2_gini(smax_med, smax_all, 'sample-max', t_cutoff)
+    analysis_4_degree_scaling(smax_med, 'sample-max', t_cutoff)
     analysis_5_inflection(smax_all, 'sample-max')
 
 

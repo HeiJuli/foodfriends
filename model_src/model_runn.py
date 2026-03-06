@@ -261,6 +261,7 @@ def run_trajectory_analysis(params=None, runs_per_combo=5):
             'final_veg_f': model.fraction_veg[-1],
             'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
             'snapshots': model.snapshots if hasattr(model, 'snapshots') else None,
+            'steady_state_t': model.steady_state_t if hasattr(model, 'steady_state_t') else None,
             'run': i, 'parameter_set': "Survey Individual Parameters"
         })
 
