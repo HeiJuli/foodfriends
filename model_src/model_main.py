@@ -62,7 +62,7 @@ params = {
     "alpha_min": 0.05,
     "alpha_max": 0.80,
     "mu": 0.45,
-    "gamma": 0.5,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
+    "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
 }
 
 
@@ -260,18 +260,20 @@ class Agent():
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
     def _cascade_attribute(self, delta, influencer, agents_list, sign=1,
-                           cascade_depth=1, decay=0.7, max_depth=5, visited=None):
+                           cascade_depth=1, decay=0.7, visited=None):
         """Propagate emission delta up the influence chain with decay.
-        sign=+1 for meat->veg (credit), sign=-1 for veg->meat (debit)."""
+        sign=+1 for meat->veg (credit), sign=-1 for veg->meat (debit).
+        No hard depth cap -- geometric decay (0.7^d) attenuates naturally;
+        visited set prevents cycles."""
         if visited is None:
             visited = set()
-        if cascade_depth > max_depth or influencer.i in visited:
+        if influencer.i in visited:
             return
         visited.add(influencer.i)
         influencer.reduction_out += sign * delta * (decay ** (cascade_depth - 1))
         if influencer.influence_parent is not None:
             self._cascade_attribute(delta, agents_list[influencer.influence_parent],
-                                    agents_list, sign, cascade_depth + 1, decay, max_depth, visited)
+                                    agents_list, sign, cascade_depth + 1, decay, visited)
 
     def step(self, G, agents, t):
         """Step agent forward one timestep via pairwise interaction."""
@@ -494,17 +496,57 @@ class Model():
             })
         return pd.DataFrame(stats)
 
-    def _count_indirect_influence(self, agent_id, depth, max_depth=5, visited=None):
+    def _count_indirect_influence(self, agent_id, depth, visited=None):
+        """Count cascade tree size. No hard depth cap -- bounded by network size."""
         if visited is None:
             visited = set()
-        if depth > max_depth or agent_id in visited:
+        if agent_id in visited:
             return 0
         visited.add(agent_id)
         count = len(self.agents[agent_id].influenced_agents)
         for child_id in self.agents[agent_id].influenced_agents:
             if child_id not in visited:
-                count += self._count_indirect_influence(child_id, depth + 1, max_depth, visited)
+                count += self._count_indirect_influence(child_id, depth + 1, visited)
         return count
+
+    def theoretical_max_reduction(self, decay=0.7):
+        """Analytical upper bound on reduction_out for each agent.
+        Assumes: agent converts ALL meat-eating neighbors, each of those
+        converts all of theirs, etc. -- perfect tree, no back-switches,
+        no overlap. BFS on actual network topology respects real degree
+        distribution and finite N.
+        Returns DataFrame with agent_id, degree, max_reduction, observed."""
+        delta = self.params["meat_CO2"] - self.params["veg_CO2"]
+        results = []
+        for agent in self.agents:
+            visited, frontier = {agent.i}, {agent.i}
+            max_red, depth = 0.0, 0
+            while frontier:
+                next_frontier = {nb for node in frontier
+                                 for nb in self.G1.neighbors(node) if nb not in visited}
+                if not next_frontier:
+                    break
+                depth += 1
+                visited.update(next_frontier)
+                max_red += len(next_frontier) * delta * (decay ** (depth - 1))
+                frontier = next_frontier
+            results.append({
+                'agent_id': agent.i, 'degree': self.G1.degree(agent.i),
+                'max_cascade_depth': depth, 'max_reachable': len(visited) - 1,
+                'theoretical_max_kg': max_red, 'observed_kg': agent.reduction_out,
+                'pct_of_max': (agent.reduction_out / max_red * 100) if max_red > 0 else 0
+            })
+        inf_bound = delta / (1 - decay)
+        avg_deg = np.mean([self.G1.degree(n) for n in self.G1.nodes()])
+        print(f"-- Theoretical max reduction sanity check --")
+        print(f"   delta={delta} kg, decay={decay}, inf-chain bound={inf_bound:.0f} kg")
+        print(f"   avg_degree={avg_deg:.1f}, N={self.params['N']}")
+        df = pd.DataFrame(results)
+        top = df.nlargest(5, 'theoretical_max_kg')
+        print(f"   Top 5 max (kg):     {top['theoretical_max_kg'].values.astype(int)}")
+        print(f"   Top 5 observed (kg): {top['observed_kg'].values.astype(int)}")
+        print(f"   Top 5 % of max:     {[f'{x:.1f}%' for x in top['pct_of_max'].values]}")
+        return df
 
     def flip(self, p):
         return np.random.random() < p
