@@ -16,7 +16,7 @@ DEFAULT_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 650,              # population size
     "erdos_p": 3,          # ER graph edge prob
-    "steps": 35000,        # simulation timesteps
+    "steps": 32000,        # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
     "immune_n": 0.10,         # fraction of immune agents
     "M": 9,                # memory buffer length
@@ -320,7 +320,7 @@ def main():
                   veg_fractions=[0.2], runs_per_combo=3)
         elif choice == '3':
             timer(run_veg_growth_analysis, params=params,
-                  veg_fractions=np.linspace(0.1, 0.6, 10))
+                  veg_fractions=np.linspace(0.1, 0.6, 30))
         elif choice == '4':
             timer(run_trajectory_analysis, params=params, runs_per_combo=30)
         elif choice == '5':
