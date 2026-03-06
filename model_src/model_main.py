@@ -61,8 +61,8 @@ params = {
     "theta_gate_k": 25,
     "alpha_min": 0.05,
     "alpha_max": 0.80,
-    "mu": 0.45,
-    "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
+    "mu": 0.3,
+    "gamma": 0.4,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
 }
 
 
@@ -319,7 +319,7 @@ class Model():
         self.pmf_tables = pmf_tables
         self.params = params
         self.snapshots = {}
-        self.snapshot_times = [params["steps"] // 3, 2 * params["steps"] // 3]
+        self.snapshot_times = [params["steps"] * i // 4 for i in range(1, 4)]
         self._generate_network()
         self.system_C = []
         self.fraction_veg = []

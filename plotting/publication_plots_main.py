@@ -28,7 +28,7 @@ def create_color_variations(base_color, n):
     base_rgb = mcolors.to_rgb(base_color)
     return [tuple(min(1.0, c * (0.7 + 0.3 * i / max(1, n-1))) for c in base_rgb) for i in range(n)]
 
-def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None):
+def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None, truncate_steps=None):
     """7-panel plot: 4 network snapshots (top) + trajectory + CCDF + Lorenz (bottom)"""
     from matplotlib.ticker import LogLocator, NullFormatter
     from matplotlib.patches import Patch
@@ -46,6 +46,15 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     snapshots = median_row['snapshots']
     trajectory = median_row['fraction_veg_trajectory']
 
+    if truncate_steps is not None and isinstance(trajectory, list):
+        trajectory = trajectory[:truncate_steps]
+        # Remap snapshots: keep t=0 and integer keys <= truncate_steps, set 'final' to last valid
+        valid_int_times = sorted([t for t in snapshots if isinstance(t, int) and t <= truncate_steps])
+        last_t = valid_int_times[-1] if valid_int_times else 0
+        snapshots = {t: snapshots[t] for t in ([0] + valid_int_times) if t in snapshots}
+        snapshots['final'] = median_row['snapshots'][last_t]
+        print(f"INFO: Truncated to {truncate_steps} steps; 'final' snapshot -> t={last_t}")
+
     if isinstance(trajectory, list) and len(trajectory) > 0:
         print(f"INFO: Initial veg fraction = {trajectory[0]:.3f}, Final = {trajectory[-1]:.3f}")
         traj_y_max = max(trajectory) * 1.1
@@ -56,7 +65,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     fig = plt.figure(figsize=(17.8*cm, 12.5*cm))
     outer_gs = fig.add_gridspec(2, 1, height_ratios=[2.8, 1.4],
                                 hspace=0.18, top=0.93, bottom=0.08, left=0.08, right=0.97)
-    gs_top = outer_gs[0].subgridspec(1, 4, wspace=0.08)
+    gs_top = outer_gs[0].subgridspec(1, 3, wspace=0.08)
     gs_bot = outer_gs[1].subgridspec(1, 3, wspace=0.35, width_ratios=[1.2, 1, 1])
 
     # Network layout: giant component only (fixed across all snapshots)
@@ -77,7 +86,12 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     # Time points
     all_times = sorted([t for t in snapshots.keys() if isinstance(t, int) and t > 0])
-    time_points = ([0] + (all_times[:2] if len(all_times) >= 2 else all_times) + ['final'])[:4]
+    if all_times:
+        mid_t = (len(trajectory) // 2) if isinstance(trajectory, list) else (all_times[-1] // 2)
+        mid = min(all_times, key=lambda t: abs(t - mid_t))
+    else:
+        mid = None
+    time_points = [t for t in [0, mid, 'final'] if t is not None]
     print(f"INFO: Plotting snapshots at times: {time_points}")
 
     # --- Legend ---
@@ -499,7 +513,9 @@ def main():
             if file_path:
                 data = load_data(file_path)
                 if data is not None and 'is_median_twin' in data.columns:
-                    plot_network_agency_evolution(file_path=file_path, log_scale="loglog")
+                    trunc_input = input("Truncate to N timesteps (Enter for full run): ")
+                    truncate_steps = int(trunc_input) if trunc_input else None
+                    plot_network_agency_evolution(file_path=file_path, log_scale="loglog", truncate_steps=truncate_steps)
                 else:
                     print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
         elif choice == '2':
