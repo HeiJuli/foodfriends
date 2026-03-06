@@ -28,8 +28,15 @@ def create_color_variations(base_color, n):
     base_rgb = mcolors.to_rgb(base_color)
     return [tuple(min(1.0, c * (0.7 + 0.3 * i / max(1, n-1))) for c in base_rgb) for i in range(n)]
 
-def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None, truncate_steps=None):
-    """7-panel plot: 4 network snapshots (top) + trajectory + CCDF + Lorenz (bottom)"""
+def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None,
+                                  truncate_steps=None, analysis_t_end=None):
+    """7-panel plot: 4 network snapshots (top) + trajectory + CCDF + Lorenz (bottom)
+
+    Args:
+        analysis_t_end: If set, panels B (CCDF) and C (Lorenz) use the snapshot closest
+                        to this timestep instead of the true final. Panel A still shows
+                        the full trajectory for visual context.
+    """
     from matplotlib.ticker import LogLocator, NullFormatter
     from matplotlib.patches import Patch
     from matplotlib.lines import Line2D
@@ -48,12 +55,31 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     if truncate_steps is not None and isinstance(trajectory, list):
         trajectory = trajectory[:truncate_steps]
-        # Remap snapshots: keep t=0 and integer keys <= truncate_steps, set 'final' to last valid
         valid_int_times = sorted([t for t in snapshots if isinstance(t, int) and t <= truncate_steps])
         last_t = valid_int_times[-1] if valid_int_times else 0
+        # Preserve 'steady' if it occurred before truncation point
+        steady_t = median_row.get('steady_state_t', None)
+        keep_steady = 'steady' in snapshots and (steady_t is not None and steady_t <= truncate_steps)
         snapshots = {t: snapshots[t] for t in ([0] + valid_int_times) if t in snapshots}
+        if keep_steady:
+            snapshots['steady'] = median_row['snapshots']['steady']
         snapshots['final'] = median_row['snapshots'][last_t]
-        print(f"INFO: Truncated to {truncate_steps} steps; 'final' snapshot -> t={last_t}")
+        print(f"INFO: Truncated to {truncate_steps} steps; 'final' snapshot -> t={last_t}"
+              f"{'; steady snapshot preserved' if keep_steady else ''}")
+
+    # Build analysis snapshots: remap 'final' for B/C panels
+    # Priority: explicit analysis_t_end > auto-detected 'steady' snapshot > true 'final'
+    analysis_snapshots = snapshots
+    if analysis_t_end is not None:
+        int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
+        best_t = min(int_times, key=lambda t: abs(t - analysis_t_end)) if int_times else 'final'
+        analysis_snapshots = dict(snapshots)
+        analysis_snapshots['final'] = snapshots[best_t] if best_t != 'final' else snapshots['final']
+        print(f"INFO: analysis_t_end={analysis_t_end} -> B/C use snapshot t={best_t}")
+    elif 'steady' in snapshots:
+        analysis_snapshots = dict(snapshots)
+        analysis_snapshots['final'] = snapshots['steady']
+        print(f"INFO: Auto-detected steady-state snapshot used for B/C panels")
 
     if isinstance(trajectory, list) and len(trajectory) > 0:
         print(f"INFO: Initial veg fraction = {trajectory[0]:.3f}, Final = {trajectory[-1]:.3f}")
@@ -192,7 +218,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     curve_idx = 0
     for t in time_points:
-        snap = snapshots[t]
+        snap = analysis_snapshots[t] if t in analysis_snapshots else snapshots[t]
         reductions = np.array(snap['reductions'])
         if np.max(reductions) == 0:
             continue
@@ -223,7 +249,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # === Bottom-right: Lorenz curve (Newman-style, sorted from largest reducer) ===
     lorenz_ax = fig.add_subplot(gs_bot[0, 2])
     for ci, t in enumerate(t for t in time_points if t != 0):
-        snap = snapshots[t]
+        snap = analysis_snapshots[t] if t in analysis_snapshots else snapshots[t]
         reductions = np.array(snap['reductions'])
         if np.max(reductions) == 0:
             continue
@@ -515,7 +541,10 @@ def main():
                 if data is not None and 'is_median_twin' in data.columns:
                     trunc_input = input("Truncate to N timesteps (Enter for full run): ")
                     truncate_steps = int(trunc_input) if trunc_input else None
-                    plot_network_agency_evolution(file_path=file_path, log_scale="loglog", truncate_steps=truncate_steps)
+                    at_input = input("Analysis t_end for B/C panels (Enter for same as trajectory): ")
+                    analysis_t_end = int(at_input) if at_input else None
+                    plot_network_agency_evolution(file_path=file_path, log_scale="loglog",
+                                                 truncate_steps=truncate_steps, analysis_t_end=analysis_t_end)
                 else:
                     print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
         elif choice == '2':

@@ -15,13 +15,13 @@ DEFAULT_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 2000,             # population size
     "erdos_p": 3,          # ER graph edge prob
-    "steps": 20000,        # simulation timesteps
+    "steps": 150000,        # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
     "immune_n": 0.10,      # fraction of immune agents
     "M": 9,                # memory buffer length
     "veg_f": 0.5,          # initial veg fraction
     "meat_f": 0.5,         # initial meat fraction
-    "p_rewire": 0.1,       # rewire probability per step
+    "p_rewire": 0.01,       # rewire probability per step
     "rewire_h": 0.1,       # homophily bias in rewiring
     "tc": 0.7,             # triadic closure probability
     "topology": "homophilic_emp",  # network type
@@ -39,7 +39,7 @@ DEFAULT_PARAMS = {
     "alpha_min": 0.15,     # alpha compression lower bound
     "alpha_max": 0.85,     # alpha compression upper bound
     "mu": 0.2,             # status-quo bias strength
-    "gamma": 0.5,          # diminishing returns exponent for repeated same-source contacts
+    "gamma": 0.3,          # diminishing returns exponent for repeated same-source contacts
 }
 
 def ensure_output_dir():

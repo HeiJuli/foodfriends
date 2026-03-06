@@ -323,6 +323,7 @@ class Model():
         self._generate_network()
         self.system_C = []
         self.fraction_veg = []
+        self.steady_state_t = None
 
     def _generate_network(self):
         topo, N = self.params['topology'], self.params["N"]
@@ -344,6 +345,17 @@ class Model():
     def record_fraction(self):
         self.fraction_veg.append(
             sum(d == "veg" for d in self.get_attributes("diet")) / self.params["N"])
+
+    def _check_steady_state(self, t, window=5000, threshold=1e-4):
+        """Detect convergence: std of fraction_veg over window < threshold.
+        Records a 'steady' snapshot on first detection."""
+        if self.steady_state_t is not None or len(self.fraction_veg) < window:
+            return
+        recent = self.fraction_veg[-window:]
+        if np.std(recent) < threshold:
+            self.steady_state_t = t
+            self.record_snapshot('steady')
+            print(f"INFO: Steady state detected at t={t} (std={np.std(recent):.2e} over {window} steps)")
 
     def harmonise_netIn(self):
         for i, agent in enumerate(self.agents):
@@ -614,6 +626,8 @@ class Model():
 
             if t in self.snapshot_times:
                 self.record_snapshot(t)
+            if t % 1000 == 0:
+                self._check_steady_state(t)
 
             self.harmonise_netIn()
 
