@@ -320,6 +320,9 @@ class Model():
         self.params = params
         self.snapshots = {}
         self.snapshot_times = [params["steps"] * i // 4 for i in range(1, 4)]
+        dense_start = params.get("snapshot_dense_start", 0)
+        if dense_start and params["steps"] > dense_start:
+            self.snapshot_times += list(range(dense_start, params["steps"] + 1, 2000))
         self._generate_network()
         self.system_C = []
         self.fraction_veg = []

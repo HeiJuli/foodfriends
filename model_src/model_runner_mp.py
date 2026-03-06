@@ -40,6 +40,7 @@ DEFAULT_PARAMS = {
     "alpha_max": 0.85,     # alpha compression upper bound
     "mu": 0.2,             # status-quo bias strength
     "gamma": 0.3,          # diminishing returns exponent for repeated same-source contacts
+    "snapshot_dense_start": 100000,  # take snapshots every 2k from this step onwards (0 = disabled)
 }
 
 def ensure_output_dir():
