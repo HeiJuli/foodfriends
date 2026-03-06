@@ -40,7 +40,7 @@ DEFAULT_PARAMS = {
     "alpha_min": 0.05,     # alpha compression lower bound
     "alpha_max": 0.80,     # alpha compression upper bound
     "mu": 0.5,             # status-quo bias strength (currently inactive in model)
-    "gamma": 0.3          # diminishing returns exponent for repeated same-source contacts
+    "gamma": 0.5          # diminishing returns exponent for repeated same-source contacts
 }
 
 
