@@ -39,6 +39,7 @@ DEFAULT_PARAMS = {
     "alpha_min": 0.15,     # alpha compression lower bound
     "alpha_max": 0.85,     # alpha compression upper bound
     "mu": 0.2,             # status-quo bias strength
+    "gamma": 0.5,          # diminishing returns exponent for repeated same-source contacts
 }
 
 def ensure_output_dir():

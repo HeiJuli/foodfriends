@@ -23,6 +23,7 @@ BASE_PARAMS = {
     "adjust_veg_fraction": True, "target_veg_fraction": 0.07,
     "tau": 0.015, "theta_gate_c": 0.35, "theta_gate_k": 25,
     "alpha_min": 0.05, "alpha_max": 0.80, "mu": 0.2,
+    "gamma": 0.5,
 }
 
 RUNS_PER_BETA = 5
