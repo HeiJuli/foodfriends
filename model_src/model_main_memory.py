@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 """
-Boltzmann dissonance model with complex contagion reinforcement.
+Boltzmann dissonance model with recency-weighted memory.
 
-Extension of model_main.py (Galesic et al. 2021). Adds diminishing marginal
-returns to repeated contacts in the social signal h_soc:
+Extension of model_main.py. Adds a sigmoid recency weight to memory contacts:
+  w(i) = 1 / (1 + exp(-sigma_k * (i/(L-1) - sigma_c)))
 
-  For each source with n contacts in memory, effective weight = n^gamma.
-  h_soc = sum(n_i^gamma for veg sources) / sum(n_j^gamma for all sources)
+where i=0 is oldest entry, i=L-1 is most recent. sigma_k controls steepness
+(higher = sharper cutoff), sigma_c controls the midpoint (0.5 = center).
 
-Where gamma in (0,1) controls diminishing returns: gamma=1 means all contacts
-equal (standard model), gamma->0 means only unique sources matter.
-E.g. gamma=0.5: 3 contacts from same person -> sqrt(3)=1.73 effective.
+Recency weights integrate with existing gamma (diminishing returns per source):
+  Per-source effective weight = sum(recency_weights)^gamma
 
-Memory stores (diet, source_id) tuples instead of plain diet strings.
+So a source with 3 contacts at positions with weights [0.2, 0.7, 0.95] gets
+effective weight = (0.2 + 0.7 + 0.95)^gamma = 1.85^0.5 = 1.36
 
 @author: everall
 """
@@ -22,7 +22,7 @@ import numpy as np
 import random
 import scipy.stats as st
 import math
-from collections import Counter
+from collections import defaultdict
 import matplotlib.pyplot as plt
 import pandas as pd
 from netin import PATCH
@@ -61,25 +61,41 @@ params = {
     "theta_gate_k": 25,
     "alpha_min": 0.05,
     "alpha_max": 0.80,
-    "mu": 0.45,
-    "gamma": 0.45,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
+    "mu": 0.5,
+    "gamma": 0.5,
+    "sigma_k": 2.0,   # recency sigmoid steepness (0=flat/uniform, higher=sharper recency bias)
+    "sigma_c": 0.5,   # recency sigmoid midpoint (0.5=center, lower=more entries get high weight)
 }
 
 
 # %% Helpers
+
+def recency_weights(L, sigma_k, sigma_c):
+    """Sigmoid recency weights for memory of length L.
+    Returns array of length L where index 0=oldest, L-1=most recent.
+    sigma_k=0 gives uniform weights (no recency effect)."""
+    if L <= 1:
+        return np.ones(L)
+    positions = np.linspace(0, 1, L)
+    if sigma_k == 0:
+        return np.ones(L)
+    return 1.0 / (1.0 + np.exp(-sigma_k * (positions - sigma_c)))
+
 
 def _status_quo_bias(s, s_cur, p_opp, mu):
     """Inertia term (Samuelson & Zeckhauser 1988): erodes with opposite-diet exposure.
     Ignore this for now"""
 
 def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
-                theta_gate_c=0.3, theta_gate_k=10, tau=0.0, mu=0.1, gamma=0.5):
+                theta_gate_c=0.3, theta_gate_k=10, tau=0.0, mu=0.1,
+                gamma=0.5, sigma_k=6.0, sigma_c=0.5):
     """H(s) = (1-w)(s-h_ind)^2 + w(s-h_soc)^2 - tau*s
 
     h_ind = (1-gate)*rho + gate*theta_01  where gate = sigmoid(k*(p_opp - c))
-    h_soc uses diminishing marginal returns per source: n contacts -> n^gamma
-      effective weight. gamma=1 => all contacts equal, gamma->0 => only unique
-      sources matter.
+    h_soc uses recency-weighted diminishing returns per source:
+      1. Each memory entry gets a recency weight via sigmoid
+      2. Per-source weighted count = sum of recency weights for that source
+      3. Effective weight = weighted_count^gamma (diminishing returns)
 
     Memory entries are (diet, source_id) tuples.
     """
@@ -87,14 +103,27 @@ def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
     if not mem:
         return (1 - w) * (s_num - rho)**2
 
-    # Effective counts with diminishing returns per source
-    veg_src = Counter(src for d, src in mem if d == "veg")
-    all_src = Counter(src for _, src in mem)
-    eff_veg = sum(n ** gamma for n in veg_src.values())
-    eff_total = sum(n ** gamma for n in all_src.values())
+    L = len(mem)
+    weights = recency_weights(L, sigma_k, sigma_c)
+
+    # Accumulate recency-weighted counts per source, split by diet
+    veg_weighted = defaultdict(float)
+    all_weighted = defaultdict(float)
+    for idx, (d, src) in enumerate(mem):
+        all_weighted[src] += weights[idx]
+        if d == "veg":
+            veg_weighted[src] += weights[idx]
+
+    eff_veg = sum(v ** gamma for v in veg_weighted.values())
+    eff_total = sum(v ** gamma for v in all_weighted.values())
 
     h_soc = eff_veg / eff_total if eff_total > 0 else 0.0
-    p_opp = sum(1 for d, _ in mem if d != current_diet) / len(mem)
+
+    # Recency-weighted p_opp for theta gate
+    opp_weight = sum(weights[idx] for idx, (d, _) in enumerate(mem) if d != current_diet)
+    total_weight = weights.sum()
+    p_opp = opp_weight / total_weight if total_weight > 0 else 0.0
+
     gate = 1 / (1 + math.exp(-theta_gate_k * (p_opp - theta_gate_c)))
 
     s, s_cur = s_num, 1.0 if current_diet == "veg" else 0.0
@@ -228,7 +257,6 @@ class Agent():
         neigh_diets = [(agents[j].diet, j) for j in neigh_ids]
         n_veg = sum(1 for d, _ in neigh_diets if d == "veg")
         veg_in_mem = round(self.params["M"] * n_veg / len(neigh_diets))
-        # Sample source IDs from actual neighbors to preserve diversity info
         veg_nbrs = [j for j in neigh_ids if agents[j].diet == "veg"]
         meat_nbrs = [j for j in neigh_ids if agents[j].diet == "meat"]
         mem = []
@@ -255,8 +283,9 @@ class Agent():
         gate_c, gate_k = self.params.get("theta_gate_c", 0.3), self.params.get("theta_gate_k", 10)
         tau, mu = self.params.get("tau", 0.0), self.params.get("mu", 0.1)
         M, gamma = self.params["M"], self.params.get("gamma", 0.5)
-        H_stay   = hamiltonian(s_stay,       self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
-        H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
+        sigma_k, sigma_c = self.params.get("sigma_k", 6.0), self.params.get("sigma_c", 0.5)
+        H_stay   = hamiltonian(s_stay,       self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma, sigma_k, sigma_c)
+        H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma, sigma_k, sigma_c)
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
     def reduction_tracker(self, old_c, influencer, agents_list,
@@ -342,7 +371,8 @@ class Model():
             for agent in self.agents:
                 agent.initialize_memory_from_neighbours(self.G1, self.agents)
 
-        print(f"INFO: beta={self.params['beta']}, gamma={self.params.get('gamma', 0.5)}")
+        print(f"INFO: beta={self.params['beta']}, gamma={self.params.get('gamma', 0.5)}, "
+              f"sigma_k={self.params.get('sigma_k', 6.0)}, sigma_c={self.params.get('sigma_c', 0.5)}")
         n_immune = int(self.params["immune_n"] * len(self.agents))
         if n_immune > 0:
             scores = np.array([(a.theta + a.rho) / 2 for a in self.agents])
@@ -452,7 +482,7 @@ class Model():
             axes[i].hist(vals[i], bins=30, alpha=0.7)
             axes[i].set_title(f'{param_names[i]} (u={np.mean(vals[i]):.2f})')
         os.makedirs("../visualisations_output", exist_ok=True)
-        plt.savefig("../visualisations_output/distro_plots_boltzmann_complex.jpg")
+        plt.savefig("../visualisations_output/distro_plots_boltzmann_memory.jpg")
         print(f"Averages: a={np.mean(vals[0]):.2f} b={np.mean(vals[1]):.2f} "
               f"r={np.mean(vals[2]):.2f} t={np.mean(vals[3]):.2f}")
         print(f"Diet: {sum(d=='veg' for d in self.get_attributes('diet'))/len(self.agents):.2f} veg")
@@ -583,9 +613,9 @@ if __name__ == '__main__':
 
     plt.ylabel("Vegetarian Fraction")
     plt.xlabel("t (steps)")
-    plt.title(f"Boltzmann + diminishing returns (gamma={params['gamma']})")
+    plt.title(f"Boltzmann + recency memory (sigma_k={params['sigma_k']}, sigma_c={params['sigma_c']}, gamma={params['gamma']})")
     plt.legend()
     plt.tight_layout()
     os.makedirs("../visualisations_output", exist_ok=True)
-    plt.savefig("../visualisations_output/boltzmann_complex_test.png", dpi=150)
-    print("Saved: ../visualisations_output/boltzmann_complex_test.png\nDone.")
+    plt.savefig("../visualisations_output/boltzmann_memory_test.png", dpi=150)
+    print("Saved: ../visualisations_output/boltzmann_memory_test.png\nDone.")

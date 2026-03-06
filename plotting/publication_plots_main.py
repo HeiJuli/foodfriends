@@ -29,7 +29,7 @@ def create_color_variations(base_color, n):
     return [tuple(min(1.0, c * (0.7 + 0.3 * i / max(1, n-1))) for c in base_rgb) for i in range(n)]
 
 def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None):
-    """6-panel plot: 4 network snapshots (top) + 1 trajectory + 1 combined CCDF (bottom)"""
+    """7-panel plot: 4 network snapshots (top) + trajectory + CCDF + Lorenz (bottom)"""
     from matplotlib.ticker import LogLocator, NullFormatter
     from matplotlib.patches import Patch
     from matplotlib.lines import Line2D
@@ -52,12 +52,12 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     else:
         traj_y_max = 0.5
 
-    # Figure layout: 4 networks top, trajectory + CCDF bottom
-    fig = plt.figure(figsize=(17.8*cm, 11*cm))
-    outer_gs = fig.add_gridspec(2, 1, height_ratios=[2.8, 1.2],
+    # Figure layout: 4 networks top, trajectory + CCDF + Lorenz bottom
+    fig = plt.figure(figsize=(17.8*cm, 12.5*cm))
+    outer_gs = fig.add_gridspec(2, 1, height_ratios=[2.8, 1.4],
                                 hspace=0.18, top=0.93, bottom=0.08, left=0.08, right=0.97)
     gs_top = outer_gs[0].subgridspec(1, 4, wspace=0.08)
-    gs_bot = outer_gs[1].subgridspec(1, 2, wspace=0.35, width_ratios=[1.2, 1])
+    gs_bot = outer_gs[1].subgridspec(1, 3, wspace=0.35, width_ratios=[1.2, 1, 1])
 
     # Network layout: giant component only (fixed across all snapshots)
     G_full = snapshots['final']['graph']
@@ -161,7 +161,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     traj_ax.set_ylim(0, 1.0)
     traj_ax.set_xlim(-0.5, len(trajectory) / 1000)
-    traj_ax.set_ylabel('$F_{veg}$', fontsize=8)
+    traj_ax.set_ylabel('$F_{veg}$', fontsize=7)
     traj_ax.set_xlabel('$t$ [thousands]', fontsize=7)
     traj_ax.spines['top'].set_visible(False)
     traj_ax.spines['right'].set_visible(False)
@@ -172,9 +172,9 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # === Bottom-right: Combined CCDF with time-colored curves ===
     ccdf_ax = fig.add_subplot(gs_bot[0, 1])
 
-    # Time colormap: light to dark
+    # Time colormap: grey shades (light to dark) to avoid conflict with diet colors
     n_curves = len([t for t in time_points if t != 0])
-    time_cmap = plt.cm.YlOrRd(np.linspace(0.25, 0.85, n_curves))
+    time_cmap = [plt.cm.Greys(v) for v in np.linspace(0.35, 0.85, n_curves)]
 
     curve_idx = 0
     for t in time_points:
@@ -196,15 +196,40 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     ccdf_ax.set_ylim(1e-3, 1.5)
     ccdf_ax.xaxis.set_major_locator(LogLocator(base=10, numticks=4))
     ccdf_ax.xaxis.set_minor_formatter(NullFormatter())
-    ccdf_ax.set_ylabel('$P(X > x)$', fontsize=8)
+    ccdf_ax.set_ylabel('$P(X > x)$', fontsize=7)
     ccdf_ax.set_xlabel('Reduction [t CO$_2$e]', fontsize=7)
     ccdf_ax.spines['top'].set_visible(False)
     ccdf_ax.spines['right'].set_visible(False)
     ccdf_ax.tick_params(axis='both', labelsize=6)
-    ccdf_ax.legend(fontsize=5.5, frameon=False, loc='upper right', title='Snapshot',
-                  title_fontsize=5.5)
+    ccdf_ax.legend(fontsize=5, frameon=False, loc='center', title='Snapshot',
+                  title_fontsize=5)
     ccdf_ax.text(0.02, 0.95, 'B', transform=ccdf_ax.transAxes, fontsize=10,
                 fontweight='bold', va='top')
+
+    # === Bottom-right: Lorenz curve (Newman-style, sorted from largest reducer) ===
+    lorenz_ax = fig.add_subplot(gs_bot[0, 2])
+    for ci, t in enumerate(t for t in time_points if t != 0):
+        snap = snapshots[t]
+        reductions = np.array(snap['reductions'])
+        if np.max(reductions) == 0:
+            continue
+        sorted_red = np.sort(reductions)[::-1]
+        cum_frac = np.cumsum(sorted_red) / sorted_red.sum()
+        pop_frac = np.arange(1, len(sorted_red) + 1) / len(sorted_red)
+        label = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f'{t//1000}k'
+        lorenz_ax.plot(pop_frac, cum_frac, color=time_cmap[ci], lw=1.2, alpha=0.9, label=label)
+    lorenz_ax.plot([0, 1], [0, 1], 'k--', lw=0.8, alpha=0.5)
+    lorenz_ax.set_xlabel('$F_{pop}$', fontsize=7)
+    lorenz_ax.set_ylabel('$F_{red}$', fontsize=7)
+    lorenz_ax.set_xlim(0, 1)
+    lorenz_ax.set_ylim(0, 1)
+    lorenz_ax.set_aspect('equal', adjustable='datalim')
+    lorenz_ax.spines['top'].set_visible(False)
+    lorenz_ax.spines['right'].set_visible(False)
+    lorenz_ax.tick_params(axis='both', labelsize=6)
+    # Legend only in CCDF panel (B) to avoid duplication
+    lorenz_ax.text(0.02, 0.95, 'C', transform=lorenz_ax.transAxes, fontsize=10,
+                   fontweight='bold', va='top')
 
     if save:
         output_dir = ensure_output_dir()

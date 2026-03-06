@@ -1,18 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-Boltzmann dissonance model with complex contagion reinforcement.
+Boltzmann dissonance model for dietary behavior change.
 
-Extension of model_main.py (Galesic et al. 2021). Adds diminishing marginal
-returns to repeated contacts in the social signal h_soc:
+Based on Galesic et al. (2021) J. R. Soc. Interface, 18, 20200857.
+Core: individual dissonance + social dissonance + external field.
 
-  For each source with n contacts in memory, effective weight = n^gamma.
-  h_soc = sum(n_i^gamma for veg sources) / sum(n_j^gamma for all sources)
+Hamiltonian per agent i for diet state s (s_num: meat=0, veg=1):
+  H_i(s) = (1-w_i)(s - h_ind)^2 + w_i(s - h_soc)^2 - tau*s + mu*(1-f_opp)*(s - s_cur)^2
 
-Where gamma in (0,1) controls diminishing returns: gamma=1 means all contacts
-equal (standard model), gamma->0 means only unique sources matter.
-E.g. gamma=0.5: 3 contacts from same person -> sqrt(3)=1.73 effective.
+  h_ind = (1-gate)*rho + gate*theta_01
+  theta_01 = (theta+1)/2        [rescale theta [-1,1] -> [0,1]]
+  gate(p_opp) = sigmoid(k*(p_opp - c))
+  h_soc = frac veg in memory buffer
+  w_i = 1 - alpha_i
 
-Memory stores (diet, source_id) tuples instead of plain diet strings.
+Alpha compressed: raw Likert [0,1] -> [alpha_min, alpha_max].
+P(switch) = exp(-beta*H_switch) / Z
 
 @author: everall
 """
@@ -22,7 +25,6 @@ import numpy as np
 import random
 import scipy.stats as st
 import math
-from collections import Counter
 import matplotlib.pyplot as plt
 import pandas as pd
 from netin import PATCH
@@ -34,35 +36,35 @@ from auxillary.sampling_utils import stratified_sample_agents
 from auxillary import network_stats
 
 # %% Parameters
+# CO2 measures in kg/year, source: https://pubmed.ncbi.nlm.nih.gov/25834298/
 params = {
-    "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,
-    "N": 650,
-    "erdos_p": 3,
-    "steps": 35000,
-    "k": 8,
-    "immune_n": 0.10,
-    "M": 9,
-    "veg_f": 0,
-    "meat_f": 0.95,
-    "p_rewire": 0.01,
-    "rewire_h": 0.1,
-    "tc": 0.7,
-    "topology": "homophilic_emp",
-    "beta": 20,
-    "alpha": 0.36,
-    "rho": 0.45,
-    "theta": 0.44,
+    "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
+    "N": 650,              # population size
+    "erdos_p": 3,          # ER graph edge prob
+    "steps": 40000,       # simulation timesteps
+    "k": 8,                # avg degree (PATCH/WS)
+    "immune_n": 0.10,         # fraction of immune agents
+    "M": 9,                # memory buffer length
+    "veg_f": 0,            # initial veg fraction
+    "meat_f": 0.95,        # initial meat fraction
+    "p_rewire": 0.01,      # rewire probability per step
+    "rewire_h": 0.1,       # homophily bias in rewiring
+    "tc": 0.7,             # triadic closure probability
+    "topology": "homophilic_emp",  # network type
+    "beta": 20,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp) 21, 19
+    "alpha": 0.36,         # individual weight (stubbornness)
+    "rho": 0.45,           # behavioral intention
+    "theta": 0.44,         # intrinsic preference [-1=meat, +1=veg]
     "agent_ini": "sample-max",
     "survey_file": "../data/hierarchical_agents.csv",
-    "adjust_veg_fraction": True,
-    "target_veg_fraction": 0.06,
-    "tau": 0.015,
-    "theta_gate_c": 0.35,
-    "theta_gate_k": 25,
-    "alpha_min": 0.05,
-    "alpha_max": 0.80,
-    "mu": 0.45,
-    "gamma": 0.45,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
+    "adjust_veg_fraction": True,  # flip meat->veg to hit target
+    "target_veg_fraction": 0.06,   # NL demographics target
+    "tau": 0.015,          # external field strength (Galesic & Stein 2019)
+    "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
+    "theta_gate_k": 25,    # gate steepness
+    "alpha_min": 0.05,     # alpha compression lower bound
+    "alpha_max": 0.80,     # alpha compression upper bound
+    "mu": 0.2,             # status-quo bias strength
 }
 
 
@@ -71,35 +73,24 @@ params = {
 def _status_quo_bias(s, s_cur, p_opp, mu):
     """Inertia term (Samuelson & Zeckhauser 1988): erodes with opposite-diet exposure.
     Ignore this for now"""
+    #return mu * (s - s_cur) ** 2
+    #return mu * (1 - p_opp) * (s - s_cur) ** 2
 
 def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
-                theta_gate_c=0.3, theta_gate_k=10, tau=0.0, mu=0.1, gamma=0.5):
-    """H(s) = (1-w)(s-h_ind)^2 + w(s-h_soc)^2 - tau*s
+                theta_gate_c=0.3, theta_gate_k=10, tau=0.0, mu=0.1):
+    """H(s) = (1-w)(s-h_ind)^2 + w(s-h_soc)^2 - tau*s + inertia.
 
     h_ind = (1-gate)*rho + gate*theta_01  where gate = sigmoid(k*(p_opp - c))
-    h_soc uses diminishing marginal returns per source: n contacts -> n^gamma
-      effective weight. gamma=1 => all contacts equal, gamma->0 => only unique
-      sources matter.
-
-    Memory entries are (diet, source_id) tuples.
     """
     mem = memory[-M:]
-    if not mem:
-        return (1 - w) * (s_num - rho)**2
-
-    # Effective counts with diminishing returns per source
-    veg_src = Counter(src for d, src in mem if d == "veg")
-    all_src = Counter(src for _, src in mem)
-    eff_veg = sum(n ** gamma for n in veg_src.values())
-    eff_total = sum(n ** gamma for n in all_src.values())
-
-    h_soc = eff_veg / eff_total if eff_total > 0 else 0.0
-    p_opp = sum(1 for d, _ in mem if d != current_diet) / len(mem)
+    h_soc = sum(1 for d in mem if d == "veg") / len(mem) if mem else 0.0
+    p_opp = sum(1 for d in mem if d != current_diet) / len(mem) if mem else 0.0
     gate = 1 / (1 + math.exp(-theta_gate_k * (p_opp - theta_gate_c)))
-
+    
     s, s_cur = s_num, 1.0 if current_diet == "veg" else 0.0
+    
     h_ind = (1 - gate) * rho + gate * (theta + 1.0) / 2.0
-    return (1 - w) * (s - h_ind)**2 + w * (s - h_soc)**2
+    return ((1 - w) * (s - h_ind)**2 + w * (s - h_soc)**2)
 
 
 def boltzmann_prob(H_switch, H_stay, beta):
@@ -176,13 +167,14 @@ class Agent():
         self.params = params
         self.set_params(**kwargs)
         self.C = self.diet_emissions(self.diet)
-        self.memory = []  # list of (diet, source_id) tuples
+        self.memory = []
         self.survey_id = kwargs.get('survey_id', i)
         self.reduction_out = 0
         self.diet_duration = 0
         self.diet_history = []
         self.last_change_time = 0
         self.immune = False
+        # Cascade attribution tracking (Guilbeault & Centola 2021)
         self.influence_parent = None
         self.influenced_agents = []
         self.change_time = None
@@ -220,26 +212,16 @@ class Agent():
         return np.random.choice(["veg", "meat"], p=[self.params["veg_f"], self.params["meat_f"]])
 
     def initialize_memory_from_neighbours(self, G, agents):
-        """Seed memory as (diet, source_id) tuples matching neighbor distribution."""
+        """Seed memory deterministically to match current neighbor distribution."""
         neigh_ids = list(G.neighbors(self.i))
         if not neigh_ids:
-            self.memory = [(self.diet, self.i)] * self.params["M"]
+            self.memory = [self.diet] * self.params["M"]
             return
-        neigh_diets = [(agents[j].diet, j) for j in neigh_ids]
-        n_veg = sum(1 for d, _ in neigh_diets if d == "veg")
+        neigh_diets = [agents[j].diet for j in neigh_ids]
+        n_veg = sum(d == "veg" for d in neigh_diets)
         veg_in_mem = round(self.params["M"] * n_veg / len(neigh_diets))
-        # Sample source IDs from actual neighbors to preserve diversity info
-        veg_nbrs = [j for j in neigh_ids if agents[j].diet == "veg"]
-        meat_nbrs = [j for j in neigh_ids if agents[j].diet == "meat"]
-        mem = []
-        for _ in range(veg_in_mem):
-            src = random.choice(veg_nbrs) if veg_nbrs else self.i
-            mem.append(("veg", src))
-        for _ in range(self.params["M"] - veg_in_mem):
-            src = random.choice(meat_nbrs) if meat_nbrs else self.i
-            mem.append(("meat", src))
-        random.shuffle(mem)
-        self.memory = mem
+        self.memory = ["veg"] * veg_in_mem + ["meat"] * (self.params["M"] - veg_in_mem)
+        np.random.shuffle(self.memory)
 
     def diet_emissions(self, diet):
         veg, meat = (st.norm.rvs(loc=x, scale=0.1*x)
@@ -254,9 +236,9 @@ class Agent():
         s_stay = 1.0 if self.diet == "veg" else 0.0
         gate_c, gate_k = self.params.get("theta_gate_c", 0.3), self.params.get("theta_gate_k", 10)
         tau, mu = self.params.get("tau", 0.0), self.params.get("mu", 0.1)
-        M, gamma = self.params["M"], self.params.get("gamma", 0.5)
-        H_stay   = hamiltonian(s_stay,       self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
-        H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
+        M = self.params["M"]
+        H_stay   = hamiltonian(s_stay,       self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu)
+        H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu)
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
     def reduction_tracker(self, old_c, influencer, agents_list,
@@ -279,7 +261,7 @@ class Agent():
         if not neighbours:
             return
         other_agent = random.choice(neighbours)
-        self.memory.append((other_agent.diet, other_agent.i))
+        self.memory.append(other_agent.diet)
 
         if not self.immune and self.flip(self.prob_calc(other_agent)):
             old_C, old_diet = self.C, self.diet
@@ -342,9 +324,10 @@ class Model():
             for agent in self.agents:
                 agent.initialize_memory_from_neighbours(self.G1, self.agents)
 
-        print(f"INFO: beta={self.params['beta']}, gamma={self.params.get('gamma', 0.5)}")
+        print(f"INFO: beta={self.params['beta']}")
         n_immune = int(self.params["immune_n"] * len(self.agents))
         if n_immune > 0:
+            # immunise agents with most extreme convictions (both tails of theta+rho)
             scores = np.array([(a.theta + a.rho) / 2 for a in self.agents])
             n_lo, n_hi = n_immune // 2, n_immune - n_immune // 2
             idx = np.concatenate([np.argsort(scores)[:n_lo], np.argsort(scores)[-n_hi:]])
@@ -395,6 +378,7 @@ class Model():
                 kwargs['alpha'] = row["alpha"]
             self.agents.append(Agent(i=agent_id, params=self.params, **kwargs))
 
+        # Alpha compression: raw Likert [0,1] -> [alpha_min, alpha_max]
         a_min, a_max = self.params.get("alpha_min"), self.params.get("alpha_max")
         if a_min is not None and a_max is not None:
             raw_mean = np.mean([a.alpha for a in self.agents])
@@ -424,8 +408,10 @@ class Model():
     def adjust_veg_fraction_to_target(self):
         if not self.params.get("adjust_veg_fraction", False):
             return
+        # Pre-equilibrate high-rho meat-eaters, then top up to target if needed
         target = self.params.get("target_veg_fraction", 0.06)
         current_veg = sum(1 for a in self.agents if a.diet == "veg")
+        # First: flip rho~1 + high-alpha agents (would switch instantly anyway)
         candidates = sorted(
             (a for a in self.agents if a.diet == "meat" and not a.immune),
             key=lambda a: (a.rho, a.alpha), reverse=True)
@@ -452,7 +438,7 @@ class Model():
             axes[i].hist(vals[i], bins=30, alpha=0.7)
             axes[i].set_title(f'{param_names[i]} (u={np.mean(vals[i]):.2f})')
         os.makedirs("../visualisations_output", exist_ok=True)
-        plt.savefig("../visualisations_output/distro_plots_boltzmann_complex.jpg")
+        plt.savefig("../visualisations_output/distro_plots_boltzmann.jpg")
         print(f"Averages: a={np.mean(vals[0]):.2f} b={np.mean(vals[1]):.2f} "
               f"r={np.mean(vals[2]):.2f} t={np.mean(vals[3]):.2f}")
         print(f"Diet: {sum(d=='veg' for d in self.get_attributes('diet'))/len(self.agents):.2f} veg")
@@ -583,9 +569,9 @@ if __name__ == '__main__':
 
     plt.ylabel("Vegetarian Fraction")
     plt.xlabel("t (steps)")
-    plt.title(f"Boltzmann + diminishing returns (gamma={params['gamma']})")
+    plt.title("Boltzmann model (Galesic et al. 2021)")
     plt.legend()
     plt.tight_layout()
     os.makedirs("../visualisations_output", exist_ok=True)
-    plt.savefig("../visualisations_output/boltzmann_complex_test.png", dpi=150)
-    print("Saved: ../visualisations_output/boltzmann_complex_test.png\nDone.")
+    plt.savefig("../visualisations_output/boltzmann_test.png", dpi=150)
+    print("Saved: ../visualisations_output/boltzmann_test.png\nDone.")
