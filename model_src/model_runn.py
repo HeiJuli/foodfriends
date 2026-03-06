@@ -16,7 +16,7 @@ DEFAULT_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 650,              # population size
     "erdos_p": 3,          # ER graph edge prob
-    "steps": 33000,        # simulation timesteps
+    "steps": 35000,        # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
     "immune_n": 0.10,         # fraction of immune agents
     "M": 9,                # memory buffer length
@@ -40,7 +40,7 @@ DEFAULT_PARAMS = {
     "alpha_min": 0.05,     # alpha compression lower bound
     "alpha_max": 0.80,     # alpha compression upper bound
     "mu": 0.5,             # status-quo bias strength (currently inactive in model)
-    "gamma": 0.5          # diminishing returns exponent for repeated same-source contacts
+    "gamma": 0.3     # diminishing returns exponent for repeated same-source contacts
 }
 
 
@@ -321,7 +321,7 @@ def main():
             timer(run_veg_growth_analysis, params=params,
                   veg_fractions=np.linspace(0.1, 0.6, 10))
         elif choice == '4':
-            timer(run_trajectory_analysis, params=params, runs_per_combo=5)
+            timer(run_trajectory_analysis, params=params, runs_per_combo=30)
         elif choice == '5':
             timer(run_parameter_analysis, params=params,
                   alpha_range=np.linspace(0.1, 0.9, 3),
