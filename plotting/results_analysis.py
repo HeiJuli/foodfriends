@@ -110,11 +110,17 @@ def analysis_2_gini(median_row, all_data, label='twin', t_cutoff=None):
         top1_frac = sorted_desc[:max(1, int(0.01 * len(sorted_desc)))].sum() / total
         median_kg = np.median(pos)
 
+        # Lorenz curve: top X% share = 1 - L(1-X) where sorted_r is ascending
+        top10_lorenz = sorted_r[int(0.90 * n):].sum() / sorted_r.sum()
+        top20_lorenz = sorted_r[int(0.80 * n):].sum() / sorted_r.sum()
+
         t_label = f't_end' if t == 'final' else f't={t//1000}k'
         print(f"\n  {t_label}:  Gini = {gini:.3f}")
         print(f"    Top  1% accounts for {top1_frac*100:.1f}% of total reductions")
         print(f"    Top 10% accounts for {top10_frac*100:.1f}% of total reductions")
         print(f"    Median agent: {median_kg:.0f} kg CO2")
+        print(f"    Lorenz (f_pop=0.90): top 10% -> {top10_lorenz*100:.2f}% of total reductions")
+        print(f"    Lorenz (f_pop=0.80): top 20% -> {top20_lorenz*100:.2f}% of total reductions")
 
     # Ensemble Gini (resolved snapshot across all runs)
     ginis = []
@@ -239,27 +245,28 @@ def analysis_5_inflection(all_data, label='twin'):
 
 def main():
     import sys
-    t_cutoff = int(sys.argv[1]) if len(sys.argv) > 1 else None
-    if t_cutoff:
-        print(f"Using t_cutoff={t_cutoff} for distribution/scaling analyses")
+    twin_cutoff = int(sys.argv[1]) if len(sys.argv) > 1 else None
+    smax_cutoff = int(sys.argv[2]) if len(sys.argv) > 2 else None
+    if twin_cutoff:
+        print(f"twin t_cutoff={twin_cutoff}, sample-max t_cutoff={smax_cutoff}")
 
     print("Loading data...")
     twin_all, twin_med = load(TWIN)
     smax_all, smax_med = load(SMAX)
 
     # --- Run all analyses on twin (primary) ---
-    analysis_1_powerlaw(twin_med, 'twin', t_cutoff)
-    analysis_2_gini(twin_med, twin_all, 'twin', t_cutoff)
-    analysis_4_degree_scaling(twin_med, 'twin', t_cutoff)
+    analysis_1_powerlaw(twin_med, 'twin', twin_cutoff)
+    analysis_2_gini(twin_med, twin_all, 'twin', twin_cutoff)
+    analysis_4_degree_scaling(twin_med, 'twin', twin_cutoff)
     analysis_5_inflection(twin_all, 'twin')
 
     # --- Robustness: sample-max ---
     print(f"\n\n{'#'*60}")
     print(f"  ROBUSTNESS: sample-max (N=385, n=10)")
     print(f"{'#'*60}")
-    analysis_1_powerlaw(smax_med, 'sample-max', t_cutoff)
-    analysis_2_gini(smax_med, smax_all, 'sample-max', t_cutoff)
-    analysis_4_degree_scaling(smax_med, 'sample-max', t_cutoff)
+    analysis_1_powerlaw(smax_med, 'sample-max', smax_cutoff)
+    analysis_2_gini(smax_med, smax_all, 'sample-max', smax_cutoff)
+    analysis_4_degree_scaling(smax_med, 'sample-max', smax_cutoff)
     analysis_5_inflection(smax_all, 'sample-max')
 
 

@@ -16,7 +16,7 @@ DEFAULT_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 650,              # population size
     "erdos_p": 3,          # ER graph edge prob
-    "steps": 32000,        # simulation timesteps
+    "steps": 35000,        # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
     "immune_n": 0.10,         # fraction of immune agents
     "M": 9,                # memory buffer length
@@ -40,7 +40,8 @@ DEFAULT_PARAMS = {
     "alpha_min": 0.05,     # alpha compression lower bound
     "alpha_max": 0.80,     # alpha compression upper bound
     "mu": 0.5,             # status-quo bias strength (currently inactive in model)
-    "gamma": 0.3     # diminishing returns exponent for repeated same-source contacts
+    "gamma": 0.3,  # diminishing returns exponent for repeated same-source contacts
+    "snapshot_dense_start": 30000,  # take snapshots every 2k from this step onwards (0 = disabled)
 }
 
 

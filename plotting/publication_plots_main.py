@@ -81,6 +81,15 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         analysis_snapshots['final'] = snapshots['steady']
         print(f"INFO: Auto-detected steady-state snapshot used for B/C panels")
 
+    # Resolve the integer t that analysis 'final' corresponds to (for trajectory marker)
+    if analysis_t_end is not None:
+        analysis_final_t = best_t if isinstance(best_t, int) else len(trajectory) - 1
+    elif 'steady' in snapshots:
+        ss_t = median_row.get('steady_state_t')
+        analysis_final_t = int(ss_t) if ss_t is not None else len(trajectory) - 1
+    else:
+        analysis_final_t = len(trajectory) - 1
+
     if isinstance(trajectory, list) and len(trajectory) > 0:
         print(f"INFO: Initial veg fraction = {trajectory[0]:.3f}, Final = {trajectory[-1]:.3f}")
         traj_y_max = max(trajectory) * 1.1
@@ -95,7 +104,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     gs_bot = outer_gs[1].subgridspec(1, 3, wspace=0.35, width_ratios=[1.2, 1, 1])
 
     # Network layout: giant component only (fixed across all snapshots)
-    G_full = snapshots['final']['graph']
+    G_full = analysis_snapshots['final']['graph']
     giant_nodes = max(nx.connected_components(G_full), key=len)
     G = G_full.subgraph(giant_nodes).copy()
     N_gc = G.number_of_nodes()
@@ -132,7 +141,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     # === Row 0: Network snapshots ===
     for i, t in enumerate(time_points):
-        snap = snapshots[t]
+        snap = analysis_snapshots[t] if t in analysis_snapshots else snapshots[t]
         all_diets = snap['diets']
         all_red   = np.array(snap['reductions'])
         net_ax = fig.add_subplot(gs_top[0, i])
@@ -190,7 +199,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             if t == 0:
                 t_val = 0
             elif t == 'final':
-                t_val = len(trajectory) - 1
+                t_val = min(analysis_final_t, len(trajectory) - 1)
             else:
                 t_val = min(t, len(trajectory) - 1)
             t_k = t_val / 1000
@@ -223,7 +232,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         if np.max(reductions) == 0:
             continue
         reductions_tonnes = reductions / 1000
-        pos_red = np.sort(reductions_tonnes[reductions_tonnes > 0])
+        pos_red = np.sort(reductions_tonnes[reductions_tonnes > 1e-6])
         ccdf_y = 1.0 - np.arange(1, len(pos_red) + 1) / len(pos_red)
 
         label = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f'{t//1000}k'
