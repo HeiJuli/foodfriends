@@ -244,7 +244,9 @@ class Agent():
 
     def diet_emissions(self, diet):
         base = self.params["veg_CO2"] if diet == "veg" else self.params["meat_CO2"]
-        return st.norm.rvs(loc=base, scale=0.1 * base)
+        # Log-normal with CV~0.20 (Temme 2015; Vellinga 2019 NL dietary data)
+        sigma = 0.20
+        return st.lognorm.rvs(s=sigma, scale=base)
 
     def choose_alpha_beta(self, mean):
         return st.truncnorm.rvs(0, 1, loc=mean, scale=mean*0.2)
@@ -306,7 +308,7 @@ class Agent():
                     self.influence_parent = None
                     self.change_time = None
         else:
-            self.C = np.random.normal(self.C_base[self.diet], 0.1 * self.C_base[self.diet])
+            self.C = st.lognorm.rvs(s=0.20, scale=self.C_base[self.diet])
 
     def flip(self, p):
         return np.random.random() < p
