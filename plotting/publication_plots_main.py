@@ -287,66 +287,58 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
     return fig
 
-def plot_trajectory_param_twin(data=None, file_path=None, save=True, xlim_max=None):
-    """Two-panel figure: (A) spaghetti trajectories + (B) amplification factor distribution.
+def _resolve_snapshot(data, analysis_t_end=None):
+    """Resolve the analysis snapshot: explicit t_end > steady > final."""
+    if 'is_median_twin' in data.columns and data['is_median_twin'].any():
+        median_row = data[data['is_median_twin']].iloc[0]
+    else:
+        twin_data = data[data['agent_ini'].isin(['twin', 'sample-max'])]
+        median_row = (twin_data if len(twin_data) else data).iloc[len(data) // 2]
+    snapshots = median_row['snapshots']
+    if analysis_t_end is not None:
+        int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
+        best_t = min(int_times, key=lambda t: abs(t - analysis_t_end)) if int_times else 'final'
+        snap = snapshots[best_t] if best_t != 'final' else snapshots['final']
+        print(f"INFO: analysis_t_end={analysis_t_end} -> using snapshot t={best_t}")
+    elif 'steady' in snapshots:
+        snap = snapshots['steady']
+        print(f"INFO: Using auto-detected steady-state snapshot")
+    else:
+        snap = snapshots['final']
+    return median_row, snap
 
-    Args:
-        xlim_max: Maximum x-axis limit in thousands (e.g., 20 for 20k timesteps).
-                  If None, uses full data range. Arrows always show steady state.
-    """
+def plot_amplification(data=None, file_path=None, save=True, analysis_t_end=None):
+    """Standalone figure: rank-ordered amplification factor distribution."""
     set_publication_style()
 
     if data is None:
         data = load_data(file_path)
         if data is None: return None
 
-    fig, (ax_traj, ax_mult) = plt.subplots(1, 2, figsize=(17.8*cm, 7*cm),
-                                            gridspec_kw={'width_ratios': [1.3, 1], 'wspace': 0.35})
+    fig, ax = plt.subplots(figsize=(8.9*cm, 7*cm))
 
-    # --- Panel A: Spaghetti trajectories ---
-    twin_data = data[data['agent_ini'].isin(['twin', 'sample-max'])]
-    if len(twin_data) == 0:
-        twin_data = data  # fallback
-    colors = create_color_variations("#984ea3", len(twin_data))
-    trajectories_data = []
-    for i, (_, row) in enumerate(twin_data.iterrows()):
-        trajectory = row['fraction_veg_trajectory']
-        if isinstance(trajectory, list):
-            t_thousands = np.arange(len(trajectory)) / 1000
-            line, = ax_traj.plot(t_thousands, trajectory, color=colors[i % len(colors)],
-                                alpha=0.6, linewidth=0.8)
-            trajectories_data.append((line, trajectory[-1]))
-
-    # Arrows at right edge — offset left by 1.5k so t=0 is visible
-    xlim = ax_traj.get_xlim()
-    x_right = xlim_max if xlim_max is not None else xlim[1]
-    ax_traj.set_xlim(-1.5, x_right)
-    x_arrow = x_right
-    for line, final_val in trajectories_data:
-        ax_traj.annotate('', xy=(x_arrow, final_val), xytext=(x_arrow*0.98, final_val),
-                        arrowprops=dict(arrowstyle='->', color=line.get_color(), lw=1.2))
-
-    ax_traj.set_xlabel('$t$ [thousands]', fontsize=8)
-    ax_traj.set_ylabel('Vegetarian Fraction', fontsize=8)
-    ax_traj.set_ylim(0, 1.0)
-    ax_traj.spines['top'].set_visible(False)
-    ax_traj.spines['right'].set_visible(False)
-    ax_traj.tick_params(axis='both', labelsize=7)
-    ax_traj.text(0.02, 0.97, 'A', transform=ax_traj.transAxes, fontsize=11,
-                fontweight='bold', va='top')
-
-    # --- Panel B: Amplification factor distribution ---
     DIRECT_REDUCTION_KG = 664  # 2054 - 1390 kg CO2/year
 
-    # Get median run reductions
-    if 'is_median_twin' in data.columns and data['is_median_twin'].any():
-        median_row = data[data['is_median_twin']].iloc[0]
-    else:
-        median_row = twin_data.iloc[len(twin_data) // 2]
-
-    reductions_kg = np.array(median_row['snapshots']['final']['reductions'])
-    pos_mask = reductions_kg > 0
+    median_row, snap = _resolve_snapshot(data, analysis_t_end)
+    reductions_kg = np.array(snap['reductions'])
+    pos_mask = reductions_kg > 1e-3
     multipliers = reductions_kg[pos_mask] / DIRECT_REDUCTION_KG
+
+    # Early-adopter cutoff: converted before 50% of steady-state veg fraction
+    change_times = snap.get('change_times')
+    traj = median_row.get('fraction_veg_trajectory', median_row.get('fraction_veg_trajectory'))
+    early_mult = None
+    if change_times is not None and traj is not None:
+        traj = np.array(traj)
+        final_veg = traj[-1]
+        half_veg = final_veg * 0.5
+        t_half = np.searchsorted(traj, half_veg)  # first t where veg >= 50% of final
+        ct = np.array(change_times)
+        early_mask = pos_mask & (ct > 0) & (ct <= t_half)  # converted before halfway
+        if early_mask.sum() > 0:
+            early_mult = np.median(reductions_kg[early_mask] / DIRECT_REDUCTION_KG)
+            print(f"INFO: Early-adopter cutoff t={t_half} ({early_mask.sum()} agents, "
+                  f"median amplification {early_mult:.1f}x)")
 
     # Sort for rank-ordered plot
     multipliers_sorted = np.sort(multipliers)[::-1]
@@ -354,48 +346,53 @@ def plot_trajectory_param_twin(data=None, file_path=None, save=True, xlim_max=No
     rank_pct = ranks / len(multipliers_sorted) * 100
 
     # Rank-ordered curve with subtle fill
-    ax_mult.fill_between(rank_pct, multipliers_sorted, alpha=0.15, color=COLORS['secondary'])
-    ax_mult.plot(rank_pct, multipliers_sorted, color=COLORS['secondary'], linewidth=1.2)
+    ax.fill_between(rank_pct, multipliers_sorted, alpha=0.15, color=COLORS['secondary'])
+    ax.plot(rank_pct, multipliers_sorted, color=COLORS['secondary'], linewidth=1.2)
 
     # Mean line
     mean_mult = np.mean(multipliers)
-    ax_mult.axhline(mean_mult, color='#555', linestyle='--', linewidth=1.0, alpha=0.7)
-    ax_mult.text(50, mean_mult * 1.15, f'Mean: {mean_mult:.0f}x', fontsize=6, color='#555',
-                va='bottom', ha='center')
+    ax.axhline(mean_mult, color='#555', linestyle='--', linewidth=1.0, alpha=0.7)
+    ax.text(50, mean_mult * 1.15, f'Mean: {mean_mult:.0f}x', fontsize=6, color='#555',
+            va='bottom', ha='center')
+
+    # Early-adopter median line
+    if early_mult is not None:
+        ax.axhline(early_mult, color='#2ca02c', linestyle='-', linewidth=1.2, alpha=0.85)
+        ax.text(50, early_mult * 1.15, f'Early adopters: {early_mult:.1f}x', fontsize=6,
+                color='#2ca02c', va='bottom', ha='center', fontweight='bold')
 
     # 1x baseline (personal only)
-    ax_mult.axhline(1.0, color='#aaa', linestyle=':', linewidth=0.8, alpha=0.6)
-    ax_mult.text(50, 1.25, 'Personal only (1x)', fontsize=5.5, color='#aaa',
-                va='bottom', ha='center')
+    ax.axhline(1.0, color='#aaa', linestyle=':', linewidth=0.8, alpha=0.6)
+    ax.text(50, 1.25, 'Personal only (1x)', fontsize=5.5, color='#aaa',
+            va='bottom', ha='center')
 
-    ax_mult.set_xlabel('Agent rank [percentile]', fontsize=8)
-    ax_mult.set_ylabel('Amplification factor', fontsize=8)
-    ax_mult.set_xlim(0, 100)
-    ax_mult.set_yscale('log')
-    ax_mult.spines['top'].set_visible(False)
-    ax_mult.spines['right'].set_visible(False)
-    ax_mult.tick_params(axis='both', labelsize=7)
-    ax_mult.text(0.02, 0.97, 'B', transform=ax_mult.transAxes, fontsize=11,
-                fontweight='bold', va='top')
+    ax.set_xlabel('Agent rank [percentile]', fontsize=8)
+    ax.set_ylabel('Amplification factor', fontsize=8)
+    ax.set_xlim(0, 100)
+    ax.set_yscale('log')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.tick_params(axis='both', labelsize=7)
 
-    # Summary stats annotation (bottom-left to avoid overlap with curve)
+    # Summary stats
     p90 = np.percentile(multipliers, 90)
     top_mult = np.max(multipliers)
-    stats_text = f'Top: {top_mult:.0f}x  |  p90: {p90:.0f}x  |  N = {len(multipliers)}'
-    ax_mult.text(0.50, 0.03, stats_text, transform=ax_mult.transAxes, fontsize=5.5,
-                va='bottom', ha='center', color='#444',
-                bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#ccc', alpha=0.8))
+    early_str = f'  |  Early: {early_mult:.1f}x' if early_mult else ''
+    stats_text = f'Top: {top_mult:.0f}x  |  p90: {p90:.0f}x{early_str}  |  N = {len(multipliers)}'
+    ax.text(0.50, 0.03, stats_text, transform=ax.transAxes, fontsize=5.5,
+            va='bottom', ha='center', color='#444',
+            bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#ccc', alpha=0.8))
 
     plt.tight_layout()
 
     if save:
         output_dir = ensure_output_dir()
-        plt.savefig(f'{output_dir}/twin_trajectories.pdf', dpi=300, bbox_inches='tight')
-        print("Saved twin_trajectories.pdf")
+        plt.savefig(f'{output_dir}/amplification_factor.pdf', dpi=300, bbox_inches='tight')
+        print("Saved amplification_factor.pdf")
 
     return fig
 
-def plot_agency_predictors(data=None, file_path=None, save=True):
+def plot_agency_predictors(data=None, file_path=None, save=True, analysis_t_end=None):
     """Standalone single-column figure: what predicts high individual agency?
     Scatter of amplification factor vs agent properties (degree, theta).
 
@@ -410,13 +407,7 @@ def plot_agency_predictors(data=None, file_path=None, save=True):
         data = load_data(file_path)
         if data is None: return None
 
-    # Get median run
-    if 'is_median_twin' in data.columns and data['is_median_twin'].any():
-        median_row = data[data['is_median_twin']].iloc[0]
-    else:
-        median_row = data.iloc[len(data) // 2]
-
-    snap = median_row['snapshots']['final']
+    median_row, snap = _resolve_snapshot(data, analysis_t_end)
     reductions_kg = np.array(snap['reductions'])
     G = snap['graph']
     nodes = list(G.nodes())
@@ -430,8 +421,8 @@ def plot_agency_predictors(data=None, file_path=None, save=True):
     thetas = np.array([G.nodes[n].get('theta', 0) for n in nodes])
     initial_diets = np.array([G.nodes[n].get('diet', 'meat') for n in nodes])
 
-    # Only agents with positive reductions
-    pos_mask = reductions_kg > 0
+    # Only agents with meaningful positive reductions (filter FP noise)
+    pos_mask = reductions_kg > 1e-3
     mult_pos = multipliers[pos_mask]
     deg_pos = degrees[pos_mask]
     theta_pos = thetas[pos_mask]
@@ -537,7 +528,7 @@ def main():
 
     while True:
         print("\n[1] Network Agency Evolution (6-panel)")
-        print("[2] Twin Trajectories (spaghetti + amplification)")
+        print("[2] Amplification Factor (standalone)")
         print("[3] Agency Predictors (degree/theta scatter)")
         print("[0] Exit")
 
@@ -559,13 +550,15 @@ def main():
         elif choice == '2':
             file_path = select_file('trajectory_analysis')
             if file_path:
-                xlim_input = input("X-axis max limit in thousands (e.g., 20 for 20k) [Enter for auto]: ")
-                xlim_max = float(xlim_input) if xlim_input else None
-                plot_trajectory_param_twin(file_path=file_path, xlim_max=xlim_max)
+                at_input = input("Analysis t_end (Enter for auto-steady): ")
+                analysis_t_end = int(at_input) if at_input else None
+                plot_amplification(file_path=file_path, analysis_t_end=analysis_t_end)
         elif choice == '3':
             file_path = select_file('trajectory_analysis')
             if file_path:
-                plot_agency_predictors(file_path=file_path)
+                at_input = input("Analysis t_end (Enter for auto-steady): ")
+                analysis_t_end = int(at_input) if at_input else None
+                plot_agency_predictors(file_path=file_path, analysis_t_end=analysis_t_end)
         elif choice == '0':
             break
         else:
