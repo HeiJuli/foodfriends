@@ -497,6 +497,7 @@ class Model():
         self.snapshots[t] = {
             'diets': self.get_attributes("diet"),
             'reductions': self.get_attributes("reduction_out"),
+            'change_times': self.get_attributes("change_time"),
             'graph': graph_copy,
             'veg_fraction': self.fraction_veg[-1]
         }
