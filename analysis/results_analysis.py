@@ -3,6 +3,7 @@
 
 1. Power-law / heavy-tail fit on CCDF of emission reductions
 2. Gini coefficient + concentration ratios from Lorenz curve
+3. Network assortativity and clustering by diet group (t0 vs t_end)
 4. Scaling exponent: amplification ~ k^gamma
 5. Inflection point / critical mass from trajectory
 
@@ -20,6 +21,13 @@ warnings.filterwarnings('ignore')
 
 TWIN = '../model_output/trajectory_analysis_twin_20260306.pkl'
 SMAX = '../model_output/trajectory_analysis_sample-max_20260306.pkl'
+
+def _apply_diets(G, diets):
+    """Return graph copy with node diet attributes updated from diets list."""
+    G2 = G.copy()
+    for i, n in enumerate(G2.nodes()):
+        G2.nodes[n]['diet'] = diets[i]
+    return G2
 DIRECT_REDUCTION_KG = 664  # 2054 - 1390
 
 def _resolve_snapshot(snapshots, t_cutoff=None):
@@ -140,6 +148,45 @@ def analysis_2_gini(median_row, all_data, label='twin', t_cutoff=None):
     print(f"    Gini median = {np.median(ginis):.3f}, IQR = [{np.percentile(ginis,25):.3f}, {np.percentile(ginis,75):.3f}]")
 
 
+def analysis_3_network_assortativity(median_row, label='twin', t_cutoff=None):
+    """Assortativity and clustering by diet group at t0 vs t_end."""
+    print(f"\n{'='*60}")
+    print(f"  3. NETWORK ASSORTATIVITY & CLUSTERING  [{label}]")
+    print(f"{'='*60}")
+
+    snaps = median_row['snapshots']
+    snap_key = _resolve_snapshot(snaps, t_cutoff)
+
+    for t_key, tlabel in [(0, 't0'), (snap_key, 't_end')]:
+        snap = snaps[t_key]
+        G = _apply_diets(snap['graph'], snap['diets'])
+        diets = snap['diets']
+        n_veg = sum(1 for x in diets if x == 'veg')
+        n_meat = len(diets) - n_veg
+        fveg = snap['veg_fraction']
+
+        r = nx.attribute_assortativity_coefficient(G, 'diet')
+
+        rows = []
+        for group in ('meat', 'veg'):
+            nodes = [n for n, a in G.nodes(data=True) if a.get('diet') == group]
+            if not nodes:
+                rows.append((group, None, None))
+                continue
+            homophily = np.mean([
+                sum(1 for nb in G.neighbors(n) if G.nodes[nb].get('diet') == group) / max(1, G.degree(n))
+                for n in nodes
+            ])
+            clust = np.mean([nx.clustering(G, n) for n in nodes])
+            rows.append((group, homophily, clust))
+
+        print(f"\n  {tlabel}  (F_veg={fveg:.3f}, N_veg={n_veg}, N_meat={n_meat})")
+        print(f"    Overall assortativity r = {r:.4f}")
+        for group, h, c in rows:
+            if h is not None:
+                print(f"    {group:4s}: neighbor homophily = {h:.4f},  clustering = {c:.4f}")
+
+
 def analysis_4_degree_scaling(median_row, label='twin', t_cutoff=None):
     """Fit amplification ~ k^gamma scaling."""
     snap_key = _resolve_snapshot(median_row['snapshots'], t_cutoff)
@@ -257,6 +304,7 @@ def main():
     # --- Run all analyses on twin (primary) ---
     analysis_1_powerlaw(twin_med, 'twin', twin_cutoff)
     analysis_2_gini(twin_med, twin_all, 'twin', twin_cutoff)
+    analysis_3_network_assortativity(twin_med, 'twin', twin_cutoff)
     analysis_4_degree_scaling(twin_med, 'twin', twin_cutoff)
     analysis_5_inflection(twin_all, 'twin')
 
@@ -266,6 +314,7 @@ def main():
     print(f"{'#'*60}")
     analysis_1_powerlaw(smax_med, 'sample-max', smax_cutoff)
     analysis_2_gini(smax_med, smax_all, 'sample-max', smax_cutoff)
+    analysis_3_network_assortativity(smax_med, 'sample-max', smax_cutoff)
     analysis_4_degree_scaling(smax_med, 'sample-max', smax_cutoff)
     analysis_5_inflection(smax_all, 'sample-max')
 

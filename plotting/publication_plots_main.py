@@ -324,21 +324,20 @@ def plot_amplification(data=None, file_path=None, save=True, analysis_t_end=None
     pos_mask = reductions_kg > 1e-3
     multipliers = reductions_kg[pos_mask] / DIRECT_REDUCTION_KG
 
-    # Early-adopter cutoff: converted before 50% of steady-state veg fraction
+    # Early-adopter cutoff: converted before F_veg crosses 0.5
     change_times = snap.get('change_times')
     traj = median_row.get('fraction_veg_trajectory', median_row.get('fraction_veg_trajectory'))
     early_mult = None
     if change_times is not None and traj is not None:
         traj = np.array(traj)
-        final_veg = traj[-1]
-        half_veg = final_veg * 0.5
-        t_half = np.searchsorted(traj, half_veg)  # first t where veg >= 50% of final
-        ct = np.array(change_times)
-        early_mask = pos_mask & (ct > 0) & (ct <= t_half)  # converted before halfway
+        crossed = np.where(traj >= 0.5)[0]
+        t_half = int(crossed[0]) if len(crossed) > 0 else len(traj)
+        ct = np.array(change_times, dtype=float)
+        early_mask = pos_mask & (ct > 0) & (ct <= t_half)  # converted before F_veg=0.5
         if early_mask.sum() > 0:
-            early_mult = np.median(reductions_kg[early_mask] / DIRECT_REDUCTION_KG)
+            early_mult = np.mean(reductions_kg[early_mask] / DIRECT_REDUCTION_KG)
             print(f"INFO: Early-adopter cutoff t={t_half} ({early_mask.sum()} agents, "
-                  f"median amplification {early_mult:.1f}x)")
+                  f"mean amplification {early_mult:.1f}x)")
 
     # Sort for rank-ordered plot
     multipliers_sorted = np.sort(multipliers)[::-1]
@@ -352,14 +351,14 @@ def plot_amplification(data=None, file_path=None, save=True, analysis_t_end=None
     # Mean line
     mean_mult = np.mean(multipliers)
     ax.axhline(mean_mult, color='#555', linestyle='--', linewidth=1.0, alpha=0.7)
-    ax.text(50, mean_mult * 1.15, f'Mean: {mean_mult:.0f}x', fontsize=6, color='#555',
-            va='bottom', ha='center')
+    ax.text(97, mean_mult * 0.88, f'Mean: {mean_mult:.0f}x', fontsize=6, color='#555',
+            va='top', ha='right')
 
-    # Early-adopter median line
+    # Early-adopter mean line
     if early_mult is not None:
-        ax.axhline(early_mult, color='#2ca02c', linestyle='-', linewidth=1.2, alpha=0.85)
-        ax.text(50, early_mult * 1.15, f'Early adopters: {early_mult:.1f}x', fontsize=6,
-                color='#2ca02c', va='bottom', ha='center', fontweight='bold')
+        ax.axhline(early_mult, color='#2ca02c', linestyle='--', linewidth=1.0, alpha=0.7)
+        ax.text(3, early_mult * 1.12, f'Early adopters: {early_mult:.1f}x', fontsize=6,
+                color='#2ca02c', va='bottom', ha='left')
 
     # 1x baseline (personal only)
     ax.axhline(1.0, color='#aaa', linestyle=':', linewidth=0.8, alpha=0.6)
