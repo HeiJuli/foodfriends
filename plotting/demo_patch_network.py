@@ -1,131 +1,109 @@
 #!/usr/bin/env python3
 """
-Demonstration script for PATCH network topology from NETIN package.
-Visualizes network structure with minority/majority node types.
+Demonstration script for empirical homophily network topology.
+Visualizes network structure colored by dietary choice (veg/meat).
+Always draws agents from the sample-max pool; generates network directly on the N sampled agents.
+Adjusts vegetarian fraction to 6% by flipping the most diet-inclined meat-eaters (same as main model).
 """
 
-import netin
-import netin.viz.handlers
-import matplotlib.pyplot as plt
-import matplotlib
+import sys
+import os
 import argparse
-import tempfile
-import shutil
+import numpy as np
+import pandas as pd
+import networkx as nx
+import matplotlib.pyplot as plt
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from auxillary.homophily_network_v2 import generate_homophily_network_v2
+
+SURVEY_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'hierarchical_agents.csv')
+ATTR_WEIGHTS = np.array([0.20, 0.35, 0.18, 0.32, 0.05])
+COLOR_VEG  = (0.2, 0.7, 0.2, 0.8)
+COLOR_MEAT = (0.8, 0.2, 0.2, 0.7)
 
 
-def create_and_visualize_patch(N=25, minority_fraction=0.1, output_file=None):
-    """
-    Create and visualize a PATCH network with minority/majority groups.
+def load_sample_max_agents(filepath=SURVEY_FILE):
+    df = pd.read_csv(filepath)
+    complete = df[df['has_alpha'] & df['has_rho']].copy().sort_values('nomem_encr').reset_index(drop=True)
+    age_targets = {'18-29': 56, '30-39': 54, '40-49': 56, '50-59': 68, '60-69': 80, '70+': 71}
+    sampled = [
+        group.sample(n=min(len(group), n_target), replace=False, random_state=42)
+        for age_group, n_target in age_targets.items()
+        for group in [complete[complete['age_group'] == age_group].reset_index(drop=True)]
+    ]
+    result = pd.concat(sampled, ignore_index=True)
+    print(f"Sample-max: {len(result)} agents loaded")
+    return result
 
-    Parameters:
-    -----------
-    N : int
-        Number of nodes (default: 50)
-    minority_fraction : float
-        Fraction of minority nodes (default: 0.1)
-    output_file : str or None
-        Output filename (default: None, displays instead)
-    """
-    print(f"Generating PATCH network with N={N}, minority_fraction={minority_fraction}")
 
-    # Calculate minority and majority sizes
-    n_minority = int(N * minority_fraction)
-    n_majority = N - n_minority
+def adjust_veg_fraction(agents_df, target=0.06, seed=42):
+    """Flip highest-(rho,alpha) meat-eaters to veg until target fraction reached."""
+    df = agents_df.copy()
+    current_veg = (df['diet'] == 'veg').sum()
+    needed = max(0, int(target * len(df)) - current_veg)
+    if needed == 0:
+        return df
+    candidates = df[df['diet'] == 'meat'].sort_values(['rho', 'alpha'], ascending=False)
+    flip_idx = candidates.index[:needed]
+    df.loc[flip_idx, 'diet'] = 'veg'
+    actual = (df['diet'] == 'veg').sum() / len(df)
+    print(f"INFO: Flipped {needed} meat-eaters -> veg (target: {target:.3f}, actual: {actual:.3f})")
+    return df
 
-    print(f"  Minority nodes: {n_minority}")
-    print(f"  Majority nodes: {n_majority}")
 
-    # Create PATCH network with two types
-    graph = netin.PATCH(
-        n=N,                 # Total number of nodes
-        k=3,                 # Minimum degree per node
-        f_m=minority_fraction,  # Fraction of minority nodes
-        h_mm=0.9,            # Homophily between minority nodes
-        h_MM=0.9,            # Homophily between majority nodes
-        tc=0.5               # Triadic closure probability
+def create_and_visualize_homophilic(N=25, output_file=None, seed=42):
+    # Always draw agents from sample-max pool
+    all_agents = load_sample_max_agents()
+    N_full = len(all_agents)
+
+    # Sample N agents from pool (random, seeded); generate network directly on them
+    if N < N_full:
+        rng = np.random.default_rng(seed)
+        idx = sorted(rng.choice(N_full, size=N, replace=False))
+        agents_df = all_agents.iloc[idx].reset_index(drop=True)
+        print(f"Sampled {N} agents from {N_full} sample-max pool")
+    else:
+        agents_df = all_agents
+
+    # Adjust veg fraction to 6% (same mechanism as main model)
+    agents_df = adjust_veg_fraction(agents_df, target=0.06, seed=seed)
+
+    print(f"Generating homophilic_emp network on {len(agents_df)} agents")
+    G, _ = generate_homophily_network_v2(
+        N=len(agents_df), avg_degree=8,
+        agents_df=agents_df,
+        attribute_weights=ATTR_WEIGHTS,
+        seed=seed, tc=0.7
     )
+    print(f"Network: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
 
-    # Generate the network
-    graph.generate()
+    node_colors = [COLOR_VEG if agents_df.iloc[i]['diet'] == 'veg' else COLOR_MEAT
+                   for i in range(len(G.nodes()))]
 
-    print(f"Network generated: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
-
-    # Monkey-patch netin to fix the parameter bug and customize colors
-    # Save originals
-    original_save_plot = netin.viz.handlers._save_plot
-    original_get_edge_color = netin.viz.handlers._get_edge_color
-    original_color_majority = netin.viz.handlers.COLOR_MAJORITY
-    original_color_minority = netin.viz.handlers.COLOR_MINORITY
-    original_color_mixed = netin.viz.handlers.COLOR_MIXED
-
-    def fixed_save_plot(fig, fn=None, **kwargs):
-        # Pop the visualization params that netin incorrectly leaks to savefig
-        kwargs.pop('node_size', None)
-        kwargs.pop('node_shape', None)
-        kwargs.pop('edge_width', None)
-        kwargs.pop('edge_style', None)
-        kwargs.pop('edge_arrows', None)
-        kwargs.pop('arrow_style', None)
-        kwargs.pop('arrow_size', None)
-        # Call original with cleaned kwargs
-        return original_save_plot(fig, fn, **kwargs)
-
-    def custom_edge_color(s, t, g, maj_val=None, min_val=None):
-        # Make edges black unless they connect to minority nodes
-        from netin.utils import constants as const
-        maj_val = const.MAJORITY_VALUE if maj_val is None else maj_val
-        min_val = const.MINORITY_VALUE if min_val is None else min_val
-
-        s_val = g.get_class_value(s)
-        t_val = g.get_class_value(t)
-
-        # If either node is minority, use green for the edge
-        if s_val == min_val or t_val == min_val:
-            return (0.2, 0.7, 0.2, 0.6)  # Green with alpha
-        # Otherwise use black
-        return (0, 0, 0, 0.3)  # Black with lower alpha
-
-    # Apply monkey patches
-    netin.viz.handlers._save_plot = fixed_save_plot
-    netin.viz.handlers._get_edge_color = custom_edge_color
-    netin.viz.handlers.COLOR_MAJORITY = (0.8, 0.2, 0.2, 0.7)  # Softer red with alpha
-    netin.viz.handlers.COLOR_MINORITY = (0.2, 0.7, 0.2, 0.8)  # Softer green with alpha
-    netin.viz.handlers.COLOR_MIXED = (0, 0, 0, 0.3)  # Black for mixed edges
-
-    # Now plot with custom node/edge sizes
-    netin.viz.handlers.plot_graph(
-        graph,
-        fn=output_file if output_file else 'network_output.png',
-        ignore_singletons=False,
-        cell_size=10,
-        node_size=80,
-        edge_width=0.8,
-        dpi=300,
-        bbox_inches='tight'
+    fig, ax = plt.subplots(figsize=(10, 10))
+    pos = nx.spring_layout(G, seed=seed)
+    nx.draw_networkx(
+        G, pos=pos, ax=ax,
+        node_color=node_colors, node_size=80,
+        edge_color=[(0, 0, 0, 0.2)], width=0.6,
+        with_labels=False
     )
+    ax.set_title(f"Homophilic empirical network  (N={G.number_of_nodes()})", fontsize=13)
+    ax.axis('off')
 
-    # Restore originals
-    netin.viz.handlers._save_plot = original_save_plot
-    netin.viz.handlers._get_edge_color = original_get_edge_color
-    netin.viz.handlers.COLOR_MAJORITY = original_color_majority
-    netin.viz.handlers.COLOR_MINORITY = original_color_minority
-    netin.viz.handlers.COLOR_MIXED = original_color_mixed
+    out = output_file or 'network_output.png'
+    fig.savefig(out, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f"Visualization saved to: {out}")
 
-    print(f"Visualization saved to: {output_file if output_file else 'network_output.png'}")
-    
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Demonstrate PATCH network topology")
-    parser.add_argument("-N", type=int, default=50, help="Number of nodes (default: 50)")
-    parser.add_argument("-m", "--minority", type=float, default=0.1,
-                        help="Minority fraction (default: 0.1)")
+    parser = argparse.ArgumentParser(description="Demonstrate homophilic empirical network topology")
+    parser.add_argument("-N", type=int, default=50, help="Number of nodes to display (default: 50)")
     parser.add_argument("-o", "--output", type=str, default=None,
-                        help="Output filename (e.g., patch_network.png)")
-
+                        help="Output filename (e.g., homophilic_network.png)")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
     args = parser.parse_args()
 
-    create_and_visualize_patch(
-        N=args.N,
-        minority_fraction=args.minority,
-        output_file=args.output
-    )
+    create_and_visualize_homophilic(N=args.N, output_file=args.output, seed=args.seed)

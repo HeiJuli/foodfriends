@@ -29,7 +29,7 @@ def create_color_variations(base_color, n):
     return [tuple(min(1.0, c * (0.7 + 0.3 * i / max(1, n-1))) for c in base_rgb) for i in range(n)]
 
 def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None,
-                                  truncate_steps=None, analysis_t_end=None):
+                                  truncate_steps=None, analysis_t_end=None, mid_t=None):
     """7-panel plot: 4 network snapshots (top) + trajectory + CCDF + Lorenz (bottom)
 
     Args:
@@ -122,8 +122,11 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # Time points
     all_times = sorted([t for t in snapshots.keys() if isinstance(t, int) and t > 0])
     if all_times:
-        mid_t = (len(trajectory) // 2) if isinstance(trajectory, list) else (all_times[-1] // 2)
-        mid = min(all_times, key=lambda t: abs(t - mid_t))
+        _mid_target = mid_t if mid_t is not None else (
+            (len(trajectory) // 2) if isinstance(trajectory, list) else (all_times[-1] // 2))
+        mid = min(all_times, key=lambda t: abs(t - _mid_target))
+        if mid_t is not None:
+            print(f"INFO: mid_t={mid_t} -> middle snapshot t={mid}")
     else:
         mid = None
     time_points = [t for t in [0, mid, 'final'] if t is not None]
@@ -150,8 +153,8 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         node_colors = ['#2a9d8f' if all_diets[n] == 'veg' else '#e76f51' for n in giant_list]
         reductions  = np.array([all_red[n] for n in giant_list])
 
-        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.25, width=0.05)
-        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=2,
+        nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.25, width=0.03)
+        nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=4,
                               alpha=0.9, edgecolors='#333', linewidths=0.15)
 
         top_reducer_value = 0
@@ -162,13 +165,13 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             top_10_nodes = [giant_list[j] for j in top_idx[:-1] if reductions[j] > 0]
             if top_10_nodes:
                 nx.draw_networkx_nodes(G, pos, nodelist=top_10_nodes, ax=net_ax,
-                                     node_color=COL_TOP10, node_size=5, alpha=0.9,
+                                     node_color=COL_TOP10, node_size=10, alpha=0.9,
                                      edgecolors='#333', linewidths=0.2)
 
             top_reducer_idx = top_idx[-1]
             if reductions[top_reducer_idx] > 0:
                 nx.draw_networkx_nodes(G, pos, nodelist=[giant_list[top_reducer_idx]], ax=net_ax,
-                                     node_color=COL_TOP1, node_size=6, alpha=1.0,
+                                     node_color=COL_TOP1, node_size=12, alpha=1.0,
                                      edgecolors='#333', linewidths=0.3)
                 top_reducer_value = reductions[top_reducer_idx]
 
@@ -540,10 +543,13 @@ def main():
                 if data is not None and 'is_median_twin' in data.columns:
                     trunc_input = input("Truncate to N timesteps (Enter for full run): ")
                     truncate_steps = int(trunc_input) if trunc_input else None
+                    mid_input = input("Middle snapshot target t (Enter for trajectory//2): ")
+                    mid_t = int(mid_input) if mid_input else None
                     at_input = input("Analysis t_end for B/C panels (Enter for same as trajectory): ")
                     analysis_t_end = int(at_input) if at_input else None
                     plot_network_agency_evolution(file_path=file_path, log_scale="loglog",
-                                                 truncate_steps=truncate_steps, analysis_t_end=analysis_t_end)
+                                                 truncate_steps=truncate_steps, mid_t=mid_t,
+                                                 analysis_t_end=analysis_t_end)
                 else:
                     print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
         elif choice == '2':

@@ -126,11 +126,12 @@ def extract_features(median_row):
     clustering = nx.clustering(G)
 
     # Complex centrality (Guilbeault & Centola 2021)
-    # NOTE: The homophilic_emp network has very low clustering (~0.007), so
-    # almost no edges form triangles. At T=2 only ~6% of edges are sufficient
-    # bridges (243/2000 nodes with CC>0). T>=3 is completely degenerate (0
-    # sufficient bridges). This is a topology-dependent result: complex
-    # centrality requires clustered networks to differentiate nodes.
+    # Network has clustering ~0.30, 89% sufficient bridges at T=2, 99% of
+    # nodes with CC>0. CC has rich continuous variation (1727 unique values).
+    # Bivariate: CC is significantly NEGATIVE vs amplification (rho_s~-0.27),
+    # but vanishes after controlling for degree (partial rho=-0.03, p=0.25).
+    # CC correlates with degree at rho=-0.50: high-CC nodes are locally
+    # embedded in dense clusters with lower degree and less novel exposure.
     print(f"Computing complex centrality (T=2)...")
     complex_cent = compute_complex_centrality(G, T=2)
 
