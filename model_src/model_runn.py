@@ -16,7 +16,7 @@ DEFAULT_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 650,              # population size
     "erdos_p": 3,          # ER graph edge prob
-    "steps": 35000,        # simulation timesteps
+    "steps": 30000,        # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
     "immune_n": 0.10,         # fraction of immune agents
     "M": 9,                # memory buffer length
@@ -26,7 +26,7 @@ DEFAULT_PARAMS = {
     "rewire_h": 0.1,       # homophily bias in rewiring
     "tc": 0.7,             # triadic closure probability
     "topology": "homophilic_emp",  # network type
-    "beta": 20,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp)
+    "beta": 13,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp)
     "alpha": 0.36,         # individual weight (stubbornness)
     "rho": 0.45,           # behavioral intention
     "theta": 0.44,         # intrinsic preference [-1=meat, +1=veg]
@@ -41,7 +41,7 @@ DEFAULT_PARAMS = {
     "alpha_max": 0.80,     # alpha compression upper bound
     "mu": 0.5,             # status-quo bias strength (currently inactive in model)
     "gamma": 0.3,  # diminishing returns exponent for repeated same-source contacts
-    "snapshot_dense_start": 28000,  # take snapshots every 2k from this step onwards (0 = disabled)
+    "snapshot_dense_start": 12000,  # take snapshots every 2k from this step onwards (0 = disabled)
 }
 
 

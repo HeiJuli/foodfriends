@@ -25,7 +25,7 @@ DEFAULT_PARAMS = {
     "rewire_h": 0.1,       # homophily bias in rewiring
     "tc": 0.7,             # triadic closure probability
     "topology": "homophilic_emp",  # network type
-    "beta": 27,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp)
+    "beta": 13,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp)
     "alpha": 0.35,         # individual weight (stubbornness)
     "rho": 0.45,           # behavioral intention
     "theta": 0,            # intrinsic preference [-1=meat, +1=veg]
@@ -36,7 +36,7 @@ DEFAULT_PARAMS = {
     "tau": 0.035,          # external field strength
     "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
     "theta_gate_k": 35,    # gate steepness
-    "alpha_min": 0.15,     # alpha compression lower bound
+    "alpha_min": 0.05,     # alpha compression lower bound
     "alpha_max": 0.85,     # alpha compression upper bound
     "mu": 0.2,             # status-quo bias strength
     "gamma": 0.3,          # diminishing returns exponent for repeated same-source contacts

@@ -48,7 +48,7 @@ params = {
     "rewire_h": 0.1,
     "tc": 0.7,
     "topology": "homophilic_emp",
-    "beta": 20,
+    "beta": 13,
     "alpha": 0.36,
     "rho": 0.45,
     "theta": 0.44,
@@ -62,7 +62,7 @@ params = {
     "alpha_min": 0.05,
     "alpha_max": 0.80,
     "mu": 0.3,
-    "gamma": 0.4,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
+    "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
 }
 
 
