@@ -63,7 +63,6 @@ params = {
     "alpha_max": 0.80,
     "mu": 0.3,
     "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
-    "tau_persistence": 5000,  # dwell-time half-saturation (Takaguchi et al. 2012): parent veg duration for temporal weight
 }
 
 
@@ -180,7 +179,7 @@ class Agent():
         self.C = self.diet_emissions(self.diet)
         self.memory = []  # list of (diet, source_id) tuples
         self.survey_id = kwargs.get('survey_id', i)
-        self.reduction_out = 0  # cumulative cascade credit (monotonically non-decreasing; Zhou et al. 2014)
+        self.cumulative_savings = 0
         self.diet_duration = 0
         self.diet_history = []
         self.last_change_time = 0
@@ -262,24 +261,6 @@ class Agent():
         H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
-    def _cascade_attribute(self, delta, influencer, agents_list,
-                           cascade_depth=1, decay=0.7, visited=None):
-        """Propagate emission credit up the influence chain with geometric decay.
-        Cumulative-only (no debits): each conversion event is a time-respecting
-        causal event (Holme & Saramäki 2012). Back-switching is a causally
-        independent event and does not retroactively negate prior credit
-        (Zhou et al. 2014; Liu et al. 2017).
-        No hard depth cap -- decay^d attenuates naturally; visited prevents cycles."""
-        if visited is None:
-            visited = set()
-        if influencer.i in visited:
-            return
-        visited.add(influencer.i)
-        influencer.reduction_out += delta * (decay ** (cascade_depth - 1))
-        if influencer.influence_parent is not None:
-            self._cascade_attribute(delta, agents_list[influencer.influence_parent],
-                                    agents_list, cascade_depth + 1, decay, visited)
-
     def step(self, G, agents, t):
         """Step agent forward one timestep via pairwise interaction."""
         neighbours = [agents[n] for n in G.neighbors(self.i)]
@@ -300,16 +281,14 @@ class Agent():
                 self.influence_parent = other_agent.i
                 self.change_time = t
                 other_agent.influenced_agents.add(self.i)
-                # Temporal weight: established parents earn more credit (Takaguchi et al. 2012)
-                tau_p = self.params.get("tau_persistence", 5000)
-                parent_dur = (t - other_agent.change_time) if other_agent.change_time is not None else t
-                temporal_weight = 1.0 - np.exp(-parent_dur / tau_p)
-                self._cascade_attribute(delta * temporal_weight, other_agent, agents)
+                self._cascade_attribute(delta, other_agent, agents, sign=1)
 
             elif old_diet == "veg" and self.diet == "meat":
-                # veg -> meat: detach from tree only -- no debits (Holme & Saramäki 2012; Zhou et al. 2014)
+                # veg -> meat: debit the influence chain, then detach
                 if self.influence_parent is not None:
-                    agents[self.influence_parent].influenced_agents.discard(self.i)
+                    parent = agents[self.influence_parent]
+                    self._cascade_attribute(delta, parent, agents, sign=-1)
+                    parent.influenced_agents.discard(self.i)
                     self.influence_parent = None
                     self.change_time = None
         else:
@@ -502,6 +481,7 @@ class Model():
         self.snapshots[t] = {
             'diets': self.get_attributes("diet"),
             'reductions': self.get_attributes("reduction_out"),
+            'peak_reductions': self.get_attributes("peak_reduction_out"),
             'change_times': self.get_attributes("change_time"),
             'alphas': self.get_attributes("alpha"),
             'rhos': self.get_attributes("rho"),

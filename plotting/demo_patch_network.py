@@ -67,11 +67,11 @@ def create_and_visualize_homophilic(N=25, output_file=None, seed=42):
         agents_df = all_agents
 
     # Adjust veg fraction to 6% (same mechanism as main model)
-    agents_df = adjust_veg_fraction(agents_df, target=0.06, seed=seed)
+    agents_df = adjust_veg_fraction(agents_df, target=0.2, seed=seed)
 
     print(f"Generating homophilic_emp network on {len(agents_df)} agents")
     G, _ = generate_homophily_network_v2(
-        N=len(agents_df), avg_degree=8,
+        N=len(agents_df), avg_degree=5,
         agents_df=agents_df,
         attribute_weights=ATTR_WEIGHTS,
         seed=seed, tc=0.7
@@ -81,15 +81,20 @@ def create_and_visualize_homophilic(N=25, output_file=None, seed=42):
     node_colors = [COLOR_VEG if agents_df.iloc[i]['diet'] == 'veg' else COLOR_MEAT
                    for i in range(len(G.nodes()))]
 
+    # Boost same-diet edge weights so connected same-diet nodes attract more strongly in layout
+    for u, v in G.edges():
+        G[u][v]['weight'] = 2.0 if agents_df.iloc[u]['diet'] == agents_df.iloc[v]['diet'] else 1.0
+
     fig, ax = plt.subplots(figsize=(10, 10))
-    pos = nx.spring_layout(G, seed=seed)
+    pos = nx.spring_layout(G, weight='weight', seed=seed)
     nx.draw_networkx(
         G, pos=pos, ax=ax,
         node_color=node_colors, node_size=80,
-        edge_color=[(0, 0, 0, 0.2)], width=0.6,
+        edge_color=[(0, 0, 0, 0.2)], width=0.8,
         with_labels=False
     )
-    ax.set_title(f"Homophilic empirical network  (N={G.number_of_nodes()})", fontsize=13)
+    n_veg = (agents_df['diet'] == 'veg').sum()
+    ax.set_title(f"Homophilic empirical network  (N={G.number_of_nodes()}, veg={n_veg})", fontsize=13)
     ax.axis('off')
 
     out = output_file or 'network_output.png'
