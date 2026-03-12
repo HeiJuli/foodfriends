@@ -63,7 +63,6 @@ params = {
     "alpha_max": 0.80,
     "mu": 0.3,
     "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
-    "tau_persistence": 5000,  # dwell-time half-saturation (Takaguchi et al. 2012): parent veg duration for temporal weight
 }
 
 
@@ -180,7 +179,7 @@ class Agent():
         self.C = self.diet_emissions(self.diet)
         self.memory = []  # list of (diet, source_id) tuples
         self.survey_id = kwargs.get('survey_id', i)
-        self.reduction_out = 0  # cumulative cascade credit (monotonically non-decreasing; Zhou et al. 2014)
+        self.cumulative_savings = 0  # person-timesteps of cascade influence
         self.diet_duration = 0
         self.diet_history = []
         self.last_change_time = 0
@@ -262,24 +261,6 @@ class Agent():
         H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
-    def _cascade_attribute(self, delta, influencer, agents_list,
-                           cascade_depth=1, decay=0.7, visited=None):
-        """Propagate emission credit up the influence chain with geometric decay.
-        Cumulative-only (no debits): each conversion event is a time-respecting
-        causal event (Holme & Saramäki 2012). Back-switching is a causally
-        independent event and does not retroactively negate prior credit
-        (Zhou et al. 2014; Liu et al. 2017).
-        No hard depth cap -- decay^d attenuates naturally; visited prevents cycles."""
-        if visited is None:
-            visited = set()
-        if influencer.i in visited:
-            return
-        visited.add(influencer.i)
-        influencer.reduction_out += delta * (decay ** (cascade_depth - 1))
-        if influencer.influence_parent is not None:
-            self._cascade_attribute(delta, agents_list[influencer.influence_parent],
-                                    agents_list, cascade_depth + 1, decay, visited)
-
     def step(self, G, agents, t):
         """Step agent forward one timestep via pairwise interaction."""
         neighbours = [agents[n] for n in G.neighbors(self.i)]
@@ -292,24 +273,16 @@ class Agent():
             old_diet = self.diet
             self.diet = "meat" if self.diet == "veg" else "veg"
             self.C = self.diet_emissions(self.diet)
-            # Use base emissions for stable attribution delta
-            delta = self.C_base["meat"] - self.C_base["veg"]
 
             if old_diet == "meat" and self.diet == "veg":
-                # meat -> veg: credit the influence chain
                 self.influence_parent = other_agent.i
                 self.change_time = t
                 other_agent.influenced_agents.add(self.i)
-                # Temporal weight: established parents earn more credit (Takaguchi et al. 2012)
-                tau_p = self.params.get("tau_persistence", 5000)
-                parent_dur = (t - other_agent.change_time) if other_agent.change_time is not None else t
-                temporal_weight = 1.0 - np.exp(-parent_dur / tau_p)
-                self._cascade_attribute(delta * temporal_weight, other_agent, agents)
 
             elif old_diet == "veg" and self.diet == "meat":
-                # veg -> meat: detach from tree only -- no debits (Holme & Saramäki 2012; Zhou et al. 2014)
                 if self.influence_parent is not None:
-                    agents[self.influence_parent].influenced_agents.discard(self.i)
+                    parent = agents[self.influence_parent]
+                    parent.influenced_agents.discard(self.i)
                     self.influence_parent = None
                     self.change_time = None
         else:
@@ -494,6 +467,17 @@ class Model():
               f"r={np.mean(vals[2]):.2f} t={np.mean(vals[3]):.2f}")
         print(f"Diet: {sum(d=='veg' for d in self.get_attributes('diet'))/len(self.agents):.2f} veg")
 
+    def _accumulate_cascade_savings(self, decay=0.7):
+        """Per-timestep: credit each ancestor for every veg agent in their chain."""
+        for agent in self.agents:
+            if agent.diet == 'veg' and agent.influence_parent is not None:
+                depth, visited, pid = 0, set(), agent.influence_parent
+                while pid is not None and pid not in visited:
+                    visited.add(pid)
+                    self.agents[pid].cumulative_savings += decay ** depth
+                    depth += 1
+                    pid = self.agents[pid].influence_parent
+
     def record_snapshot(self, t):
         try:
             graph_copy = self.G1.copy()
@@ -501,7 +485,8 @@ class Model():
             graph_copy = nx.Graph(self.G1)
         self.snapshots[t] = {
             'diets': self.get_attributes("diet"),
-            'reductions': self.get_attributes("reduction_out"),
+            'reductions': self.get_attributes("cumulative_savings"),
+            'snapshot_t': t if isinstance(t, int) else self.params["steps"],
             'change_times': self.get_attributes("change_time"),
             'alphas': self.get_attributes("alpha"),
             'rhos': self.get_attributes("rho"),
@@ -516,7 +501,7 @@ class Model():
             total = self._count_indirect_influence(agent.i, 0, visited=set())
             stats.append({
                 'agent_id': agent.i, 'direct_influence': direct,
-                'total_cascade': total, 'attributed_reduction': agent.reduction_out,
+                'total_cascade': total, 'attributed_reduction': agent.cumulative_savings,
                 'multiplier': total / direct if direct > 0 else 0
             })
         return pd.DataFrame(stats)
@@ -558,8 +543,8 @@ class Model():
             results.append({
                 'agent_id': agent.i, 'degree': self.G1.degree(agent.i),
                 'max_cascade_depth': depth, 'max_reachable': len(visited) - 1,
-                'theoretical_max_kg': max_red, 'observed_kg': agent.reduction_out,
-                'pct_of_max': (agent.reduction_out / max_red * 100) if max_red > 0 else 0
+                'theoretical_max_kg': max_red, 'observed_kg': agent.cumulative_savings,
+                'pct_of_max': (agent.cumulative_savings / max_red * 100) if max_red > 0 else 0
             })
         inf_bound = delta / (1 - decay)
         avg_deg = np.mean([self.G1.degree(n) for n in self.G1.nodes()])
@@ -634,6 +619,7 @@ class Model():
                 self.agents[i].step(self.G1, self.agents, t)
                 self.rewire(self.agents[i])
 
+            self._accumulate_cascade_savings()
             self.system_C.append(self.get_attribute("C") / self.params["N"])
             self.record_fraction()
 

@@ -319,5 +319,33 @@ def main():
     analysis_5_inflection(smax_all, 'sample-max')
 
 
+def causal_fidelity(snapshots_G, N):
+    """Lentz, Selhorst & Sokolov (2012) PRL 108:228702 causal fidelity.
+
+    c = |temporally-reachable pairs| / |statically-reachable pairs|
+    c < 1 means the static network overestimates cascade reach by factor 1/c.
+    Temporal reachability computed via sequential Boolean matrix products over
+    ordered snapshots (time-respecting paths). Report c in methods section.
+
+    Args:
+        snapshots_G: ordered list of networkx Graph objects (t0, t1, ..., t_end)
+        N: number of nodes
+    Returns:
+        float: causal fidelity c in [0,1]
+    """
+    from scipy.sparse.csgraph import connected_components
+    I = np.eye(N, dtype=bool)
+    P_temp = I.copy()
+    P_static = np.zeros((N, N), dtype=bool)
+    for G in snapshots_G:
+        A = nx.to_numpy_array(G, nodelist=range(N), dtype=bool)
+        P_temp = P_temp @ (I | A)          # Boolean matmul: time-respecting paths
+        P_static |= A
+    # Transitive closure of static via BFS (undirected)
+    n_comp, labels = connected_components(P_static.astype(np.uint8), directed=False)
+    P_static_reach = (labels[:, None] == labels[None, :])
+    return float(P_temp.sum()) / float(P_static_reach.sum())
+
+
 if __name__ == '__main__':
     main()

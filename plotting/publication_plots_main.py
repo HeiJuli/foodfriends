@@ -193,6 +193,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # === Bottom-left: Single trajectory with snapshot markers ===
     traj_ax = fig.add_subplot(gs_bot[0, 0])
     if isinstance(trajectory, list):
+        from scipy.ndimage import uniform_filter1d
         t_thousands = np.arange(len(trajectory)) / 1000
         traj_ax.plot(t_thousands, trajectory, color=COLORS['vegetation'], linewidth=1.0, alpha=0.9)
 
@@ -210,6 +211,21 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
             traj_ax.scatter(t_k, trajectory[t_val], color=COLORS['vegetation'],
                           s=14, zorder=5, edgecolors='#333', linewidths=0.4)
             time_labels.append((t_k, t))
+
+        # Tipping point: max of 2nd derivative (max adoption acceleration)
+        COL_TIP = '#9b59b6'  # purple -- no clash with teal/orange/grey/green/gold
+        traj_arr = np.array(trajectory)
+        _window, _burnin = 2000, 5000
+        if len(traj_arr) > _burnin + _window * 2:
+            _sm = uniform_filter1d(traj_arr, size=_window)
+            _d2 = np.gradient(np.gradient(_sm))
+            _d2[:_burnin] = 0
+            _d2[_sm > 0.5] = 0
+            _t_tip = int(np.argmax(_d2))
+            _t_tip_k = _t_tip / 1000
+            traj_ax.axvline(_t_tip_k, color=COL_TIP, linestyle=':', linewidth=0.9, alpha=0.8)
+            print(f"INFO: Tipping point (max d2F/dt2) at t={_t_tip} ({_t_tip_k:.1f}k), "
+                  f"F_veg={traj_arr[_t_tip]:.3f}")
 
     traj_ax.set_ylim(0, 1.0)
     traj_ax.set_xlim(-0.5, len(trajectory) / 1000)

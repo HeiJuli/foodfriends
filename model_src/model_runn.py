@@ -41,6 +41,7 @@ DEFAULT_PARAMS = {
     "alpha_max": 0.80,     # alpha compression upper bound
     "mu": 0.5,             # status-quo bias strength (currently inactive in model)
     "gamma": 0.3,  # diminishing returns exponent for repeated same-source contacts
+    "tau_persistence": 5000,  # dwell-time half-saturation for temporal cascade weight (Takaguchi et al. 2012)
     "snapshot_dense_start": 12000,  # take snapshots every 2k from this step onwards (0 = disabled)
 }
 
