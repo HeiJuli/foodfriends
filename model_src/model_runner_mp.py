@@ -31,13 +31,13 @@ DEFAULT_PARAMS = {
     "theta": 0,            # intrinsic preference [-1=meat, +1=veg]
     "agent_ini": "sample-max",
     "survey_file": "../data/hierarchical_agents.csv",
-    "adjust_veg_fraction": False,  # flip meat->veg to hit target
+    "adjust_veg_fraction": True,  # flip meat->veg to hit target
     "target_veg_fraction": 0.06,   # NL demographics target
     "tau": 0.035,          # external field strength
     "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
     "theta_gate_k": 35,    # gate steepness
     "alpha_min": 0.05,     # alpha compression lower bound
-    "alpha_max": 0.85,     # alpha compression upper bound
+    "alpha_max": 0.80,     # alpha compression upper bound
     "mu": 0.2,             # status-quo bias strength
     "gamma": 0.3,          # diminishing returns exponent for repeated same-source contacts
     "tau_persistence": 5000,  # dwell-time half-saturation for temporal cascade weight (Takaguchi et al. 2012)

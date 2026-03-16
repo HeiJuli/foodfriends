@@ -506,7 +506,9 @@ class Model():
             'alphas': self.get_attributes("alpha"),
             'rhos': self.get_attributes("rho"),
             'graph': graph_copy,
-            'veg_fraction': self.fraction_veg[-1]
+            'veg_fraction': self.fraction_veg[-1],
+            'influence_parents': [a.influence_parent for a in self.agents],
+            'direct_conversions': [len(a.influenced_agents) for a in self.agents],
         }
 
     def cascade_statistics(self):
