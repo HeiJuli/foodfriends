@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Agency predictor analysis: what predicts high individual amplification?
+"""Agency predictor analysis: adoption, contagion, and amplification.
 
-Standalone exploratory script. Computes centrality measures (including complex
-centrality per Guilbeault & Centola 2021) from stored graph, runs Spearman
-correlations and OLS regression, saves diagnostic figure.
+Three dependent variables from the spreader's perspective:
+  1. Adoption:      did agent i switch? (binary, logistic)
+  2. Contagion:      how many agents did i directly convert? (count)
+  3. Amplification:  total cascade credit in kg CO2 (continuous)
+
+Plus: degree-amplification scaling (linear vs super-linear) and
+network degree assortativity.
 
 Usage: python agency_predictor_analysis.py [path_to_pkl]
 """
@@ -13,7 +17,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pointbiserialr
 import statsmodels.api as sm
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from plot_styles import set_publication_style, COLORS
@@ -21,7 +25,14 @@ from plot_styles import set_publication_style, COLORS
 cm = 1/2.54
 DIRECT_REDUCTION_KG = 664  # 2054 - 1390
 
-DEFAULT_FILE = '/home/jpoveralls/Downloads/trajectory_analysis_twin_20260213.pkl'
+DEFAULT_FILE = '../model_output/trajectory_analysis_twin_20260316.pkl'
+
+TOPO_PREDS = ['degree', 'betweenness', 'eigenvector', 'clustering', 'complex_cent']
+PSYCH_PREDS = ['rho', 'alpha', 'theta']
+ALL_PREDS = TOPO_PREDS + PSYCH_PREDS
+
+
+# --- I/O ---
 
 def load_latest(file_path=None):
     if file_path:
@@ -41,51 +52,21 @@ def get_median_row(data):
     return data.iloc[len(data) // 2]
 
 
-# --- Complex centrality (Guilbeault & Centola 2021, Nat. Commun. 12:4430) ---
-# Eqs 1-7 in Methods section. Bridge width captures whether sufficient
-# reinforcing ties exist between neighborhoods for complex contagion to spread.
+# --- Complex centrality (Guilbeault & Centola 2021) ---
 
 def compute_complex_centrality(G, T=2):
-    """Compute complex centrality for all nodes.
-
-    Per Guilbeault & Centola (2021): complex centrality CC_i is the average
-    complex path length from node i to all other nodes. Complex path length
-    counts hops through a "sufficient bridge graph" where edge (u,v) exists
-    only if v has >= T neighbors in the closed neighborhood N[u].
-
-    Args:
-        G: networkx Graph
-        T: adoption threshold (default 2 = simplest complex contagion)
-
-    Returns:
-        dict: {node: complex_centrality_value}
-    """
     nodes = list(G.nodes())
     n = len(nodes)
-
-    # Precompute closed neighborhoods (sets) for fast intersection
     closed_nbr = {v: set(G.neighbors(v)) | {v} for v in nodes}
-
-    # Build sufficient bridge graph: directed edge u->v exists iff
-    # bridge_width(u->v) >= T, i.e., |N(v) ∩ N[u]| >= T
-    # For edge (u,v): N(v) ∩ N[u] = common_neighbors(u,v) ∪ {u}
-    # so bridge_width = |common_neighbors(u,v)| + 1
     adj_sufficient = {v: [] for v in nodes}
     for u, v in G.edges():
-        cn = len(closed_nbr[u] & closed_nbr[v]) - 2  # common neighbors (excl u,v)
-        # Bridge u->v: v's neighbors in N[u] = common_neighbors + u itself
-        w_uv = cn + 1
-        # Bridge v->u: u's neighbors in N[v] = common_neighbors + v itself
-        w_vu = cn + 1
-        if w_uv >= T:
+        cn = len(closed_nbr[u] & closed_nbr[v]) - 2
+        w = cn + 1
+        if w >= T:
             adj_sufficient[u].append(v)
-        if w_vu >= T:
             adj_sufficient[v].append(u)
-
-    # BFS from each node in sufficient bridge graph
     cc = {}
     for i in nodes:
-        # BFS
         dist = {i: 0}
         queue = deque([i])
         while queue:
@@ -94,188 +75,458 @@ def compute_complex_centrality(G, T=2):
                 if v not in dist:
                     dist[v] = dist[u] + 1
                     queue.append(v)
-
-        # Average complex path length to nodes outside N[i]
-        # Unreachable nodes contribute 0 (Eq. 4: PL_C = 0 if no path)
         ni = closed_nbr[i]
         n_targets = n - len(ni)
-        if n_targets > 0:
-            total = sum(d for v, d in dist.items() if v not in ni)
-            cc[i] = total / n_targets
-        else:
-            cc[i] = 0.0
-
+        cc[i] = sum(d for v, d in dist.items() if v not in ni) / n_targets if n_targets > 0 else 0.0
     return cc
 
 
-def extract_features(median_row):
-    """Extract all predictor features and response variable from snapshot."""
-    snap_final = median_row['snapshots']['final']
-    snap_init = median_row['snapshots'][0]
+# --- Feature extraction ---
+
+def extract_features(row):
+    """Build agent-level DataFrame from a single run's snapshots."""
+    snap_final = row['snapshots']['final']
+    snap_init = row['snapshots'][0]
     G = snap_final['graph']
     nodes = list(G.nodes())
     N = len(nodes)
 
     reductions_kg = np.array(snap_final['reductions'])
-    multipliers = reductions_kg / DIRECT_REDUCTION_KG
+    init_diets = snap_init['diets']
+    final_diets = snap_final['diets']
 
-    # Standard centrality measures
-    print(f"Computing centrality measures for N={N} nodes...")
+    # Direct conversions: from snapshot if available, else from influence_parents
+    if 'direct_conversions' in snap_final:
+        direct_conv = np.array(snap_final['direct_conversions'])
+    elif 'influence_parents' in snap_final:
+        parents = snap_final['influence_parents']
+        direct_conv = np.zeros(N, dtype=int)
+        for p in parents:
+            if p is not None:
+                direct_conv[p] += 1
+    else:
+        direct_conv = None
+        print("WARNING: no direct_conversions or influence_parents in snapshot")
+
+    # Centrality measures
+    print(f"Computing centrality measures for N={N}...")
     betweenness = nx.betweenness_centrality(G)
     eigenvector = nx.eigenvector_centrality_numpy(G)
     clustering = nx.clustering(G)
-
-    # Complex centrality (Guilbeault & Centola 2021)
-    # Network has clustering ~0.30, 89% sufficient bridges at T=2, 99% of
-    # nodes with CC>0. CC has rich continuous variation (1727 unique values).
-    # Bivariate: CC is significantly NEGATIVE vs amplification (rho_s~-0.27),
-    # but vanishes after controlling for degree (partial rho=-0.03, p=0.25).
-    # CC correlates with degree at rho=-0.50: high-CC nodes are locally
-    # embedded in dense clusters with lower degree and less novel exposure.
     print(f"Computing complex centrality (T=2)...")
     complex_cent = compute_complex_centrality(G, T=2)
 
-    # Initial diets from step-0 snapshot
-    init_diets = snap_init['diets']
-
     df = pd.DataFrame({
         'node': nodes,
-        'multiplier': multipliers,
         'reduction_kg': reductions_kg,
+        'multiplier': reductions_kg / DIRECT_REDUCTION_KG,
         'degree': [G.degree(n) for n in nodes],
         'betweenness': [betweenness[n] for n in nodes],
         'eigenvector': [eigenvector[n] for n in nodes],
         'clustering': [clustering[n] for n in nodes],
         'complex_cent': [complex_cent[n] for n in nodes],
         'theta': [G.nodes[n].get('theta', 0) for n in nodes],
+        'alpha': np.array(snap_final['alphas']),
+        'rho': np.array(snap_final['rhos']),
         'initial_diet': [init_diets[i] for i in range(N)],
+        'final_diet': [final_diets[i] for i in range(N)],
     })
-    df['init_veg'] = (df['initial_diet'] == 'veg').astype(int)
+    if direct_conv is not None:
+        df['direct_conversions'] = direct_conv
+    df['init_meat'] = (df['initial_diet'] == 'meat').astype(int)
+    df['adopted'] = ((df['initial_diet'] == 'meat') & (df['final_diet'] == 'veg')).astype(int)
     return df
 
-def run_correlations(df):
-    """Spearman correlations of each predictor vs log(multiplier)."""
-    pos = df[df['reduction_kg'] > 0].copy()
-    pos['log_mult'] = np.log(pos['multiplier'])
-    predictors = ['degree', 'betweenness', 'eigenvector', 'clustering',
-                  'complex_cent', 'theta', 'init_veg']
 
-    print(f"\n{'='*60}")
-    print(f"SPEARMAN CORRELATIONS vs log(multiplier)  [N={len(pos)}]")
-    print(f"{'='*60}")
+# --- Analysis: three dependent variables ---
+
+def _sig_stars(p):
+    return '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else ''
+
+def analyze_adoption(df):
+    """DV1: binary adoption among initial meat-eaters."""
+    meat = df[df['init_meat'] == 1].copy()
+    print(f"\n{'='*65}")
+    print(f"DV1: ADOPTION (binary)  [N_meat={len(meat)}, switched={meat['adopted'].sum()}]")
+    print(f"{'='*65}")
+
+    # Point-biserial correlations
+    print(f"\n--- Point-biserial correlations vs adopted ---")
+    print(f"{'Predictor':<16} {'r_pb':>8} {'p-value':>12} {'sig':>5}")
+    print(f"{'-'*45}")
+    results = []
+    for p in ALL_PREDS:
+        r, pval = pointbiserialr(meat['adopted'], meat[p])
+        print(f"{p:<16} {r:>8.3f} {pval:>12.2e}  {_sig_stars(pval):>4}")
+        results.append({'predictor': p, 'r_pb': r, 'p': pval})
+
+    # Logistic regression: psychology-only vs topology-only vs full
+    for label, preds in [('psychology', PSYCH_PREDS), ('topology', TOPO_PREDS), ('full', ALL_PREDS)]:
+        X = sm.add_constant((meat[preds] - meat[preds].mean()) / meat[preds].std())
+        model = sm.Logit(meat['adopted'], X).fit(disp=0)
+        print(f"\n  Logistic [{label}]: pseudo-R2={model.prsquared:.4f}  AIC={model.aic:.0f}")
+    return pd.DataFrame(results)
+
+
+def analyze_contagion(df):
+    """DV2: direct conversion count (from spreader's perspective)."""
+    if 'direct_conversions' not in df.columns:
+        print("\nWARNING: skipping contagion analysis (no direct_conversions data)")
+        return None
+
+    # All agents who ever switched to veg (have any cascade credit OR direct conversions)
+    spreaders = df[(df['reduction_kg'] > 0) | (df['direct_conversions'] > 0)].copy()
+    print(f"\n{'='*65}")
+    print(f"DV2: CONTAGION (direct conversions)  [N_spreaders={len(spreaders)}]")
+    print(f"{'='*65}")
+    print(f"  mean={spreaders['direct_conversions'].mean():.2f}  "
+          f"median={spreaders['direct_conversions'].median():.0f}  "
+          f"max={spreaders['direct_conversions'].max():.0f}")
+
+    # Spearman correlations
+    print(f"\n--- Spearman correlations vs direct_conversions ---")
     print(f"{'Predictor':<16} {'rho_s':>8} {'p-value':>12} {'sig':>5}")
     print(f"{'-'*45}")
     results = []
-    for p in predictors:
-        rho, pval = spearmanr(pos[p], pos['log_mult'])
-        sig = '***' if pval < 0.001 else '**' if pval < 0.01 else '*' if pval < 0.05 else ''
-        print(f"{p:<16} {rho:>8.3f} {pval:>12.2e}  {sig:>4}")
+    for p in ALL_PREDS:
+        rho, pval = spearmanr(spreaders[p], spreaders['direct_conversions'])
+        print(f"{p:<16} {rho:>8.3f} {pval:>12.2e}  {_sig_stars(pval):>4}")
         results.append({'predictor': p, 'rho_s': rho, 'p': pval})
-    return pd.DataFrame(results), pos
 
-def run_regression(pos):
-    """OLS regression: log(multiplier) ~ all predictors."""
-    predictors = ['degree', 'betweenness', 'eigenvector', 'clustering',
-                  'complex_cent', 'theta', 'init_veg']
-    X = pos[predictors].copy()
-    y = pos['log_mult']
+    # OLS: direct_conversions ~ predictors (Poisson would be better but OLS is fine for exploration)
+    for label, preds in [('psychology', PSYCH_PREDS), ('topology', TOPO_PREDS), ('full', ALL_PREDS)]:
+        X = sm.add_constant((spreaders[preds] - spreaders[preds].mean()) / spreaders[preds].std())
+        model = sm.OLS(spreaders['direct_conversions'], X).fit()
+        print(f"\n  OLS [{label}]: R2={model.rsquared:.4f}  adj-R2={model.rsquared_adj:.4f}")
 
-    # Standardize for comparable coefficients
-    X_std = (X - X.mean()) / X.std()
-    X_std = sm.add_constant(X_std)
-    model = sm.OLS(y, X_std).fit()
+    return pd.DataFrame(results)
 
-    print(f"\n{'='*60}")
-    print(f"OLS REGRESSION: log(multiplier) ~ predictors (standardized)")
-    print(f"{'='*60}")
-    print(model.summary2().tables[1].to_string())
-    print(f"\nR-squared: {model.rsquared:.3f}   Adj R-squared: {model.rsquared_adj:.3f}")
 
-    # VIF for collinearity
-    X_raw = sm.add_constant(pos[predictors])
-    print(f"\n{'='*60}")
-    print(f"VARIANCE INFLATION FACTORS")
-    print(f"{'='*60}")
-    for i, p in enumerate(['const'] + predictors):
-        vif = variance_inflation_factor(X_raw.values, i)
-        flag = ' <-- HIGH' if vif > 5 else ''
-        print(f"  {p:<16} VIF = {vif:.2f}{flag}")
+def analyze_amplification(df):
+    """DV3: log(amplification multiplier) for agents with positive cascade credit."""
+    pos = df[df['reduction_kg'] > 0].copy()
+    pos['log_mult'] = np.log(pos['multiplier'])
+    print(f"\n{'='*65}")
+    print(f"DV3: AMPLIFICATION (log multiplier)  [N_positive={len(pos)}]")
+    print(f"{'='*65}")
 
-    return model, predictors
+    # Spearman correlations
+    print(f"\n--- Spearman correlations vs log(multiplier) ---")
+    print(f"{'Predictor':<16} {'rho_s':>8} {'p-value':>12} {'sig':>5}")
+    print(f"{'-'*45}")
+    results = []
+    for p in ALL_PREDS:
+        rho, pval = spearmanr(pos[p], pos['log_mult'])
+        print(f"{p:<16} {rho:>8.3f} {pval:>12.2e}  {_sig_stars(pval):>4}")
+        results.append({'predictor': p, 'rho_s': rho, 'p': pval})
 
-def make_diagnostic_figure(pos, corr_df, model, predictors, output_dir='../visualisations_output'):
-    """Multi-panel diagnostic figure: scatters for significant predictors + coefficient forest plot."""
+    # OLS comparisons
+    for label, preds in [('psychology', PSYCH_PREDS), ('topology', TOPO_PREDS), ('full', ALL_PREDS)]:
+        X = sm.add_constant((pos[preds] - pos[preds].mean()) / pos[preds].std())
+        model = sm.OLS(pos['log_mult'], X).fit()
+        print(f"\n  OLS [{label}]: R2={model.rsquared:.4f}  adj-R2={model.rsquared_adj:.4f}")
+
+    # Full model details
+    X_full = sm.add_constant((pos[ALL_PREDS] - pos[ALL_PREDS].mean()) / pos[ALL_PREDS].std())
+    full_model = sm.OLS(pos['log_mult'], X_full).fit()
+    print(f"\n--- Full OLS coefficients (standardized) ---")
+    print(full_model.summary2().tables[1].to_string())
+
+    return pd.DataFrame(results), pos, full_model
+
+
+# --- Degree scaling and network diagnostics ---
+
+def analyze_degree_scaling(df):
+    """Check if amplification scales linearly or super-linearly with degree."""
+    pos = df[df['reduction_kg'] > 0].copy()
+    print(f"\n{'='*65}")
+    print(f"DEGREE-AMPLIFICATION SCALING")
+    print(f"{'='*65}")
+
+    # Bin by degree deciles and compute mean amplification
+    pos['deg_bin'] = pd.qcut(pos['degree'], 10, duplicates='drop')
+    binned = pos.groupby('deg_bin', observed=True).agg(
+        mean_deg=('degree', 'mean'), mean_red=('reduction_kg', 'mean'),
+        median_red=('reduction_kg', 'median'), n=('degree', 'size')
+    ).reset_index()
+    print("\n  Degree decile bins:")
+    print(f"  {'mean_deg':>8} {'mean_red':>10} {'median_red':>10} {'n':>5}")
+    for _, r in binned.iterrows():
+        print(f"  {r['mean_deg']:>8.1f} {r['mean_red']:>10.1f} {r['median_red']:>10.1f} {r['n']:>5.0f}")
+
+    # Log-log regression: log(reduction) ~ log(degree) -> slope > 1 means super-linear
+    log_deg = np.log(pos['degree'])
+    log_red = np.log(pos['reduction_kg'])
+    X = sm.add_constant(log_deg)
+    model = sm.OLS(log_red, X).fit()
+    slope = model.params.iloc[1]
+    ci = model.conf_int().iloc[1]
+    print(f"\n  log-log slope: {slope:.3f}  95% CI: [{ci[0]:.3f}, {ci[1]:.3f}]")
+    print(f"  Interpretation: {'SUPER-LINEAR' if ci[0] > 1 else 'LINEAR' if ci[1] > 1 else 'SUB-LINEAR'}")
+    print(f"  R2={model.rsquared:.3f}")
+
+    # Also check contagion scaling if available
+    if 'direct_conversions' in pos.columns:
+        dc_pos = pos[pos['direct_conversions'] > 0]
+        if len(dc_pos) > 10:
+            log_dc = np.log(dc_pos['direct_conversions'])
+            log_d = np.log(dc_pos['degree'])
+            X2 = sm.add_constant(log_d)
+            m2 = sm.OLS(log_dc, X2).fit()
+            s2 = m2.params.iloc[1]
+            ci2 = m2.conf_int().iloc[1]
+            print(f"\n  Contagion log-log slope: {s2:.3f}  95% CI: [{ci2[0]:.3f}, {ci2[1]:.3f}]")
+
+    return slope, ci
+
+
+def analyze_network_properties(G):
+    """Degree assortativity and basic network diagnostics."""
+    print(f"\n{'='*65}")
+    print(f"NETWORK PROPERTIES")
+    print(f"{'='*65}")
+    r = nx.degree_assortativity_coefficient(G)
+    print(f"  Degree assortativity: {r:.4f}")
+    print(f"  {'ASSORTATIVE (high-deg connect to high-deg)' if r > 0 else 'DISASSORTATIVE'}")
+    degs = [G.degree(n) for n in G.nodes()]
+    print(f"  Degree: mean={np.mean(degs):.1f}  std={np.std(degs):.1f}  "
+          f"min={min(degs)}  max={max(degs)}")
+    print(f"  Clustering: {nx.average_clustering(G):.3f}")
+    print(f"  Transitivity: {nx.transitivity(G):.3f}")
+    return r
+
+
+# --- Ensemble analysis (all runs) ---
+
+def run_ensemble(data, n_runs=None):
+    """Run correlations across multiple runs for stability check."""
+    if n_runs is None:
+        n_runs = len(data)
+    n_runs = min(n_runs, len(data))
+    print(f"\n{'='*65}")
+    print(f"ENSEMBLE ANALYSIS ({n_runs} runs)")
+    print(f"{'='*65}")
+
+    dvs = {
+        'adoption': {'results': [], 'stat': 'r_pb'},
+        'amplification': {'results': [], 'stat': 'rho_s'},
+    }
+    # Only include contagion if data supports it
+    snap0 = data.iloc[0]['snapshots']['final']
+    has_contagion = 'direct_conversions' in snap0 or 'influence_parents' in snap0
+    if has_contagion:
+        dvs['contagion'] = {'results': [], 'stat': 'rho_s'}
+
+    for i in range(n_runs):
+        row = data.iloc[i]
+        df = extract_features_fast(row)
+
+        # Adoption
+        meat = df[df['init_meat'] == 1]
+        adoption_r = {}
+        for p in ALL_PREDS:
+            r, pval = pointbiserialr(meat['adopted'], meat[p])
+            adoption_r[p] = {'val': r, 'sig': pval < 0.05}
+        dvs['adoption']['results'].append(adoption_r)
+
+        # Amplification
+        pos = df[df['reduction_kg'] > 0]
+        amp_r = {}
+        if len(pos) > 10:
+            log_m = np.log(pos['multiplier'])
+            for p in ALL_PREDS:
+                rho, pval = spearmanr(pos[p], log_m)
+                amp_r[p] = {'val': rho, 'sig': pval < 0.05}
+        dvs['amplification']['results'].append(amp_r)
+
+        # Contagion
+        if has_contagion and 'direct_conversions' in df.columns:
+            spreaders = df[(df['reduction_kg'] > 0) | (df['direct_conversions'] > 0)]
+            con_r = {}
+            if len(spreaders) > 10:
+                for p in ALL_PREDS:
+                    rho, pval = spearmanr(spreaders[p], spreaders['direct_conversions'])
+                    con_r[p] = {'val': rho, 'sig': pval < 0.05}
+            dvs['contagion']['results'].append(con_r)
+
+    # Print summary
+    for dv_name, dv in dvs.items():
+        stat_name = dv['stat']
+        print(f"\n  --- {dv_name.upper()} ({stat_name}) across {n_runs} runs ---")
+        print(f"  {'Predictor':<16} {'mean':>8} {'std':>8} {'frac_sig':>8}")
+        for p in ALL_PREDS:
+            vals = [r[p]['val'] for r in dv['results'] if p in r]
+            sigs = [r[p]['sig'] for r in dv['results'] if p in r]
+            if vals:
+                print(f"  {p:<16} {np.mean(vals):>8.3f} {np.std(vals):>8.3f} "
+                      f"{np.mean(sigs):>7.0%}")
+
+
+def extract_features_fast(row):
+    """Fast feature extraction (no complex centrality) for ensemble runs."""
+    snap_final = row['snapshots']['final']
+    snap_init = row['snapshots'][0]
+    G = snap_final['graph']
+    nodes = list(G.nodes())
+    N = len(nodes)
+
+    reductions_kg = np.array(snap_final['reductions'])
+    init_diets, final_diets = snap_init['diets'], snap_final['diets']
+
+    # Direct conversions
+    direct_conv = None
+    if 'direct_conversions' in snap_final:
+        direct_conv = np.array(snap_final['direct_conversions'])
+    elif 'influence_parents' in snap_final:
+        parents = snap_final['influence_parents']
+        direct_conv = np.zeros(N, dtype=int)
+        for p in parents:
+            if p is not None:
+                direct_conv[p] += 1
+
+    betweenness = nx.betweenness_centrality(G)
+    eigenvector = nx.eigenvector_centrality_numpy(G)
+    clustering = nx.clustering(G)
+    # Skip complex centrality for speed in ensemble
+    cc = {n: 0.0 for n in nodes}
+
+    df = pd.DataFrame({
+        'node': nodes,
+        'reduction_kg': reductions_kg,
+        'multiplier': reductions_kg / DIRECT_REDUCTION_KG,
+        'degree': [G.degree(n) for n in nodes],
+        'betweenness': [betweenness[n] for n in nodes],
+        'eigenvector': [eigenvector[n] for n in nodes],
+        'clustering': [clustering[n] for n in nodes],
+        'complex_cent': [cc[n] for n in nodes],
+        'theta': [G.nodes[n].get('theta', 0) for n in nodes],
+        'alpha': np.array(snap_final['alphas']),
+        'rho': np.array(snap_final['rhos']),
+        'initial_diet': [init_diets[i] for i in range(N)],
+        'final_diet': [final_diets[i] for i in range(N)],
+    })
+    if direct_conv is not None:
+        df['direct_conversions'] = direct_conv
+    df['init_meat'] = (df['initial_diet'] == 'meat').astype(int)
+    df['adopted'] = ((df['initial_diet'] == 'meat') & (df['final_diet'] == 'veg')).astype(int)
+    return df
+
+
+# --- Figures ---
+
+def make_three_panel_figure(df, adopt_corr, contag_corr, amp_corr,
+                            output_dir='../visualisations_output'):
+    """Side-by-side coefficient comparison for all three DVs."""
     set_publication_style()
     os.makedirs(output_dir, exist_ok=True)
 
-    # Identify significant predictors (p < 0.05) sorted by |rho|
-    sig = corr_df[corr_df['p'] < 0.05].sort_values('rho_s', key=abs, ascending=False)
-    n_sig = len(sig)
-    n_panels = min(n_sig, 5) + 1  # scatter panels + forest plot
+    fig, axes = plt.subplots(1, 3, figsize=(18*cm, 7*cm), sharey=True)
+    titles = ['Adoption (r_pb)', 'Contagion (rho_s)', 'Amplification (rho_s)']
+    corr_dfs = [adopt_corr, contag_corr, amp_corr]
+    val_cols = ['r_pb', 'rho_s', 'rho_s']
 
-    fig, axes = plt.subplots(1, n_panels, figsize=(n_panels * 4.5 * cm, 5.5 * cm))
+    for ax, title, cdf, vcol, letter in zip(axes, titles, corr_dfs, val_cols,
+                                              'ABC'):
+        if cdf is None:
+            ax.set_visible(False); continue
+        preds = cdf['predictor'].values
+        vals = cdf[vcol].values
+        sigs = cdf['p'].values < 0.05
+        colors = [COLORS['primary'] if s else '#aaa' for s in sigs]
+        y_pos = np.arange(len(preds))
+
+        ax.barh(y_pos, vals, color=colors, height=0.6, alpha=0.8)
+        ax.axvline(0, color='#666', lw=0.8, ls='--')
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(preds, fontsize=7)
+        ax.set_xlabel(vcol, fontsize=7)
+        ax.set_title(title, fontsize=8)
+        ax.tick_params(labelsize=6)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.text(0.02, 0.97, letter, transform=ax.transAxes, fontsize=10,
+                fontweight='bold', va='top')
+
+    plt.tight_layout()
+    out = f'{output_dir}/agency_three_dvs.pdf'
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    print(f"\nSaved: {out}")
+    return fig
+
+
+def make_degree_scaling_figure(df, output_dir='../visualisations_output'):
+    """Degree vs amplification and degree vs contagion scatter + binned means."""
+    set_publication_style()
+    pos = df[df['reduction_kg'] > 0].copy()
+    has_dc = 'direct_conversions' in pos.columns
+
+    n_panels = 2 if has_dc else 1
+    fig, axes = plt.subplots(1, n_panels, figsize=(n_panels*6*cm, 5.5*cm))
     if n_panels == 1:
         axes = [axes]
 
-    # Scatter panels for significant predictors
-    for i, (_, row) in enumerate(sig.head(5).iterrows()):
-        ax = axes[i]
-        pred = row['predictor']
-        x = pos[pred]
-        y = pos['multiplier']
-        ax.scatter(x, y, s=6, alpha=0.4, c=COLORS['primary'], edgecolors='none', rasterized=True)
-
-        # Binned means
-        bins = np.percentile(x, np.linspace(0, 100, 8))
+    def _scatter_binned(ax, x, y, xlabel, ylabel, letter):
+        ax.scatter(x, y, s=4, alpha=0.3, c=COLORS['primary'], edgecolors='none', rasterized=True)
+        bins = np.percentile(x, np.linspace(0, 100, 12))
         bc, bm = [], []
         for lo, hi in zip(bins[:-1], bins[1:]):
             mask = (x >= lo) & (x < hi)
             if mask.sum() > 2:
                 bc.append(x[mask].mean()); bm.append(y[mask].mean())
         if bc:
-            ax.plot(bc, bm, 'o-', color=COLORS['secondary'], lw=1.2, ms=3, zorder=5)
-
-        ax.set_yscale('log')
-        ax.set_xlabel(pred, fontsize=7)
-        if i == 0:
-            ax.set_ylabel('Amplification', fontsize=7)
+            ax.plot(bc, bm, 'o-', color=COLORS['secondary'], lw=1.5, ms=4, zorder=5)
+        ax.set_xlabel(xlabel, fontsize=7); ax.set_ylabel(ylabel, fontsize=7)
+        ax.set_xscale('log'); ax.set_yscale('log')
         ax.tick_params(labelsize=6)
         ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
-        ax.set_title(f"$\\rho_s$={row['rho_s']:.2f}", fontsize=7)
-        ax.text(0.02, 0.97, chr(65+i), transform=ax.transAxes, fontsize=9, fontweight='bold', va='top')
+        ax.text(0.02, 0.97, letter, transform=ax.transAxes, fontsize=10,
+                fontweight='bold', va='top')
 
-    # Forest plot of standardized coefficients
-    ax_f = axes[-1]
-    coefs = model.params[1:]  # skip const
-    cis = model.conf_int().iloc[1:]
-    colors_bar = ['#c0392b' if model.pvalues[p] < 0.05 else '#aaa' for p in predictors]
-    y_pos = np.arange(len(predictors))
-
-    ax_f.barh(y_pos, coefs, color=colors_bar, height=0.6, alpha=0.7)
-    ax_f.errorbar(coefs, y_pos, xerr=[(coefs - cis[0]).values, (cis[1] - coefs).values],
-                  fmt='none', color='#333', lw=0.8, capsize=2)
-    ax_f.axvline(0, color='#666', lw=0.8, ls='--')
-    ax_f.set_yticks(y_pos); ax_f.set_yticklabels(predictors, fontsize=6)
-    ax_f.set_xlabel('Std. coef.', fontsize=7)
-    ax_f.tick_params(labelsize=6)
-    ax_f.spines['top'].set_visible(False); ax_f.spines['right'].set_visible(False)
-    ax_f.set_title(f"OLS (R$^2$={model.rsquared:.2f})", fontsize=7)
-    ax_f.text(0.02, 0.97, chr(65+n_panels-1), transform=ax_f.transAxes, fontsize=9,
-              fontweight='bold', va='top')
+    _scatter_binned(axes[0], pos['degree'], pos['reduction_kg'],
+                    'Degree', 'Amplification (kg)', 'A')
+    if has_dc:
+        dc_pos = pos[pos['direct_conversions'] > 0]
+        _scatter_binned(axes[1], dc_pos['degree'], dc_pos['direct_conversions'],
+                        'Degree', 'Direct conversions', 'B')
 
     plt.tight_layout()
-    out = f'{output_dir}/agency_predictor_diagnostic.pdf'
+    out = f'{output_dir}/degree_scaling.pdf'
     plt.savefig(out, dpi=300, bbox_inches='tight')
-    print(f"\nSaved: {out}")
+    print(f"Saved: {out}")
     return fig
+
+
+# --- Main ---
 
 if __name__ == '__main__':
     fp = sys.argv[1] if len(sys.argv) > 1 else None
     data = load_latest(fp)
-    print(f"Loaded {len(data)} runs, N={len(data.iloc[0]['snapshots']['final']['reductions'])} agents")
+    N_agents = len(data.iloc[0]['snapshots']['final']['reductions'])
+    print(f"Loaded {len(data)} runs, N={N_agents} agents")
+
+    # Detailed analysis on median run
     median_row = get_median_row(data)
     df = extract_features(median_row)
-    corr_df, pos = run_correlations(df)
-    model, predictors = run_regression(pos)
-    make_diagnostic_figure(pos, corr_df, model, predictors)
+
+    # Three DVs
+    adopt_corr = analyze_adoption(df)
+    contag_corr = analyze_contagion(df)
+    amp_corr, pos, amp_model = analyze_amplification(df)
+
+    # Degree scaling
+    slope, ci = analyze_degree_scaling(df)
+
+    # Network properties
+    G = median_row['snapshots']['final']['graph']
+    r_assort = analyze_network_properties(G)
+
+    # Ensemble stability (skip complex_cent for speed)
+    print("\nRunning ensemble analysis (this may take a while)...")
+    run_ensemble(data, n_runs=min(len(data), 20))
+
+    # Figures
+    make_three_panel_figure(df, adopt_corr, contag_corr, amp_corr)
+    make_degree_scaling_figure(df)
+
     plt.show()
