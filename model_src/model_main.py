@@ -35,7 +35,7 @@ from auxillary import network_stats
 
 # %% Parameters
 params = {
-    "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,
+    "veg_CO2": 1390, "meat_CO2": 2054,
     "N": 650,
     "erdos_p": 3,
     "steps": 35000,
@@ -45,7 +45,6 @@ params = {
     "veg_f": 0,
     "meat_f": 0.95,
     "p_rewire": 0.01,
-    "rewire_h": 0.1,
     "tc": 0.7,
     "topology": "homophilic_emp",
     "beta": 13,
@@ -64,6 +63,7 @@ params = {
     "mu": 0.3,
     "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
     "tau_persistence": 5000,  # dwell-time half-saturation (Takaguchi et al. 2012): parent veg duration for temporal weight
+    "decay": 0.7,  # geometric decay per cascade depth for emission credit attribution
 }
 
 
@@ -262,23 +262,27 @@ class Agent():
         H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
-    def _cascade_attribute(self, delta, influencer, agents_list,
-                           cascade_depth=1, decay=0.7, visited=None):
-        """Propagate emission credit up the influence chain with geometric decay.
-        Cumulative-only (no debits): each conversion event is a time-respecting
-        causal event (Holme & Saramäki 2012). Back-switching is a causally
-        independent event and does not retroactively negate prior credit
-        (Zhou et al. 2014; Liu et al. 2017).
-        No hard depth cap -- decay^d attenuates naturally; visited prevents cycles."""
+    def _cascade_attribute(self, delta, influencer, agents_list, t,
+                           cascade_depth=1, decay=None, visited=None):
+        """Propagate emission credit up the influence chain.
+        Per-ancestor dwell-time weight (Takaguchi et al. 2012) + geometric depth decay.
+        Cumulative-only: back-switching is causally independent (Karimi & Holme 2013;
+        Zhou et al. 2014; Liu et al. 2017). No hard depth cap -- decay^d attenuates
+        naturally; visited prevents cycles."""
+        if decay is None:
+            decay = self.params.get("decay", 0.7)
         if visited is None:
             visited = set()
         if influencer.i in visited:
             return
         visited.add(influencer.i)
-        influencer.reduction_out += delta * (decay ** (cascade_depth - 1))
+        tau_p = self.params.get("tau_persistence", 5000)
+        dur = (t - influencer.change_time) if influencer.change_time is not None else t
+        w = 1.0 - np.exp(-dur / tau_p)
+        influencer.reduction_out += delta * w * (decay ** (cascade_depth - 1))
         if influencer.influence_parent is not None:
             self._cascade_attribute(delta, agents_list[influencer.influence_parent],
-                                    agents_list, cascade_depth + 1, decay, visited)
+                                    agents_list, t, cascade_depth + 1, decay, visited)
 
     def step(self, G, agents, t):
         """Step agent forward one timestep via pairwise interaction."""
@@ -300,11 +304,7 @@ class Agent():
                 self.influence_parent = other_agent.i
                 self.change_time = t
                 other_agent.influenced_agents.add(self.i)
-                # Temporal weight: established parents earn more credit (Takaguchi et al. 2012)
-                tau_p = self.params.get("tau_persistence", 5000)
-                parent_dur = (t - other_agent.change_time) if other_agent.change_time is not None else t
-                temporal_weight = 1.0 - np.exp(-parent_dur / tau_p)
-                self._cascade_attribute(delta * temporal_weight, other_agent, agents)
+                self._cascade_attribute(delta, other_agent, agents, t)
 
             elif old_diet == "veg" and self.diet == "meat":
                 # veg -> meat: detach from tree only -- no debits (Holme & Saramäki 2012; Zhou et al. 2014)
@@ -536,13 +536,15 @@ class Model():
                 count += self._count_indirect_influence(child_id, depth + 1, visited)
         return count
 
-    def theoretical_max_reduction(self, decay=0.7):
+    def theoretical_max_reduction(self, decay=None):
         """Analytical upper bound on reduction_out for each agent.
         Assumes: agent converts ALL meat-eating neighbors, each of those
         converts all of theirs, etc. -- perfect tree, no back-switches,
         no overlap. BFS on actual network topology respects real degree
         distribution and finite N.
         Returns DataFrame with agent_id, degree, max_reduction, observed."""
+        if decay is None:
+            decay = self.params.get("decay", 0.7)
         delta = self.params["meat_CO2"] - self.params["veg_CO2"]
         results = []
         for agent in self.agents:
