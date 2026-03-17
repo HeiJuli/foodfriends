@@ -52,7 +52,7 @@ BASE_PARAMS = {
     "survey_file": "../data/hierarchical_agents.csv",
     "adjust_veg_fraction": True, "target_veg_fraction": 0.06,
     "tau": 0.015, "theta_gate_c": 0.35, "theta_gate_k": 25,
-    "mu": 0.2, "gamma": 0.5, "tau_persistence": 5000,
+    "mu": 0.2, "gamma": 0.5, "tau_persistence": None,
 }
 
 RUNS_PER_REGIME = 3
