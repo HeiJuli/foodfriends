@@ -62,7 +62,7 @@ params = {
     "alpha_max": 0.80,
     "mu": 0.3,
     "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
-    "tau_persistence": 5000,  # dwell-time half-saturation (Takaguchi et al. 2012): parent veg duration for temporal weight
+    "tau_persistence": None,  # computed as M*2*N (memory renewal window); Takaguchi et al. 2012 / Newman 2002 infectious period
     "decay": 0.7,  # geometric decay per cascade depth for emission credit attribution
 }
 
@@ -325,6 +325,9 @@ class Model():
     def __init__(self, params, pmf_tables=None):
         self.pmf_tables = pmf_tables
         self.params = params
+        # Resolve tau_persistence: memory renewal window = M * 2 * N (Newman 2002; Takaguchi et al. 2012)
+        if self.params.get("tau_persistence") is None:
+            self.params["tau_persistence"] = self.params["M"] * 2 * self.params["N"]
         self.snapshots = {}
         self.snapshot_times = [params["steps"] * i // 4 for i in range(1, 4)]
         dense_start = params.get("snapshot_dense_start", 0)
@@ -356,10 +359,10 @@ class Model():
         self.fraction_veg.append(
             sum(d == "veg" for d in self.get_attributes("diet")) / self.params["N"])
 
-    def _check_steady_state(self, t, window=5000, threshold=1e-4):
+    def _check_steady_state(self, t, window=5000, threshold=1e-4, min_t=10000):
         """Detect convergence: std of fraction_veg over window < threshold.
         Records a 'steady' snapshot on first detection."""
-        if self.steady_state_t is not None or len(self.fraction_veg) < window:
+        if t < min_t or self.steady_state_t is not None or len(self.fraction_veg) < window:
             return
         recent = self.fraction_veg[-window:]
         if np.std(recent) < threshold:

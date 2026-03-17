@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
-from scipy.ndimage import uniform_filter1d
+from scipy.signal import savgol_filter
 import networkx as nx
 import warnings
 warnings.filterwarnings('ignore')
@@ -255,14 +255,18 @@ def analysis_5_inflection(all_data, label='twin'):
         if len(traj) < burnin + window * 2:
             continue
 
-        # Smooth, then 2nd derivative (max acceleration of adoption)
-        smoothed = uniform_filter1d(traj, size=window)
-        d2Fdt2 = np.gradient(np.gradient(smoothed))
+        # Savitzky-Golay: local cubic fit gives 2nd derivative directly
+        # (much lower variance than double finite-difference on box-filtered signal)
+        d2Fdt2 = savgol_filter(traj, window_length=2001, polyorder=3, deriv=2)
+        smoothed = savgol_filter(traj, window_length=2001, polyorder=3)
         d2Fdt2[:burnin] = 0  # mask burn-in
-        # Mask post-50% regime (late-stage dynamics confound)
-        d2Fdt2[smoothed > 0.5] = 0
+        d2Fdt2[smoothed > 0.5] = 0  # mask post-50% regime
 
         idx_max = np.argmax(d2Fdt2)
+        # Skip if peak is indistinguishable from noise
+        valid = d2Fdt2[(d2Fdt2 != 0)]
+        if len(valid) == 0 or d2Fdt2[idx_max] < 3 * np.std(valid):
+            continue
         inflection_fveg.append(smoothed[idx_max])
         inflection_times.append(idx_max)
 
