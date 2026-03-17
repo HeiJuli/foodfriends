@@ -24,7 +24,7 @@ BASE_PARAMS = {
     "tau": 0.015, "theta_gate_c": 0.35, "theta_gate_k": 25,
     "alpha_min": 0.05, "alpha_max": 0.80, "mu": 0.2,
     "gamma": 0.5,
-    "tau_persistence": 5000,
+    "tau_persistence": None,
 }
 
 RUNS_PER_BETA = 5

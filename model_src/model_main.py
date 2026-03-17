@@ -276,7 +276,7 @@ class Agent():
         if influencer.i in visited:
             return
         visited.add(influencer.i)
-        tau_p = self.params.get("tau_persistence", 5000)
+        tau_p = self.params["tau_persistence"]
         dur = (t - influencer.change_time) if influencer.change_time is not None else t
         w = 1.0 - np.exp(-dur / tau_p)
         influencer.reduction_out += delta * w * (decay ** (cascade_depth - 1))
