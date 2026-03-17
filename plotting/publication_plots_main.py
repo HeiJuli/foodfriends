@@ -79,7 +79,9 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     elif 'steady' in snapshots:
         analysis_snapshots = dict(snapshots)
         analysis_snapshots['final'] = snapshots['steady']
-        print(f"INFO: Auto-detected steady-state snapshot used for B/C panels")
+        ss_t_print = median_row.get('steady_state_t')
+        print(f"INFO: Auto-detected steady-state snapshot used for B/C panels"
+              + (f" (t={int(ss_t_print)})" if ss_t_print is not None else ""))
 
     # Resolve the integer t that analysis 'final' corresponds to (for trajectory marker)
     if analysis_t_end is not None:
@@ -193,7 +195,7 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     # === Bottom-left: Single trajectory with snapshot markers ===
     traj_ax = fig.add_subplot(gs_bot[0, 0])
     if isinstance(trajectory, list):
-        from scipy.ndimage import uniform_filter1d
+        from scipy.signal import savgol_filter
         t_thousands = np.arange(len(trajectory)) / 1000
         traj_ax.plot(t_thousands, trajectory, color=COLORS['vegetation'], linewidth=1.0, alpha=0.9)
 
@@ -215,10 +217,10 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         # Tipping point: max of 2nd derivative (max adoption acceleration)
         COL_TIP = '#9b59b6'  # purple -- no clash with teal/orange/grey/green/gold
         traj_arr = np.array(trajectory)
-        _window, _burnin = 2000, 5000
-        if len(traj_arr) > _burnin + _window * 2:
-            _sm = uniform_filter1d(traj_arr, size=_window)
-            _d2 = np.gradient(np.gradient(_sm))
+        _burnin = 5000
+        if len(traj_arr) > _burnin + 2001 * 2:
+            _d2 = savgol_filter(traj_arr, window_length=2001, polyorder=3, deriv=2)
+            _sm = savgol_filter(traj_arr, window_length=2001, polyorder=3)
             _d2[:_burnin] = 0
             _d2[_sm > 0.5] = 0
             _t_tip = int(np.argmax(_d2))
@@ -321,7 +323,9 @@ def _resolve_snapshot(data, analysis_t_end=None):
         print(f"INFO: analysis_t_end={analysis_t_end} -> using snapshot t={best_t}")
     elif 'steady' in snapshots:
         snap = snapshots['steady']
-        print(f"INFO: Using auto-detected steady-state snapshot")
+        ss_t_print = median_row.get('steady_state_t')
+        print(f"INFO: Using auto-detected steady-state snapshot"
+              + (f" (t={int(ss_t_print)})" if ss_t_print is not None else ""))
     else:
         snap = snapshots['final']
     return median_row, snap

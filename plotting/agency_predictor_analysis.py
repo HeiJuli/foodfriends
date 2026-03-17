@@ -25,7 +25,7 @@ from plot_styles import set_publication_style, COLORS
 cm = 1/2.54
 DIRECT_REDUCTION_KG = 664  # 2054 - 1390
 
-DEFAULT_FILE = '../model_output/trajectory_analysis_twin_20260316.pkl'
+DEFAULT_FILE = '../model_output/trajectory_analysis_twin_20260317.pkl'
 
 TOPO_PREDS = ['degree', 'betweenness', 'eigenvector', 'clustering', 'complex_cent']
 PSYCH_PREDS = ['rho', 'alpha', 'theta']
