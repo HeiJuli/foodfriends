@@ -46,10 +46,21 @@ def load_latest(file_path=None):
     print(f"Loading: {files[-1]}")
     return pd.read_pickle(files[-1])
 
+ANALYSIS_T = 130000  # analysis cutoff — must match results_analysis.py
+
 def get_median_row(data):
     if 'is_median_twin' in data.columns and data['is_median_twin'].any():
         return data[data['is_median_twin']].iloc[0]
     return data.iloc[len(data) // 2]
+
+def _resolve_snap(snapshots, t_cutoff=ANALYSIS_T):
+    """Return snapshot at t_cutoff (nearest int key), else 'final'."""
+    if t_cutoff is not None:
+        int_ts = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
+        if int_ts:
+            best = min(int_ts, key=lambda t: abs(t - t_cutoff))
+            return snapshots[best]
+    return snapshots.get('final', snapshots[max(t for t in snapshots if isinstance(t, int))])
 
 
 # --- Complex centrality (Guilbeault & Centola 2021) ---
@@ -85,7 +96,7 @@ def compute_complex_centrality(G, T=2):
 
 def extract_features(row):
     """Build agent-level DataFrame from a single run's snapshots."""
-    snap_final = row['snapshots']['final']
+    snap_final = _resolve_snap(row['snapshots'])
     snap_init = row['snapshots'][0]
     G = snap_final['graph']
     nodes = list(G.nodes())
@@ -313,7 +324,7 @@ def run_ensemble(data, n_runs=None):
         'amplification': {'results': [], 'stat': 'rho_s'},
     }
     # Only include contagion if data supports it
-    snap0 = data.iloc[0]['snapshots']['final']
+    snap0 = _resolve_snap(data.iloc[0]['snapshots'])
     has_contagion = 'direct_conversions' in snap0 or 'influence_parents' in snap0
     if has_contagion:
         dvs['contagion'] = {'results': [], 'stat': 'rho_s'}
@@ -365,7 +376,7 @@ def run_ensemble(data, n_runs=None):
 
 def extract_features_fast(row):
     """Fast feature extraction (no complex centrality) for ensemble runs."""
-    snap_final = row['snapshots']['final']
+    snap_final = _resolve_snap(row['snapshots'])
     snap_init = row['snapshots'][0]
     G = snap_final['graph']
     nodes = list(G.nodes())
@@ -548,7 +559,7 @@ def make_degree_scaling_figure(df, output_dir='../visualisations_output'):
 if __name__ == '__main__':
     fp = sys.argv[1] if len(sys.argv) > 1 else None
     data = load_latest(fp)
-    N_agents = len(data.iloc[0]['snapshots']['final']['reductions'])
+    N_agents = len(_resolve_snap(data.iloc[0]['snapshots'])['reductions'])
     print(f"Loaded {len(data)} runs, N={N_agents} agents")
 
     # Detailed analysis on median run
@@ -564,7 +575,7 @@ if __name__ == '__main__':
     slope, ci = analyze_degree_scaling(df)
 
     # Network properties
-    G = median_row['snapshots']['final']['graph']
+    G = _resolve_snap(median_row['snapshots'])['graph']
     r_assort = analyze_network_properties(G)
 
     # Ensemble stability (skip complex_cent for speed)
