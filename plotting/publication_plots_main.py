@@ -6,10 +6,37 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import networkx as nx
+import yaml
 from matplotlib.colors import LinearSegmentedColormap
 from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMAP, ECO_DIV_CMAP
 
 cm = 1/2.54
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'plot_config.yaml')
+MODEL_OUTPUT = os.path.join(os.path.dirname(__file__), '..', 'model_output')
+
+def load_config():
+    """Load plot config from YAML. Returns dict or None."""
+    if not os.path.exists(CONFIG_PATH):
+        print(f"WARNING: No config at {CONFIG_PATH}")
+        return None
+    with open(CONFIG_PATH) as f:
+        cfg = yaml.safe_load(f)
+    print(f"INFO: Loaded config from {CONFIG_PATH}")
+    return cfg
+
+def _cfg_path(filename):
+    """Resolve a pkl filename to full path under model_output/."""
+    if filename is None:
+        return None
+    if os.path.isabs(filename):
+        return filename
+    return os.path.join(MODEL_OUTPUT, filename)
+
+def _find_crossing(traj, ref_fveg):
+    """Find first timestep where trajectory crosses ref_fveg. Returns int or None."""
+    arr = np.array(traj)
+    idx = np.where(arr >= ref_fveg)[0]
+    return int(idx[0]) if len(idx) > 0 else None
 
 def ensure_output_dir():
     output_dir = '../visualisations_output'
@@ -28,113 +55,159 @@ def create_color_variations(base_color, n):
     base_rgb = mcolors.to_rgb(base_color)
     return [tuple(min(1.0, c * (0.7 + 0.3 * i / max(1, n-1))) for c in base_rgb) for i in range(n)]
 
-def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scale=None,
-                                  truncate_steps=None, analysis_t_end=None, mid_t=None):
-    """7-panel plot: 4 network snapshots (top) + trajectory + CCDF + Lorenz (bottom)
+def _get_median(df):
+    if 'is_median_twin' in df.columns and df['is_median_twin'].any():
+        return df[df['is_median_twin']].iloc[0]
+    twin = df[df['agent_ini'].isin(['twin', 'sample-max'])] if 'agent_ini' in df.columns else df
+    return (twin if len(twin) else df).iloc[len(df) // 2]
+
+def _resolve_analysis(snapshots, row, t_end_override=None):
+    """Return (snapshot_dict, final_t_int) for analysis panels."""
+    if t_end_override is not None:
+        int_ts = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
+        best = min(int_ts, key=lambda t: abs(t - t_end_override)) if int_ts else None
+        if best is not None:
+            return snapshots[best], best
+        return snapshots.get('final', snapshots[max(t for t in snapshots if isinstance(t, int))]), None
+    if 'steady' in snapshots:
+        ss_t = row.get('steady_state_t')
+        return snapshots['steady'], int(ss_t) if ss_t is not None else None
+    # fallback to last integer key
+    last = max((t for t in snapshots if isinstance(t, int)), default=None)
+    return snapshots.get('final', snapshots.get(last)), last
+
+def _truncate_snaps(snapshots, row, max_t):
+    """Truncate snapshot dict to times <= max_t, remapping 'final'."""
+    valid = sorted([t for t in snapshots if isinstance(t, int) and t <= max_t])
+    last_t = valid[-1] if valid else 0
+    ss_t = row.get('steady_state_t')
+    keep_steady = 'steady' in snapshots and ss_t is not None and ss_t <= max_t
+    out = {t: snapshots[t] for t in ([0] + valid) if t in snapshots}
+    if keep_steady:
+        out['steady'] = snapshots['steady']
+    out['final'] = snapshots[last_t]
+    return out
+
+
+def plot_network_agency_evolution(data=None, file_path=None,
+                                  small_data=None, small_file_path=None,
+                                  save=True, log_scale=None,
+                                  truncate_steps=None, analysis_t_end=None,
+                                  small_truncate_steps=None, small_mid_t=None,
+                                  small_analysis_t_end=None,
+                                  rescale_ref=0.5, savgol_window=10001):
+    """7-panel: 3 network snapshots (top) + trajectory + CCDF + Lorenz (bottom).
+
+    Dual-mode: big N provides primary trajectory, CCDF, Lorenz.
+               small N provides network visualisations and grey trajectory overlay.
+    If small_file_path not provided, falls back to single-source mode.
 
     Args:
-        analysis_t_end: If set, panels B (CCDF) and C (Lorenz) use the snapshot closest
-                        to this timestep instead of the true final. Panel A still shows
-                        the full trajectory for visual context.
+        data/file_path:              Big N dataset (primary)
+        small_data/small_file_path:  Small N dataset (illustrative networks)
+        truncate_steps:              Big N display window (x-axis max)
+        analysis_t_end:              Big N: snapshot for CCDF/Lorenz (Enter=auto-steady)
+        small_truncate_steps:        Small N display window
+        small_mid_t:                 Small N: middle network snapshot target
+        small_analysis_t_end:        Small N: which snapshot is t_end for networks
+        rescale_ref:                 F_veg crossing to align small N onto big N time axis
+                                     (None to disable rescaling)
+        savgol_window:               Savitzky-Golay window for tipping point detection
     """
     from matplotlib.ticker import LogLocator, NullFormatter
     from matplotlib.patches import Patch
-    from matplotlib.lines import Line2D
+    from scipy.signal import savgol_filter
     set_publication_style()
 
-    COL_TOP10 = '#6a994e'
-    COL_TOP1  = '#d4a029'
+    COL_TOP10, COL_TOP1 = '#6a994e', '#d4a029'
 
+    # === Load big N (primary) ===
     if data is None:
         data = load_data(file_path)
         if data is None: return None
+    big_row = _get_median(data)
+    big_traj = list(big_row['fraction_veg_trajectory'])
+    big_snaps = big_row['snapshots']
+    if truncate_steps:
+        big_traj = big_traj[:truncate_steps]
+    big_snap, big_final_t = _resolve_analysis(big_snaps, big_row, analysis_t_end)
+    print(f"INFO: Big N: F_veg {big_traj[0]:.3f} -> {big_traj[-1]:.3f} ({len(big_traj)} steps)")
 
-    median_row = data[data['is_median_twin']].iloc[0]
-    snapshots = median_row['snapshots']
-    trajectory = median_row['fraction_veg_trajectory']
-
-    if truncate_steps is not None and isinstance(trajectory, list):
-        trajectory = trajectory[:truncate_steps]
-        valid_int_times = sorted([t for t in snapshots if isinstance(t, int) and t <= truncate_steps])
-        last_t = valid_int_times[-1] if valid_int_times else 0
-        # Preserve 'steady' if it occurred before truncation point
-        steady_t = median_row.get('steady_state_t', None)
-        keep_steady = 'steady' in snapshots and (steady_t is not None and steady_t <= truncate_steps)
-        snapshots = {t: snapshots[t] for t in ([0] + valid_int_times) if t in snapshots}
-        if keep_steady:
-            snapshots['steady'] = median_row['snapshots']['steady']
-        snapshots['final'] = median_row['snapshots'][last_t]
-        print(f"INFO: Truncated to {truncate_steps} steps; 'final' snapshot -> t={last_t}"
-              f"{'; steady snapshot preserved' if keep_steady else ''}")
-
-    # Build analysis snapshots: remap 'final' for B/C panels
-    # Priority: explicit analysis_t_end > auto-detected 'steady' snapshot > true 'final'
-    analysis_snapshots = snapshots
-    if analysis_t_end is not None:
-        int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
-        best_t = min(int_times, key=lambda t: abs(t - analysis_t_end)) if int_times else 'final'
-        analysis_snapshots = dict(snapshots)
-        analysis_snapshots['final'] = snapshots[best_t] if best_t != 'final' else snapshots['final']
-        print(f"INFO: analysis_t_end={analysis_t_end} -> B/C use snapshot t={best_t}")
-    elif 'steady' in snapshots:
-        analysis_snapshots = dict(snapshots)
-        analysis_snapshots['final'] = snapshots['steady']
-        ss_t_print = median_row.get('steady_state_t')
-        print(f"INFO: Auto-detected steady-state snapshot used for B/C panels"
-              + (f" (t={int(ss_t_print)})" if ss_t_print is not None else ""))
-
-    # Resolve the integer t that analysis 'final' corresponds to (for trajectory marker)
-    if analysis_t_end is not None:
-        analysis_final_t = best_t if isinstance(best_t, int) else len(trajectory) - 1
-    elif 'steady' in snapshots:
-        ss_t = median_row.get('steady_state_t')
-        analysis_final_t = int(ss_t) if ss_t is not None else len(trajectory) - 1
+    # === Load small N (optional) ===
+    dual = small_file_path is not None or small_data is not None
+    if dual:
+        if small_data is None:
+            small_data = load_data(small_file_path)
+        if small_data is None:
+            dual = False
+    if dual:
+        sm_row = _get_median(small_data)
+        sm_traj = list(sm_row['fraction_veg_trajectory'])
+        sm_snaps = dict(sm_row['snapshots'])
+        if small_truncate_steps:
+            sm_traj = sm_traj[:small_truncate_steps]
+            sm_snaps = _truncate_snaps(sm_snaps, sm_row, small_truncate_steps)
+        net_snap_final, sm_final_t = _resolve_analysis(sm_snaps, sm_row, small_analysis_t_end)
+        sm_analysis = dict(sm_snaps)
+        sm_analysis['final'] = net_snap_final
+        if sm_final_t is None:
+            sm_final_t = len(sm_traj) - 1
+        print(f"INFO: Small N: F_veg {sm_traj[0]:.3f} -> {sm_traj[-1]:.3f} ({len(sm_traj)} steps)")
     else:
-        analysis_final_t = len(trajectory) - 1
+        # Fallback: single-source mode (big N for everything)
+        sm_snaps = dict(big_snaps)
+        sm_traj = big_traj
+        if truncate_steps:
+            sm_snaps = _truncate_snaps(sm_snaps, big_row, truncate_steps)
+        net_snap_final, sm_final_t = _resolve_analysis(sm_snaps, big_row, analysis_t_end)
+        sm_analysis = dict(sm_snaps)
+        sm_analysis['final'] = net_snap_final
+        if sm_final_t is None:
+            sm_final_t = len(sm_traj) - 1
 
-    if isinstance(trajectory, list) and len(trajectory) > 0:
-        print(f"INFO: Initial veg fraction = {trajectory[0]:.3f}, Final = {trajectory[-1]:.3f}")
-        traj_y_max = max(trajectory) * 1.1
-    else:
-        traj_y_max = 0.5
+    # === Compute time rescaling for small N overlay ===
+    scale_factor = 1.0
+    if dual and rescale_ref is not None:
+        t_cross_big = _find_crossing(big_traj, rescale_ref)
+        t_cross_sm = _find_crossing(sm_traj, rescale_ref)
+        if t_cross_big is not None and t_cross_sm is not None and t_cross_sm > 0:
+            scale_factor = t_cross_big / t_cross_sm
+            print(f"INFO: Rescaling small N: F_veg={rescale_ref} at t_big={t_cross_big}, "
+                  f"t_small={t_cross_sm}, scale={scale_factor:.2f}")
+        else:
+            print(f"INFO: Rescaling skipped (crossing F_veg={rescale_ref} not found in both trajectories)")
 
-    # Figure layout: 4 networks top, trajectory + CCDF + Lorenz bottom
-    fig = plt.figure(figsize=(17.8*cm, 12.5*cm))
+    # === Figure layout ===
+    fig = plt.figure(figsize=(17.8*cm, 11.5*cm))
     outer_gs = fig.add_gridspec(2, 1, height_ratios=[2.8, 1.4],
-                                hspace=0.18, top=0.93, bottom=0.08, left=0.08, right=0.97)
+                                hspace=0.08, top=0.93, bottom=0.08, left=0.08, right=0.97)
     gs_top = outer_gs[0].subgridspec(1, 3, wspace=0.08)
     gs_bot = outer_gs[1].subgridspec(1, 3, wspace=0.35, width_ratios=[1.2, 1, 1])
 
-    # Network layout: giant component only (fixed across all snapshots)
-    G_full = analysis_snapshots['final']['graph']
+    # === Network layout (from small N) ===
+    G_full = sm_analysis['final']['graph']
     giant_nodes = max(nx.connected_components(G_full), key=len)
     G = G_full.subgraph(giant_nodes).copy()
-    N_gc = G.number_of_nodes()
     giant_list = list(G.nodes())
-    print(f"INFO: Network full N={G_full.number_of_nodes()}, giant component={N_gc} nodes, "
-          f"{G.number_of_edges()} edges, "
-          f"{nx.number_connected_components(G_full)} components")
-
+    N_gc = G.number_of_nodes()
     pos = nx.spring_layout(G, k=4/N_gc**0.5, iterations=80, seed=42)
+    pos_arr = np.array(list(pos.values()))
+    x_min, x_max = pos_arr[:, 0].min(), pos_arr[:, 0].max()
+    y_min, y_max_net = pos_arr[:, 1].min(), pos_arr[:, 1].max()
+    print(f"INFO: Network N={G_full.number_of_nodes()}, giant={N_gc}, edges={G.number_of_edges()}")
 
-    pos_array = np.array(list(pos.values()))
-    x_min, x_max = pos_array[:, 0].min(), pos_array[:, 0].max()
-    y_min, y_max_net = pos_array[:, 1].min(), pos_array[:, 1].max()
-
-    # Time points
-    all_times = sorted([t for t in snapshots.keys() if isinstance(t, int) and t > 0])
+    # Time points for network snapshots (from small N)
+    all_times = sorted([t for t in sm_snaps if isinstance(t, int) and t > 0])
     if all_times:
-        _mid_target = mid_t if mid_t is not None else (
-            (len(trajectory) // 2) if isinstance(trajectory, list) else (all_times[-1] // 2))
+        _mid_target = small_mid_t if small_mid_t is not None else (
+            len(sm_traj) // 2 if isinstance(sm_traj, list) else all_times[-1] // 2)
         mid = min(all_times, key=lambda t: abs(t - _mid_target))
-        if mid_t is not None:
-            print(f"INFO: mid_t={mid_t} -> middle snapshot t={mid}")
     else:
         mid = None
     time_points = [t for t in [0, mid, 'final'] if t is not None]
-    print(f"INFO: Plotting snapshots at times: {time_points}")
+    print(f"INFO: Network snapshots at: {time_points}")
 
-    # --- Legend ---
+    # === Legend ===
     net_legend = [
         Patch(facecolor='#2a9d8f', edgecolor='#333', linewidth=0.4, label='Vegetarian'),
         Patch(facecolor='#e76f51', edgecolor='#333', linewidth=0.4, label='Meat eater'),
@@ -144,16 +217,16 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     fig.legend(handles=net_legend, loc='upper center', bbox_to_anchor=(0.5, 0.995),
                ncol=4, fontsize=6.5, frameon=False, handletextpad=0.4, columnspacing=1.0)
 
-    # === Row 0: Network snapshots ===
+    # === Row 0: Network snapshots (from small N) ===
     for i, t in enumerate(time_points):
-        snap = analysis_snapshots[t] if t in analysis_snapshots else snapshots[t]
-        all_diets = snap['diets']
-        all_red   = np.array(snap['reductions'])
+        snap = sm_analysis.get(t, sm_snaps.get(t))
+        if snap is None:
+            continue
         net_ax = fig.add_subplot(gs_top[0, i])
-
-        # Index by node id into the full diet/reduction arrays
+        all_diets = snap['diets']
+        all_red = np.array(snap['reductions'])
         node_colors = ['#2a9d8f' if all_diets[n] == 'veg' else '#e76f51' for n in giant_list]
-        reductions  = np.array([all_red[n] for n in giant_list])
+        reductions = np.array([all_red[n] for n in giant_list])
 
         nx.draw_networkx_edges(G, pos, ax=net_ax, alpha=0.25, width=0.03)
         nx.draw_networkx_nodes(G, pos, ax=net_ax, node_color=node_colors, node_size=4,
@@ -163,13 +236,11 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
         if np.max(reductions) > 0:
             n_top = max(1, int(0.1 * len(reductions)))
             top_idx = np.argsort(reductions)[-n_top:]
-
             top_10_nodes = [giant_list[j] for j in top_idx[:-1] if reductions[j] > 0]
             if top_10_nodes:
                 nx.draw_networkx_nodes(G, pos, nodelist=top_10_nodes, ax=net_ax,
                                      node_color=COL_TOP10, node_size=10, alpha=0.9,
                                      edgecolors='#333', linewidths=0.2)
-
             top_reducer_idx = top_idx[-1]
             if reductions[top_reducer_idx] > 0:
                 nx.draw_networkx_nodes(G, pos, nodelist=[giant_list[top_reducer_idx]], ax=net_ax,
@@ -179,7 +250,6 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
         title = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f't = {t//1000}k'
         net_ax.set_title(title, fontsize=10, pad=2)
-
         pad_n = 0.02
         net_ax.set_xlim(x_min - pad_n, x_max + pad_n)
         net_ax.set_ylim(y_min - pad_n, y_max_net + pad_n)
@@ -192,45 +262,46 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
                        fontweight='bold', bbox=dict(boxstyle='round,pad=0.2', fc='white',
                        edgecolor=COL_TOP1, linewidth=0.8, alpha=0.9))
 
-    # === Bottom-left: Single trajectory with snapshot markers ===
+    # === Panel A: Trajectory (big N primary + small N grey overlay) ===
     traj_ax = fig.add_subplot(gs_bot[0, 0])
-    if isinstance(trajectory, list):
-        from scipy.signal import savgol_filter
-        t_thousands = np.arange(len(trajectory)) / 1000
-        traj_ax.plot(t_thousands, trajectory, color=COLORS['vegetation'], linewidth=1.0, alpha=0.9)
 
-        # Vertical markers at snapshot times
-        time_labels = []
-        for t in time_points:
-            if t == 0:
-                t_val = 0
-            elif t == 'final':
-                t_val = min(analysis_final_t, len(trajectory) - 1)
-            else:
-                t_val = min(t, len(trajectory) - 1)
-            t_k = t_val / 1000
-            traj_ax.axvline(t_k, color='#888', linestyle=':', linewidth=0.7, alpha=0.6)
-            traj_ax.scatter(t_k, trajectory[t_val], color=COLORS['vegetation'],
-                          s=14, zorder=5, edgecolors='#333', linewidths=0.4)
-            time_labels.append((t_k, t))
+    # Small N grey line (rescaled, drawn first so big N is on top)
+    if dual:
+        t_k_sm = np.arange(len(sm_traj)) * scale_factor / 1000
+        traj_ax.plot(t_k_sm, sm_traj, color='#999', linewidth=0.6, alpha=0.6)
 
-        # Tipping point: max of 2nd derivative (max adoption acceleration)
-        COL_TIP = '#9b59b6'  # purple -- no clash with teal/orange/grey/green/gold
-        traj_arr = np.array(trajectory)
-        _burnin = 5000
-        if len(traj_arr) > _burnin + 2001 * 2:
-            _d2 = savgol_filter(traj_arr, window_length=2001, polyorder=3, deriv=2)
-            _sm = savgol_filter(traj_arr, window_length=2001, polyorder=3)
-            _d2[:_burnin] = 0
-            _d2[_sm > 0.5] = 0
-            _t_tip = int(np.argmax(_d2))
-            _t_tip_k = _t_tip / 1000
-            traj_ax.axvline(_t_tip_k, color=COL_TIP, linestyle=':', linewidth=0.9, alpha=0.8)
-            print(f"INFO: Tipping point (max d2F/dt2) at t={_t_tip} ({_t_tip_k:.1f}k), "
-                  f"F_veg={traj_arr[_t_tip]:.3f}")
+    # Big N primary line
+    t_k_big = np.arange(len(big_traj)) / 1000
+    traj_ax.plot(t_k_big, big_traj, color=COLORS['vegetation'], linewidth=1.0, alpha=0.9)
+
+    # Vertical markers at small N snapshot times (rescaled, intersect the grey line)
+    ref_traj = sm_traj if dual else big_traj
+    marker_color = '#999' if dual else COLORS['vegetation']
+    for t in time_points:
+        t_val = 0 if t == 0 else (min(sm_final_t, len(ref_traj) - 1) if t == 'final'
+                                   else min(t, len(ref_traj) - 1))
+        t_k = t_val * scale_factor / 1000  # rescaled to big N time axis
+        traj_ax.axvline(t_k, color='#888', linestyle=':', linewidth=0.7, alpha=0.6)
+        traj_ax.scatter(t_k, ref_traj[t_val], color=marker_color,
+                       s=14, zorder=5, edgecolors='#333', linewidths=0.4)
+
+    # Tipping point from big N
+    _sw = savgol_window
+    traj_arr = np.array(big_traj)
+    _burnin = 5000
+    if len(traj_arr) > _burnin + _sw * 2:
+        COL_TIP = '#9b59b6'
+        _d2 = savgol_filter(traj_arr, window_length=_sw, polyorder=3, deriv=2)
+        _sm = savgol_filter(traj_arr, window_length=_sw, polyorder=3)
+        _d2[:_burnin] = 0
+        _d2[_sm > 0.5] = 0
+        _t_tip = int(np.argmax(_d2))
+        _t_tip_k = _t_tip / 1000
+        traj_ax.axvline(_t_tip_k, color=COL_TIP, linestyle=':', linewidth=0.9, alpha=0.8)
+        print(f"INFO: Tipping point at t={_t_tip} ({_t_tip_k:.1f}k), F_veg={traj_arr[_t_tip]:.3f}")
 
     traj_ax.set_ylim(0, 1.0)
-    traj_ax.set_xlim(-0.5, len(trajectory) / 1000)
+    traj_ax.set_xlim(-0.5, len(big_traj) / 1000)
     traj_ax.set_ylabel('$F_{veg}$', fontsize=7)
     traj_ax.set_xlabel('$t$ [thousands]', fontsize=7)
     traj_ax.spines['top'].set_visible(False)
@@ -239,27 +310,13 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     traj_ax.text(0.02, 0.95, 'A', transform=traj_ax.transAxes, fontsize=10,
                 fontweight='bold', va='top')
 
-    # === Bottom-right: Combined CCDF with time-colored curves ===
+    # === Panel B: CCDF (big N steady state, single curve) ===
     ccdf_ax = fig.add_subplot(gs_bot[0, 1])
-
-    # Time colormap: grey shades (light to dark) to avoid conflict with diet colors
-    n_curves = len([t for t in time_points if t != 0])
-    time_cmap = [plt.cm.Greys(v) for v in np.linspace(0.35, 0.85, n_curves)]
-
-    curve_idx = 0
-    for t in time_points:
-        snap = analysis_snapshots[t] if t in analysis_snapshots else snapshots[t]
-        reductions = np.array(snap['reductions'])
-        if np.max(reductions) == 0:
-            continue
-        reductions_tonnes = reductions / 1000
-        pos_red = np.sort(reductions_tonnes[reductions_tonnes > 1e-6])
-        ccdf_y = 1.0 - np.arange(1, len(pos_red) + 1) / len(pos_red)
-
-        label = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f'{t//1000}k'
-        ccdf_ax.step(pos_red, ccdf_y, where='post', color=time_cmap[curve_idx],
-                    linewidth=1.2, alpha=0.9, label=label)
-        curve_idx += 1
+    reductions_all = np.array(big_snap['reductions'])
+    if np.max(reductions_all) > 0:
+        red_t = np.sort(reductions_all[reductions_all > 1e-6] / 1000)
+        ccdf_y = 1.0 - np.arange(1, len(red_t) + 1) / len(red_t)
+        ccdf_ax.step(red_t, ccdf_y, where='post', color='#555', linewidth=1.2, alpha=0.9)
 
     ccdf_ax.set_xscale('log')
     ccdf_ax.set_yscale('log')
@@ -271,23 +328,16 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     ccdf_ax.spines['top'].set_visible(False)
     ccdf_ax.spines['right'].set_visible(False)
     ccdf_ax.tick_params(axis='both', labelsize=6)
-    ccdf_ax.legend(fontsize=5, frameon=False, loc='center', title='Snapshot',
-                  title_fontsize=5)
     ccdf_ax.text(0.02, 0.95, 'B', transform=ccdf_ax.transAxes, fontsize=10,
                 fontweight='bold', va='top')
 
-    # === Bottom-right: Lorenz curve (Newman-style, sorted from largest reducer) ===
+    # === Panel C: Lorenz (big N steady state, single curve) ===
     lorenz_ax = fig.add_subplot(gs_bot[0, 2])
-    for ci, t in enumerate(t for t in time_points if t != 0):
-        snap = analysis_snapshots[t] if t in analysis_snapshots else snapshots[t]
-        reductions = np.array(snap['reductions'])
-        if np.max(reductions) == 0:
-            continue
-        sorted_red = np.sort(reductions)[::-1]
+    if np.max(reductions_all) > 0:
+        sorted_red = np.sort(reductions_all)[::-1]
         cum_frac = np.cumsum(sorted_red) / sorted_red.sum()
         pop_frac = np.arange(1, len(sorted_red) + 1) / len(sorted_red)
-        label = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f'{t//1000}k'
-        lorenz_ax.plot(pop_frac, cum_frac, color=time_cmap[ci], lw=1.2, alpha=0.9, label=label)
+        lorenz_ax.plot(pop_frac, cum_frac, color='#555', lw=1.2, alpha=0.9)
     lorenz_ax.plot([0, 1], [0, 1], 'k--', lw=0.8, alpha=0.5)
     lorenz_ax.set_xlabel('$F_{pop}$', fontsize=7)
     lorenz_ax.set_ylabel('$F_{red}$', fontsize=7)
@@ -297,7 +347,6 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
     lorenz_ax.spines['top'].set_visible(False)
     lorenz_ax.spines['right'].set_visible(False)
     lorenz_ax.tick_params(axis='both', labelsize=6)
-    # Legend only in CCDF panel (B) to avoid duplication
     lorenz_ax.text(0.02, 0.95, 'C', transform=lorenz_ax.transAxes, fontsize=10,
                    fontweight='bold', va='top')
 
@@ -310,24 +359,11 @@ def plot_network_agency_evolution(data=None, file_path=None, save=True, log_scal
 
 def _resolve_snapshot(data, analysis_t_end=None):
     """Resolve the analysis snapshot: explicit t_end > steady > final."""
-    if 'is_median_twin' in data.columns and data['is_median_twin'].any():
-        median_row = data[data['is_median_twin']].iloc[0]
-    else:
-        twin_data = data[data['agent_ini'].isin(['twin', 'sample-max'])]
-        median_row = (twin_data if len(twin_data) else data).iloc[len(data) // 2]
+    median_row = _get_median(data)
     snapshots = median_row['snapshots']
-    if analysis_t_end is not None:
-        int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
-        best_t = min(int_times, key=lambda t: abs(t - analysis_t_end)) if int_times else 'final'
-        snap = snapshots[best_t] if best_t != 'final' else snapshots['final']
-        print(f"INFO: analysis_t_end={analysis_t_end} -> using snapshot t={best_t}")
-    elif 'steady' in snapshots:
-        snap = snapshots['steady']
-        ss_t_print = median_row.get('steady_state_t')
-        print(f"INFO: Using auto-detected steady-state snapshot"
-              + (f" (t={int(ss_t_print)})" if ss_t_print is not None else ""))
-    else:
-        snap = snapshots['final']
+    snap, final_t = _resolve_analysis(snapshots, median_row, analysis_t_end)
+    if final_t is not None:
+        print(f"INFO: Using snapshot t={final_t}")
     return median_row, snap
 
 def plot_amplification(data=None, file_path=None, save=True, analysis_t_end=None):
@@ -545,6 +581,32 @@ def select_file(pattern):
     except (ValueError, IndexError):
         return files[0]
 
+def _run_from_config(cfg, plot_key):
+    """Run a plot using config dict entries."""
+    if plot_key == 'network_agency_evolution':
+        c = cfg[plot_key]
+        big = c.get('big_n', {})
+        sm = c.get('small_n', {})
+        rsc = c.get('rescale', {})
+        plot_network_agency_evolution(
+            file_path=_cfg_path(big.get('file')),
+            small_file_path=_cfg_path(sm.get('file')),
+            truncate_steps=big.get('truncate_steps'),
+            analysis_t_end=big.get('analysis_t_end'),
+            small_truncate_steps=sm.get('truncate_steps'),
+            small_mid_t=sm.get('mid_t'),
+            small_analysis_t_end=sm.get('analysis_t_end'),
+            rescale_ref=rsc.get('reference_fveg', 0.5),
+            savgol_window=c.get('savgol_window', 10001))
+    elif plot_key == 'amplification':
+        c = cfg[plot_key]
+        plot_amplification(file_path=_cfg_path(c.get('file')),
+                          analysis_t_end=c.get('analysis_t_end'))
+    elif plot_key == 'agency_predictors':
+        c = cfg[plot_key]
+        plot_agency_predictors(file_path=_cfg_path(c.get('file')),
+                              analysis_t_end=c.get('analysis_t_end'))
+
 def main():
     print("=== Main Publication Plots ===")
 
@@ -552,26 +614,67 @@ def main():
         print("\n[1] Network Agency Evolution (6-panel)")
         print("[2] Amplification Factor (standalone)")
         print("[3] Agency Predictors (degree/theta scatter)")
+        print("[c] Load from config (plot_config.yaml)")
         print("[0] Exit")
 
         choice = input("Select: ")
 
-        if choice == '1':
-            file_path = select_file('trajectory_analysis')
-            if file_path:
-                data = load_data(file_path)
-                if data is not None and 'is_median_twin' in data.columns:
-                    trunc_input = input("Truncate to N timesteps (Enter for full run): ")
-                    truncate_steps = int(trunc_input) if trunc_input else None
-                    mid_input = input("Middle snapshot target t (Enter for trajectory//2): ")
-                    mid_t = int(mid_input) if mid_input else None
-                    at_input = input("Analysis t_end for B/C panels (Enter for same as trajectory): ")
-                    analysis_t_end = int(at_input) if at_input else None
-                    plot_network_agency_evolution(file_path=file_path, log_scale="loglog",
-                                                 truncate_steps=truncate_steps, mid_t=mid_t,
-                                                 analysis_t_end=analysis_t_end)
-                else:
-                    print("No twin mode snapshots found. Run trajectory analysis with twin mode first.")
+        if choice == 'c':
+            cfg = load_config()
+            if cfg is None:
+                continue
+            print("\nAvailable in config:")
+            keys = list(cfg.keys())
+            for i, k in enumerate(keys):
+                print(f"  [{i+1}] {k}")
+            print(f"  [a] All")
+            sel = input("Select: ").strip()
+            if sel == 'a':
+                for k in keys:
+                    print(f"\n--- {k} ---")
+                    _run_from_config(cfg, k)
+            else:
+                try:
+                    _run_from_config(cfg, keys[int(sel) - 1])
+                except (ValueError, IndexError):
+                    print("Invalid selection")
+
+        elif choice == '1':
+            print("\n--- Big N (primary: trajectory, CCDF, Lorenz) ---")
+            big_file = select_file('trajectory_analysis')
+            if not big_file:
+                continue
+
+            use_small = input("Add small-N illustrative network? (y/N): ").strip().lower()
+            small_file = None
+            if use_small == 'y':
+                print("\n--- Small N (illustrative: network panels, grey trajectory) ---")
+                small_file = select_file('trajectory_analysis')
+
+            trunc = input("Big N: truncate steps (Enter=full): ").strip()
+            truncate_steps = int(trunc) if trunc else None
+            at = input("Big N: analysis t_end for CCDF/Lorenz (Enter=auto-steady): ").strip()
+            analysis_t_end = int(at) if at else None
+
+            small_truncate_steps = small_mid_t = small_analysis_t_end = None
+            if small_file:
+                st = input("Small N: truncate steps (Enter=full): ").strip()
+                small_truncate_steps = int(st) if st else None
+                sm = input("Small N: mid snapshot target t (Enter=auto): ").strip()
+                small_mid_t = int(sm) if sm else None
+                sa = input("Small N: analysis t_end for networks (Enter=auto-steady): ").strip()
+                small_analysis_t_end = int(sa) if sa else None
+
+            rr = input("Rescale ref F_veg (Enter=0.5, 'none'=disable): ").strip()
+            rescale_ref = None if rr.lower() == 'none' else (float(rr) if rr else 0.5)
+
+            plot_network_agency_evolution(
+                file_path=big_file, small_file_path=small_file,
+                truncate_steps=truncate_steps, analysis_t_end=analysis_t_end,
+                small_truncate_steps=small_truncate_steps,
+                small_mid_t=small_mid_t, small_analysis_t_end=small_analysis_t_end,
+                rescale_ref=rescale_ref)
+
         elif choice == '2':
             file_path = select_file('trajectory_analysis')
             if file_path:
