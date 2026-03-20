@@ -124,7 +124,7 @@ def run_single(args):
     # 5. Critical fraction (max d2F/dt2, F<0.5)
     traj = np.array(model.fraction_veg, dtype=float)
     fc = np.nan
-    win = min(5001, len(traj) // 3)
+    win = min(10001, len(traj) // 3)
     if win % 2 == 0: win -= 1
     if win >= 5 and len(traj) > win * 2:
         smoothed = savgol_filter(traj, window_length=win, polyorder=3)
@@ -231,21 +231,26 @@ if __name__ == '__main__':
         if N <= 20000: return 150000
         return 150000  # cap
 
-    tasks = [(N, run, steps_for_N(N)) for N in sizes for run in range(N_RUNS)]
-
     n_cores = max(1, int(0.75 * os.cpu_count()))
-    total_agents = sum(N * N_RUNS for N in sizes)
+    total_tasks = sum(N_RUNS for _ in sizes)
     print(f"System-size scaling sweep")
     print(f"  N values: {sizes}")
     print(f"  Runs per N: {N_RUNS}")
-    print(f"  Total sims: {len(tasks)}")
+    print(f"  Total sims: {total_tasks}")
     print(f"  Total agent-steps: {sum(N * steps_for_N(N) * N_RUNS for N in sizes):,.0f}")
     print(f"  Cores: {n_cores}")
     print()
 
+    # Process sizes sequentially to avoid simultaneous large-N runs exhausting RAM.
+    # Cap concurrency for large N to prevent OOM swapping (which looks like CPU=0).
     t0 = time.time()
-    with Pool(n_cores) as pool:
-        results = pool.map(run_single, tasks)
+    results = []
+    for N in sizes:
+        tasks = [(N, run, steps_for_N(N)) for run in range(N_RUNS)]
+        n_workers = max(1, min(n_cores, 4 if N >= 50000 else n_cores))
+        print(f"  Running N={N} ({N_RUNS} runs, {n_workers} workers)...")
+        with Pool(n_workers) as pool:
+            results.extend(pool.map(run_single, tasks))
 
     df = pd.DataFrame(results)
     elapsed = time.time() - t0

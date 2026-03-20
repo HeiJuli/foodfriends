@@ -247,7 +247,7 @@ def analysis_5_inflection(all_data, label='twin'):
 
     accel_fveg, accel_times = [], []  # max d2F/dt2 (acceleration onset)
     veloc_fveg, veloc_times = [], []  # max dF/dt (inflection proper)
-    win = 5001
+    win = 10001
     burnin = 5000
 
     for _, row in all_data.iterrows():

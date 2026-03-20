@@ -8,7 +8,12 @@ import seaborn as sns
 import networkx as nx
 import yaml
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.ticker import LogLocator, NullFormatter
+from matplotlib.patches import Patch
+from scipy.signal import savgol_filter
 from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMAP, ECO_DIV_CMAP
+
+COL_TOP10, COL_TOP1 = '#6a994e', '#d4a029'
 
 cm = 1/2.54
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'plot_config.yaml')
@@ -54,6 +59,19 @@ def create_color_variations(base_color, n):
     import matplotlib.colors as mcolors
     base_rgb = mcolors.to_rgb(base_color)
     return [tuple(min(1.0, c * (0.7 + 0.3 * i / max(1, n-1))) for c in base_rgb) for i in range(n)]
+
+def _get_median_trajectory(df):
+    """Find the run whose trajectory minimizes pointwise RMSE to the ensemble median."""
+    trajs = [np.array(row.get('fraction_veg_trajectory',
+                               row.get('fraction_veg', [])), dtype=float)
+             for _, row in df.iterrows()]
+    min_len = min(len(t) for t in trajs)
+    mat = np.array([t[:min_len] for t in trajs])
+    pointwise_med = np.median(mat, axis=0)
+    rmse = np.sqrt(np.mean((mat - pointwise_med)**2, axis=1))
+    best = np.argmin(rmse)
+    print(f"INFO: Best trajectory match: run {best} (RMSE={rmse[best]:.4f})")
+    return df.iloc[best]
 
 def _get_median(df):
     if 'is_median_twin' in df.columns and df['is_median_twin'].any():
@@ -114,12 +132,7 @@ def plot_network_agency_evolution(data=None, file_path=None,
                                      (None to disable rescaling)
         savgol_window:               Savitzky-Golay window for tipping point detection
     """
-    from matplotlib.ticker import LogLocator, NullFormatter
-    from matplotlib.patches import Patch
-    from scipy.signal import savgol_filter
     set_publication_style()
-
-    COL_TOP10, COL_TOP1 = '#6a994e', '#d4a029'
 
     # === Load big N (primary) ===
     if data is None:
@@ -453,10 +466,7 @@ def plot_amplification(data=None, file_path=None, save=True, analysis_t_end=None
 def plot_agency_predictors(data=None, file_path=None, save=True, analysis_t_end=None):
     """Standalone single-column figure: what predicts high individual agency?
     Scatter of amplification factor vs agent properties (degree, theta).
-
-    NOTE: This is exploratory. Further analysis needed to properly identify
-    predictors of high agency (e.g., regression, SHAP values, network centrality
-    measures beyond degree). See claude_stuff/agency_predictor_analysis_TODO.md
+    Uses pooled ensemble data (all runs) for consistency with text statistics.
     """
     from scipy.stats import spearmanr
     set_publication_style()
@@ -465,31 +475,31 @@ def plot_agency_predictors(data=None, file_path=None, save=True, analysis_t_end=
         data = load_data(file_path)
         if data is None: return None
 
-    median_row, snap = _resolve_snapshot(data, analysis_t_end)
-    reductions_kg = np.array(snap['reductions'])
-    G = snap['graph']
-    nodes = list(G.nodes())
-    N = len(nodes)
-
+    # Pool agents from all runs
+    all_deg, all_mult, all_theta = [], [], []
     DIRECT_REDUCTION_KG = 664
-    multipliers = reductions_kg / DIRECT_REDUCTION_KG
-
-    # Extract agent properties
-    degrees = np.array([G.degree(n) for n in nodes])
-    thetas = np.array([G.nodes[n].get('theta', 0) for n in nodes])
-    initial_diets = np.array([G.nodes[n].get('diet', 'meat') for n in nodes])
-
-    # Only agents with meaningful positive reductions (filter FP noise)
-    pos_mask = reductions_kg > 1e-3
-    mult_pos = multipliers[pos_mask]
-    deg_pos = degrees[pos_mask]
-    theta_pos = thetas[pos_mask]
+    for _, row in data.iterrows():
+        snaps = row['snapshots']
+        snap, _ = _resolve_analysis(snaps, row, analysis_t_end)
+        reds = np.array(snap['reductions'])
+        G = snap['graph']
+        nodes = list(G.nodes())
+        pos_mask = reds > 1e-3
+        mults = reds[pos_mask] / DIRECT_REDUCTION_KG
+        degs = np.array([G.degree(n) for n in nodes])[pos_mask]
+        thetas = np.array([G.nodes[n].get('theta', 0) for n in nodes])[pos_mask]
+        all_deg.append(degs); all_mult.append(mults); all_theta.append(thetas)
+    deg_pos = np.concatenate(all_deg)
+    mult_pos = np.concatenate(all_mult)
+    theta_pos = np.concatenate(all_theta)
+    n_runs = len(data)
+    print(f"INFO: Pooled {len(deg_pos)} agents from {n_runs} runs")
 
     fig, (ax_deg, ax_theta) = plt.subplots(2, 1, figsize=(8.9*cm, 14*cm), sharex=False)
 
     # --- Panel A: Multiplier vs Degree ---
-    sc1 = ax_deg.scatter(deg_pos, mult_pos, s=8, alpha=0.5, c=COLORS['primary'],
-                         edgecolors='none', rasterized=True)
+    ax_deg.scatter(deg_pos, mult_pos, s=3, alpha=0.15, c=COLORS['primary'],
+                   edgecolors='none', rasterized=True)
 
     # Binned means for trend
     degree_bins = np.percentile(deg_pos, np.linspace(0, 100, 8))
@@ -504,7 +514,7 @@ def plot_agency_predictors(data=None, file_path=None, save=True, analysis_t_end=
                    markersize=4, zorder=5, label='Binned mean')
 
     rho_deg, p_deg = spearmanr(deg_pos, mult_pos)
-    ax_deg.text(0.97, 0.97, f'$\\rho_s$ = {rho_deg:.2f} (p = {p_deg:.1e})',
+    ax_deg.text(0.97, 0.97, f'$\\rho_s$ = {rho_deg:.2f} (n={n_runs} runs)',
                transform=ax_deg.transAxes, fontsize=6, va='top', ha='right',
                bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#ccc', alpha=0.8))
 
@@ -519,10 +529,9 @@ def plot_agency_predictors(data=None, file_path=None, save=True, analysis_t_end=
                fontweight='bold', va='top')
 
     # --- Panel B: Multiplier vs Theta ---
-    sc2 = ax_theta.scatter(theta_pos, mult_pos, s=8, alpha=0.5, c=COLORS['primary'],
-                           edgecolors='none', rasterized=True)
+    ax_theta.scatter(theta_pos, mult_pos, s=3, alpha=0.15, c=COLORS['primary'],
+                     edgecolors='none', rasterized=True)
 
-    # Binned means
     theta_bins = np.linspace(theta_pos.min(), theta_pos.max(), 8)
     bin_centers_t, bin_means_t = [], []
     for lo, hi in zip(theta_bins[:-1], theta_bins[1:]):
@@ -535,7 +544,7 @@ def plot_agency_predictors(data=None, file_path=None, save=True, analysis_t_end=
                      markersize=4, zorder=5, label='Binned mean')
 
     rho_theta, p_theta = spearmanr(theta_pos, mult_pos)
-    ax_theta.text(0.97, 0.97, f'$\\rho_s$ = {rho_theta:.2f} (p = {p_theta:.1e})',
+    ax_theta.text(0.97, 0.97, f'$\\rho_s$ = {rho_theta:.2f} (n={n_runs} runs)',
                  transform=ax_theta.transAxes, fontsize=6, va='top', ha='right',
                  bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#ccc', alpha=0.8))
 
@@ -557,6 +566,404 @@ def plot_agency_predictors(data=None, file_path=None, save=True, analysis_t_end=
         print("Saved agency_predictors.pdf")
 
     return fig
+
+def plot_network_agency_evolution_ensemble(
+        file_path=None, small_file_path=None, data=None, small_data=None,
+        truncate_steps=None, analysis_t_end=None,
+        small_truncate_steps=None, small_mid_t=None, small_analysis_t_end=None,
+        rescale_ref=0.5, savgol_window=10001, save=True):
+    """Ensemble version of 6-panel figure: median + IQR shading for panels A/B/C.
+    Network snapshots (top row) still use small-N median run."""
+    set_publication_style()
+
+    if data is None:
+        data = load_data(file_path)
+        if data is None: return None
+
+    big_row = _get_median_trajectory(data)
+    big_snaps = big_row['snapshots']
+    big_traj = big_row.get('fraction_veg_trajectory',
+                           big_row.get('fraction_veg', []))
+
+    if truncate_steps:
+        big_snaps = _truncate_snaps(big_snaps, big_row, truncate_steps)
+        big_traj = big_traj[:truncate_steps]
+
+    big_snap, big_final_t = _resolve_analysis(big_snaps, big_row, analysis_t_end)
+    analysis_final_t = big_final_t if big_final_t is not None else len(big_traj) - 1
+
+    # --- Collect ensemble trajectories and distributions ---
+    all_trajs, all_reds, all_lorenz = [], [], []
+    for _, row in data.iterrows():
+        traj = np.array(row.get('fraction_veg_trajectory',
+                                row.get('fraction_veg', [])), dtype=float)
+        if truncate_steps:
+            traj = traj[:truncate_steps]
+        all_trajs.append(traj)
+
+        snaps = row['snapshots']
+        snap, _ = _resolve_analysis(snaps, row, analysis_t_end)
+        r = np.array(snap['reductions'])
+        all_reds.append(r)
+
+    # Common trajectory length (trim to shortest)
+    min_len = min(len(t) for t in all_trajs)
+    traj_mat = np.array([t[:min_len] for t in all_trajs])
+    traj_median = np.median(traj_mat, axis=0)
+    traj_q25 = np.percentile(traj_mat, 25, axis=0)
+    traj_q75 = np.percentile(traj_mat, 75, axis=0)
+
+    # Ensemble CCDF: evaluate at common x grid
+    ccdf_x = np.logspace(-2, 2.5, 200)  # tonnes
+    ccdf_runs = []
+    for r in all_reds:
+        pos = np.sort(r[r > 1e-6] / 1000)
+        if len(pos) > 0:
+            ccdf_y = np.array([np.mean(pos > x) for x in ccdf_x])
+            ccdf_runs.append(ccdf_y)
+    ccdf_mat = np.array(ccdf_runs)
+    ccdf_med = np.median(ccdf_mat, axis=0)
+    ccdf_q25 = np.percentile(ccdf_mat, 25, axis=0)
+    ccdf_q75 = np.percentile(ccdf_mat, 75, axis=0)
+
+    # Ensemble Lorenz: evaluate at common pop_frac grid
+    pop_grid = np.linspace(0, 1, 200)
+    lorenz_runs = []
+    for r in all_reds:
+        sorted_r = np.sort(r)[::-1]
+        total = sorted_r.sum()
+        if total > 0:
+            cum = np.cumsum(sorted_r) / total
+            pop_f = np.arange(1, len(sorted_r) + 1) / len(sorted_r)
+            lorenz_runs.append(np.interp(pop_grid, pop_f, cum))
+    lorenz_mat = np.array(lorenz_runs)
+    lorenz_med = np.median(lorenz_mat, axis=0)
+    lorenz_q25 = np.percentile(lorenz_mat, 25, axis=0)
+    lorenz_q75 = np.percentile(lorenz_mat, 75, axis=0)
+
+    # --- Small N setup (network panels only — unchanged) ---
+    dual = small_file_path is not None or small_data is not None
+    if dual:
+        if small_data is None:
+            small_data = load_data(small_file_path)
+        if small_data is None:
+            dual = False
+    if dual:
+        sm_row = _get_median(small_data)
+        sm_snaps = sm_row['snapshots']
+        sm_traj = sm_row.get('fraction_veg_trajectory',
+                             sm_row.get('fraction_veg', []))
+        if small_truncate_steps:
+            sm_snaps = _truncate_snaps(sm_snaps, sm_row, small_truncate_steps)
+            sm_traj = sm_traj[:small_truncate_steps]
+        net_snap_final, sm_final_t = _resolve_analysis(sm_snaps, sm_row, small_analysis_t_end)
+        sm_analysis = dict(sm_snaps)
+        sm_analysis['final'] = net_snap_final
+        if sm_final_t is None:
+            sm_final_t = len(sm_traj) - 1
+    else:
+        sm_snaps = dict(big_snaps)
+        sm_traj = big_traj
+        if truncate_steps:
+            sm_snaps = _truncate_snaps(sm_snaps, big_row, truncate_steps)
+        net_snap_final, sm_final_t = _resolve_analysis(sm_snaps, big_row, analysis_t_end)
+        sm_analysis = dict(sm_snaps)
+        sm_analysis['final'] = net_snap_final
+        if sm_final_t is None:
+            sm_final_t = len(sm_traj) - 1
+
+    # Time rescaling
+    scale_factor = 1.0
+    if dual and rescale_ref is not None:
+        t_cross_big = _find_crossing(big_traj, rescale_ref)
+        t_cross_sm = _find_crossing(sm_traj, rescale_ref)
+        if t_cross_big is not None and t_cross_sm is not None and t_cross_sm > 0:
+            scale_factor = t_cross_big / t_cross_sm
+
+    # === Figure layout (same as original) ===
+    fig = plt.figure(figsize=(17.8*cm, 11.5*cm))
+    outer_gs = fig.add_gridspec(2, 1, height_ratios=[2.8, 1.4],
+                                hspace=0.08, top=0.93, bottom=0.08, left=0.08, right=0.97)
+    gs_top = outer_gs[0].subgridspec(1, 3, wspace=0.08)
+    gs_bot = outer_gs[1].subgridspec(1, 3, wspace=0.35, width_ratios=[1.2, 1, 1])
+
+    # === Network layout (from small N — unchanged) ===
+    G_full = sm_analysis['final']['graph']
+    giant_nodes = max(nx.connected_components(G_full), key=len)
+    G = G_full.subgraph(giant_nodes).copy()
+    giant_list = list(G.nodes())
+    N_gc = G.number_of_nodes()
+    pos_layout = nx.spring_layout(G, k=4/N_gc**0.5, iterations=80, seed=42)
+    pos_arr = np.array(list(pos_layout.values()))
+    x_min, x_max = pos_arr[:, 0].min(), pos_arr[:, 0].max()
+    y_min, y_max_net = pos_arr[:, 1].min(), pos_arr[:, 1].max()
+
+    all_times = sorted([t for t in sm_snaps if isinstance(t, int) and t > 0])
+    if all_times:
+        _mid_target = small_mid_t if small_mid_t is not None else (
+            len(sm_traj) // 2 if isinstance(sm_traj, list) else all_times[-1] // 2)
+        mid = min(all_times, key=lambda t: abs(t - _mid_target))
+    else:
+        mid = None
+    time_points = [t for t in [0, mid, 'final'] if t is not None]
+
+    # Legend
+    net_legend = [
+        Patch(facecolor='#2a9d8f', edgecolor='#333', linewidth=0.4, label='Vegetarian'),
+        Patch(facecolor='#e76f51', edgecolor='#333', linewidth=0.4, label='Meat eater'),
+        Patch(facecolor=COL_TOP10, edgecolor='#333', linewidth=0.4, label='Top 10% reducers'),
+        Patch(facecolor=COL_TOP1, edgecolor='#333', linewidth=0.4, label='Top reducer'),
+    ]
+    fig.legend(handles=net_legend, loc='upper center', bbox_to_anchor=(0.5, 0.995),
+               ncol=4, fontsize=6.5, frameon=False, handletextpad=0.4, columnspacing=1.0)
+
+    # === Row 0: Network snapshots (same as original) ===
+    for i, t in enumerate(time_points):
+        snap = sm_analysis.get(t, sm_snaps.get(t))
+        if snap is None:
+            continue
+        net_ax = fig.add_subplot(gs_top[0, i])
+        all_diets = snap['diets']
+        all_red = np.array(snap['reductions'])
+        node_colors = ['#2a9d8f' if all_diets[n] == 'veg' else '#e76f51' for n in giant_list]
+        reductions = np.array([all_red[n] for n in giant_list])
+
+        nx.draw_networkx_edges(G, pos_layout, ax=net_ax, alpha=0.25, width=0.03)
+        nx.draw_networkx_nodes(G, pos_layout, ax=net_ax, node_color=node_colors, node_size=4,
+                              alpha=0.9, edgecolors='#333', linewidths=0.15)
+
+        top_reducer_value = 0
+        if np.max(reductions) > 0:
+            n_top = max(1, int(0.1 * len(reductions)))
+            top_idx = np.argsort(reductions)[-n_top:]
+            top_10_nodes = [giant_list[j] for j in top_idx[:-1] if reductions[j] > 0]
+            if top_10_nodes:
+                nx.draw_networkx_nodes(G, pos_layout, nodelist=top_10_nodes, ax=net_ax,
+                                     node_color=COL_TOP10, node_size=10, alpha=0.9,
+                                     edgecolors='#333', linewidths=0.2)
+            top_reducer_idx = top_idx[-1]
+            if reductions[top_reducer_idx] > 0:
+                nx.draw_networkx_nodes(G, pos_layout, nodelist=[giant_list[top_reducer_idx]], ax=net_ax,
+                                     node_color=COL_TOP1, node_size=12, alpha=1.0,
+                                     edgecolors='#333', linewidths=0.3)
+                top_reducer_value = reductions[top_reducer_idx]
+
+        title = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f't = {t//1000}k'
+        net_ax.set_title(title, fontsize=10, pad=2)
+        pad_n = 0.02
+        net_ax.set_xlim(x_min - pad_n, x_max + pad_n)
+        net_ax.set_ylim(y_min - pad_n, y_max_net + pad_n)
+        net_ax.set_aspect('equal', adjustable='box')
+        net_ax.axis('off')
+
+        if top_reducer_value > 0:
+            net_ax.text(0.5, -0.06, f'{top_reducer_value/1000:.1f} t CO$_2$e',
+                       transform=net_ax.transAxes, ha='center', va='top', fontsize=5.5,
+                       fontweight='bold', bbox=dict(boxstyle='round,pad=0.2', fc='white',
+                       edgecolor=COL_TOP1, linewidth=0.8, alpha=0.9))
+
+    # === Panel A: Trajectory — median run + ensemble IQR band ===
+    traj_ax = fig.add_subplot(gs_bot[0, 0])
+    t_k = np.arange(min_len) / 1000
+
+    # IQR shading (pointwise ensemble)
+    traj_ax.fill_between(t_k, traj_q25, traj_q75, color=COLORS['vegetation'],
+                         alpha=0.22, linewidth=0)
+    # Median run line (single run, preserves stochastic texture)
+    big_traj_arr = np.array(big_traj[:min_len], dtype=float)
+    traj_ax.plot(t_k, big_traj_arr, color=COLORS['vegetation'], linewidth=0.7, alpha=0.9)
+
+    # Small N grey overlay
+    if dual:
+        t_k_sm = np.arange(len(sm_traj)) * scale_factor / 1000
+        traj_ax.plot(t_k_sm, sm_traj, color='#999', linewidth=0.35, alpha=0.5)
+
+    # Vertical markers at network snapshot times with labels
+    ref_traj = sm_traj if dual else list(traj_median)
+    marker_color = '#999' if dual else COLORS['vegetation']
+    for t in time_points:
+        if t == 0:
+            continue
+        t_val = (min(sm_final_t, len(ref_traj) - 1) if t == 'final'
+                 else min(t, len(ref_traj) - 1))
+        t_k_pt = t_val * scale_factor / 1000
+        traj_ax.axvline(t_k_pt, color='#888', linestyle=':', linewidth=0.7, alpha=0.6)
+        traj_ax.scatter(t_k_pt, ref_traj[t_val], color=marker_color,
+                       s=14, zorder=5, edgecolors='#333', linewidths=0.4)
+        label = '$t_{end}$' if t == 'final' else f'$t_{{{t_val//1000}k}}$'
+        traj_ax.text(t_k_pt, 1.02, label, transform=traj_ax.get_xaxis_transform(),
+                    fontsize=5, ha='center', va='bottom', color='#555')
+
+    # F_c vertical line at tipping time (from median run trajectory)
+    _sw = savgol_window
+    if min_len > 5000 + _sw * 2:
+        COL_TIP = '#9b59b6'
+        _d2 = savgol_filter(big_traj_arr, window_length=_sw, polyorder=3, deriv=2)
+        _sm = savgol_filter(big_traj_arr, window_length=_sw, polyorder=3)
+        _d2[:5000] = 0
+        _d2[_sm > 0.5] = 0
+        _t_tip = int(np.argmax(_d2))
+        if _d2[_t_tip] > 0:
+            _fc = _sm[_t_tip]
+            _t_tip_k = _t_tip / 1000
+            traj_ax.axvline(_t_tip_k, color=COL_TIP, linestyle=':', linewidth=0.9, alpha=0.8)
+            traj_ax.text(_t_tip_k + 1, 0.15,
+                        f'$F_c$ = {_fc:.2f}', fontsize=5.5, color=COL_TIP,
+                        ha='left', va='bottom')
+            print(f"INFO: F_c = {_fc:.3f} at t={_t_tip} ({_t_tip_k:.1f}k)")
+
+    traj_ax.set_ylim(0, 1.0)
+    traj_ax.set_xlim(-0.5, len(big_traj) / 1000)
+    traj_ax.set_ylabel('$F_{veg}$', fontsize=7)
+    traj_ax.set_xlabel('$t$ [thousands]', fontsize=7)
+    traj_ax.spines['top'].set_visible(False)
+    traj_ax.spines['right'].set_visible(False)
+    traj_ax.tick_params(axis='both', labelsize=6)
+    traj_ax.text(0.02, 0.95, 'A', transform=traj_ax.transAxes, fontsize=10,
+                fontweight='bold', va='top')
+
+    # === Panel B: CCDF — ensemble median + IQR ===
+    ccdf_ax = fig.add_subplot(gs_bot[0, 1])
+    valid = ccdf_med > 0
+    ccdf_ax.fill_between(ccdf_x[valid], ccdf_q25[valid], ccdf_q75[valid],
+                         color='#555', alpha=0.10, linewidth=0)
+    ccdf_ax.step(ccdf_x[valid], ccdf_med[valid], where='post', color='#555',
+                 linewidth=1.2, alpha=0.9)
+
+    ccdf_ax.set_xscale('log')
+    ccdf_ax.set_yscale('log')
+    ccdf_ax.set_ylim(1e-3, 1.5)
+    ccdf_ax.xaxis.set_major_locator(LogLocator(base=10, numticks=4))
+    ccdf_ax.xaxis.set_minor_formatter(NullFormatter())
+    ccdf_ax.set_ylabel('$P(X > x)$', fontsize=7)
+    ccdf_ax.set_xlabel('Reduction [t CO$_2$e]', fontsize=7)
+    ccdf_ax.spines['top'].set_visible(False)
+    ccdf_ax.spines['right'].set_visible(False)
+    ccdf_ax.tick_params(axis='both', labelsize=6)
+    ccdf_ax.text(0.02, 0.95, 'B', transform=ccdf_ax.transAxes, fontsize=10,
+                fontweight='bold', va='top')
+
+    # === Panel C: Lorenz — ensemble median + IQR ===
+    lorenz_ax = fig.add_subplot(gs_bot[0, 2])
+    lorenz_ax.fill_between(pop_grid, lorenz_q25, lorenz_q75,
+                           color='#555', alpha=0.10, linewidth=0)
+    lorenz_ax.plot(pop_grid, lorenz_med, color='#555', lw=1.2, alpha=0.9)
+    lorenz_ax.plot([0, 1], [0, 1], 'k--', lw=0.8, alpha=0.5)
+    lorenz_ax.set_xlabel('$F_{pop}$', fontsize=7)
+    lorenz_ax.set_ylabel('$F_{red}$', fontsize=7)
+    lorenz_ax.set_xlim(0, 1)
+    lorenz_ax.set_ylim(0, 1)
+    lorenz_ax.set_aspect('equal', adjustable='datalim')
+    lorenz_ax.spines['top'].set_visible(False)
+    lorenz_ax.spines['right'].set_visible(False)
+    lorenz_ax.tick_params(axis='both', labelsize=6)
+    lorenz_ax.text(0.02, 0.95, 'C', transform=lorenz_ax.transAxes, fontsize=10,
+                   fontweight='bold', va='top')
+
+    if save:
+        output_dir = ensure_output_dir()
+        plt.savefig(f'{output_dir}/network_agency_evolution_ensemble.pdf',
+                    dpi=300, bbox_inches='tight')
+        print("Saved network_agency_evolution_ensemble.pdf")
+
+    return fig
+
+
+def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t_end=None):
+    """Ensemble version of amplification plot: median + IQR shading."""
+    set_publication_style()
+
+    if data is None:
+        data = load_data(file_path)
+        if data is None: return None
+
+    fig, ax = plt.subplots(figsize=(8.9*cm, 7*cm))
+    DIRECT_REDUCTION_KG = 664
+
+    # Collect rank-ordered multipliers at common percentiles
+    rank_pct = np.linspace(0, 100, 500)
+    mult_runs = []
+    early_mults, mean_mults = [], []
+    for _, row in data.iterrows():
+        snaps = row['snapshots']
+        snap, _ = _resolve_analysis(snaps, row, analysis_t_end)
+        reds = np.array(snap['reductions'])
+        pos = reds[reds > 1e-3]
+        if len(pos) < 10:
+            continue
+        mults = np.sort(pos / DIRECT_REDUCTION_KG)[::-1]
+        # Interpolate to common rank percentiles
+        run_pct = np.linspace(0, 100, len(mults))
+        mult_runs.append(np.interp(rank_pct, run_pct, mults))
+        mean_mults.append(np.mean(mults))
+
+        # Early-adopter mean
+        traj = np.array(row.get('fraction_veg_trajectory',
+                                row.get('fraction_veg', [])), dtype=float)
+        ct = snap.get('change_times')
+        if ct is not None:
+            crossed = np.where(traj >= 0.5)[0]
+            t_half = int(crossed[0]) if len(crossed) > 0 else len(traj)
+            ct = np.array(ct, dtype=float)
+            pos_mask = reds > 1e-3
+            early_mask = pos_mask & (ct > 0) & (ct <= t_half)
+            if early_mask.sum() > 0:
+                early_mults.append(np.mean(reds[early_mask] / DIRECT_REDUCTION_KG))
+
+    mult_mat = np.array(mult_runs)
+    med = np.median(mult_mat, axis=0)
+    q25 = np.percentile(mult_mat, 25, axis=0)
+    q75 = np.percentile(mult_mat, 75, axis=0)
+
+    # Plot
+    ax.fill_between(rank_pct, q25, q75, alpha=0.12, color=COLORS['secondary'])
+    ax.plot(rank_pct, med, color=COLORS['secondary'], linewidth=1.2)
+
+    # Mean line (ensemble median of means)
+    mean_mult = np.median(mean_mults)
+    ax.axhline(mean_mult, color='#555', linestyle='--', linewidth=1.0, alpha=0.7)
+    ax.text(97, mean_mult * 0.88, f'Mean: {mean_mult:.0f}x', fontsize=6, color='#555',
+            va='top', ha='right')
+
+    # Early-adopter line
+    if early_mults:
+        early_mult = np.median(early_mults)
+        ax.axhline(early_mult, color='#2ca02c', linestyle='--', linewidth=1.0, alpha=0.7)
+        ax.text(3, early_mult * 1.12, f'Early adopters: {early_mult:.1f}x', fontsize=6,
+                color='#2ca02c', va='bottom', ha='left')
+
+    ax.axhline(1.0, color='#aaa', linestyle=':', linewidth=0.8, alpha=0.6)
+    ax.text(50, 1.25, 'Personal only (1x)', fontsize=5.5, color='#aaa',
+            va='bottom', ha='center')
+
+    ax.set_xlabel('Agent rank [percentile]', fontsize=8)
+    ax.set_ylabel('Amplification factor', fontsize=8)
+    ax.set_xlim(0, 100)
+    ax.set_yscale('log')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.tick_params(axis='both', labelsize=7)
+
+    # Stats annotation
+    top_mult = np.median([np.max(r) for r in mult_runs])
+    p90 = np.median(mult_mat[:, int(0.1 * len(rank_pct))])
+    early_str = f'  |  Early: {early_mult:.1f}x' if early_mults else ''
+    stats_text = (f'Top: {top_mult:.0f}x  |  p90: {p90:.0f}x{early_str}'
+                  f'  |  n={len(data)} runs')
+    ax.text(0.50, 0.03, stats_text, transform=ax.transAxes, fontsize=5.5,
+            va='bottom', ha='center', color='#444',
+            bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#ccc', alpha=0.8))
+
+    plt.tight_layout()
+
+    if save:
+        output_dir = ensure_output_dir()
+        plt.savefig(f'{output_dir}/amplification_factor_ensemble.pdf',
+                    dpi=300, bbox_inches='tight')
+        print("Saved amplification_factor_ensemble.pdf")
+
+    return fig
+
 
 def select_file(pattern):
     import glob
@@ -606,14 +1013,31 @@ def _run_from_config(cfg, plot_key):
         c = cfg[plot_key]
         plot_agency_predictors(file_path=_cfg_path(c.get('file')),
                               analysis_t_end=c.get('analysis_t_end'))
+    elif plot_key == 'network_agency_evolution_ensemble':
+        c = cfg[plot_key]
+        big = c.get('big_n', {})
+        sm = c.get('small_n', {})
+        rsc = c.get('rescale', {})
+        plot_network_agency_evolution_ensemble(
+            file_path=_cfg_path(big.get('file')),
+            small_file_path=_cfg_path(sm.get('file')) if sm.get('file') else None,
+            analysis_t_end=big.get('analysis_t_end'),
+            rescale_ref=rsc.get('reference_fveg', 0.5),
+            savgol_window=c.get('savgol_window', 10001))
+    elif plot_key == 'amplification_ensemble':
+        c = cfg[plot_key]
+        plot_amplification_ensemble(file_path=_cfg_path(c.get('file')),
+                                   analysis_t_end=c.get('analysis_t_end'))
 
 def main():
     print("=== Main Publication Plots ===")
 
     while True:
-        print("\n[1] Network Agency Evolution (6-panel)")
-        print("[2] Amplification Factor (standalone)")
-        print("[3] Agency Predictors (degree/theta scatter)")
+        print("\n[1] Network Agency Evolution (6-panel, median run)")
+        print("[2] Amplification Factor (median run)")
+        print("[3] Agency Predictors (ensemble pooled)")
+        print("[4] Network Agency Evolution ENSEMBLE (median+IQR)")
+        print("[5] Amplification Factor ENSEMBLE (median+IQR)")
         print("[c] Load from config (plot_config.yaml)")
         print("[0] Exit")
 
@@ -687,6 +1111,27 @@ def main():
                 at_input = input("Analysis t_end (Enter for auto-steady): ")
                 analysis_t_end = int(at_input) if at_input else None
                 plot_agency_predictors(file_path=file_path, analysis_t_end=analysis_t_end)
+        elif choice == '4':
+            print("\n--- Ensemble: Big N (primary) ---")
+            big_file = select_file('trajectory_analysis')
+            if not big_file:
+                continue
+            use_small = input("Add small-N illustrative network? (y/N): ").strip().lower()
+            small_file = None
+            if use_small == 'y':
+                print("\n--- Small N (illustrative: network panels) ---")
+                small_file = select_file('trajectory_analysis')
+            at = input("Analysis t_end (Enter=auto-steady): ").strip()
+            analysis_t_end = int(at) if at else None
+            plot_network_agency_evolution_ensemble(
+                file_path=big_file, small_file_path=small_file,
+                analysis_t_end=analysis_t_end)
+        elif choice == '5':
+            file_path = select_file('trajectory_analysis')
+            if file_path:
+                at_input = input("Analysis t_end (Enter for auto-steady): ")
+                analysis_t_end = int(at_input) if at_input else None
+                plot_amplification_ensemble(file_path=file_path, analysis_t_end=analysis_t_end)
         elif choice == '0':
             break
         else:
