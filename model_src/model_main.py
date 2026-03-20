@@ -414,7 +414,12 @@ class Model():
                 random_state=42, verbose=True
             ).reset_index(drop=True)
         elif n_survey < N:
-            raise ValueError(f"Cannot create {N} agents from {n_survey} survey participants.")
+            print(f"INFO: Stratified upsampling {n_survey} -> N={N} (with replacement)")
+            self.survey_data = stratified_sample_agents(
+                self.survey_data, n_target=N,
+                strata_cols=['gender', 'age_group', 'incquart', 'educlevel'],
+                random_state=42, verbose=False
+            ).reset_index(drop=True)
         else:
             print(f"INFO: Using all {n_survey} survey participants")
 

@@ -20,9 +20,9 @@ def stratified_sample_agents(df, n_target, strata_cols=['gender', 'age_group', '
     Returns:
         DataFrame with n_target sampled agents maintaining demographic proportions
     """
-    if n_target >= len(df):
+    if n_target == len(df):
         if verbose:
-            print(f"INFO: n_target ({n_target}) >= data size ({len(df)}), returning all data")
+            print(f"INFO: n_target ({n_target}) == data size ({len(df)}), returning all data")
         return df.copy()
 
     # Create stratification groups
