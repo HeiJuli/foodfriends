@@ -19,8 +19,8 @@ import networkx as nx
 import warnings
 warnings.filterwarnings('ignore')
 
-TWIN = '../model_output/trajectory_analysis_twin_20260306.pkl'
-SMAX = '../model_output/trajectory_analysis_sample-max_20260306.pkl'
+TWIN = '../model_output/trajectory_analysis_twin_20260317.pkl'
+SMAX = '../model_output/trajectory_analysis_sample-max_20260317.pkl'
 
 def _apply_diets(G, diets):
     """Return graph copy with node diet attributes updated from diets list."""
@@ -245,39 +245,46 @@ def analysis_5_inflection(all_data, label='twin'):
     print(f"  5. INFLECTION POINT / CRITICAL MASS  [{label}]")
     print(f"{'='*60}")
 
-    inflection_fveg = []
-    inflection_times = []
-    window = 2000  # smoothing window
-    burnin = 5000  # skip initial equilibration jump
+    accel_fveg, accel_times = [], []  # max d2F/dt2 (acceleration onset)
+    veloc_fveg, veloc_times = [], []  # max dF/dt (inflection proper)
+    win = 5001
+    burnin = 5000
 
     for _, row in all_data.iterrows():
         traj = np.array(row['fraction_veg_trajectory'], dtype=float)
-        if len(traj) < burnin + window * 2:
+        if len(traj) < burnin + win * 2:
             continue
 
-        # Savitzky-Golay: local cubic fit gives 2nd derivative directly
-        # (much lower variance than double finite-difference on box-filtered signal)
-        d2Fdt2 = savgol_filter(traj, window_length=2001, polyorder=3, deriv=2)
-        smoothed = savgol_filter(traj, window_length=2001, polyorder=3)
-        d2Fdt2[:burnin] = 0  # mask burn-in
-        d2Fdt2[smoothed > 0.5] = 0  # mask post-50% regime
+        smoothed = savgol_filter(traj, window_length=win, polyorder=3)
+        d1 = savgol_filter(traj, window_length=win, polyorder=3, deriv=1)
+        d2 = savgol_filter(traj, window_length=win, polyorder=3, deriv=2)
+        d1[:burnin] = 0
+        d2[:burnin] = 0
 
-        idx_max = np.argmax(d2Fdt2)
-        # Skip if peak is indistinguishable from noise
-        valid = d2Fdt2[(d2Fdt2 != 0)]
-        if len(valid) == 0 or d2Fdt2[idx_max] < 3 * np.std(valid):
-            continue
-        inflection_fveg.append(smoothed[idx_max])
-        inflection_times.append(idx_max)
+        # Max velocity (inflection point)
+        idx1 = np.argmax(d1)
+        veloc_fveg.append(smoothed[idx1])
+        veloc_times.append(idx1)
 
-    fv = np.array(inflection_fveg)
-    tv = np.array(inflection_times) / 1000  # to thousands
+        # Max acceleration below F=0.5 (onset of rapid spread)
+        d2_masked = d2.copy()
+        d2_masked[smoothed > 0.5] = 0
+        idx2 = np.argmax(d2_masked)
+        if d2_masked[idx2] > 0:
+            accel_fveg.append(smoothed[idx2])
+            accel_times.append(idx2)
 
-    print(f"  Across n={len(fv)} runs:")
-    print(f"  F_veg at max d2F/dt2:  median = {np.median(fv):.3f}  ({np.median(fv)*100:.1f}%)")
-    print(f"                       IQR = [{np.percentile(fv,25):.3f}, {np.percentile(fv,75):.3f}]")
-    print(f"  Time of inflection:  median = {np.median(tv):.1f}k steps")
-    print(f"                       IQR = [{np.percentile(tv,25):.1f}k, {np.percentile(tv,75):.1f}k]")
+    for name, fv_list, tv_list in [
+        ('Max acceleration (d2F/dt2, F<0.5)', accel_fveg, accel_times),
+        ('Max velocity (dF/dt, inflection)', veloc_fveg, veloc_times),
+    ]:
+        if not fv_list:
+            print(f"\n  {name}: no runs detected"); continue
+        fv, tv = np.array(fv_list), np.array(tv_list) / 1000
+        print(f"\n  {name}  (n={len(fv)} runs):")
+        print(f"    F_veg:  median = {np.median(fv):.3f}  ({np.median(fv)*100:.1f}%)")
+        print(f"            IQR = [{np.percentile(fv,25):.3f}, {np.percentile(fv,75):.3f}]")
+        print(f"    Time:   median = {np.median(tv):.1f}k steps")
 
     # Also report "tipping thresholds" at 25% and 50%
     for threshold in [0.25, 0.50]:

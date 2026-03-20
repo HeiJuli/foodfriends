@@ -455,6 +455,52 @@ def make_three_panel_figure(df, adopt_corr, contag_corr, amp_corr,
     return fig
 
 
+def make_two_panel_figure(adopt_corr, amp_corr, output_dir='../visualisations_output'):
+    """Publication two-panel: adoption vs amplification predictor comparison."""
+    set_publication_style()
+    os.makedirs(output_dir, exist_ok=True)
+
+    SIG_COLOR = '#5e4fa2'   # muted violet — distinct from veg teal
+    NS_COLOR = '#bbb'
+    PRED_LABELS = {
+        'degree': 'Degree', 'betweenness': 'Betweenness', 'eigenvector': 'Eigenvector',
+        'clustering': 'Clustering', 'complex_cent': 'Complex cent.',
+        'rho': r'Beh. intention ($\rho$)', 'alpha': r'Self-reliance ($\alpha$)',
+        'theta': r'Dietary pref. ($\theta$)',
+    }
+
+    fig, axes = plt.subplots(1, 2, figsize=(14*cm, 7*cm), sharey=True)
+    panels = [
+        (adopt_corr, 'r_pb', r'$r_{pb}$', 'A'),
+        (amp_corr, 'rho_s', r'$\rho_s$', 'B'),
+    ]
+    for ax, (cdf, vcol, xlabel, letter) in zip(axes, panels):
+        preds, vals = cdf['predictor'].values, cdf[vcol].values
+        sigs = cdf['p'].values < 0.05
+        colors = [SIG_COLOR if s else NS_COLOR for s in sigs]
+        y_pos = np.arange(len(preds))
+        labels = [PRED_LABELS.get(p, p) for p in preds]
+
+        ax.barh(y_pos, vals, color=colors, height=0.6, alpha=0.85)
+        ax.axvline(0, color='#555', lw=0.7, ls='--')
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(labels, fontsize=7)
+        ax.set_xlabel(xlabel, fontsize=8)
+        ax.tick_params(labelsize=7)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.text(0.03, 0.97, letter, transform=ax.transAxes, fontsize=11,
+                fontweight='bold', va='top')
+
+    axes[0].set_title('Adoption', fontsize=9, fontstyle='italic', pad=4)
+    axes[1].set_title('Amplification', fontsize=9, fontstyle='italic', pad=4)
+    plt.tight_layout()
+    out = f'{output_dir}/agency_two_dvs.pdf'
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    print(f"Saved: {out}")
+    return fig
+
+
 def make_degree_scaling_figure(df, output_dir='../visualisations_output'):
     """Degree vs amplification and degree vs contagion scatter + binned means."""
     set_publication_style()
@@ -527,6 +573,7 @@ if __name__ == '__main__':
 
     # Figures
     make_three_panel_figure(df, adopt_corr, contag_corr, amp_corr)
+    make_two_panel_figure(adopt_corr, amp_corr)
     make_degree_scaling_figure(df)
 
     plt.show()

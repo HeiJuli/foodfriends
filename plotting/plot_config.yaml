@@ -1,0 +1,25 @@
+# Plot configuration for publication_plots_main.py
+# Avoids re-entering parameters interactively each run.
+# File paths are relative to model_output/
+
+network_agency_evolution:
+  big_n:
+    file: trajectory_analysis_twin_20260317.pkl
+    truncate_steps: null        # null = full run
+    analysis_t_end: null        # null = auto-steady; int = explicit timestep for CCDF/Lorenz
+  small_n:
+    file: trajectory_analysis_sample-max_20260317.pkl
+    truncate_steps: null        # null = full run
+    mid_t: null                 # null = auto (trajectory midpoint); int = target timestep
+    analysis_t_end: null        # null = auto-steady; int = explicit timestep for network t_end
+  rescale:
+    reference_fveg: 0.5         # F_veg crossing to align trajectories at (null = no rescaling)
+  savgol_window: 10001          # Savitzky-Golay window for tipping point detection
+
+amplification:
+  file: trajectory_analysis_twin_20260317.pkl
+  analysis_t_end: null
+
+agency_predictors:
+  file: trajectory_analysis_twin_20260317.pkl
+  analysis_t_end: null
