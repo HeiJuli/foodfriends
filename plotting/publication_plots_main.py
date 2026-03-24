@@ -445,14 +445,11 @@ def plot_amplification(data=None, file_path=None, save=True, analysis_t_end=None
     ax.spines['right'].set_visible(False)
     ax.tick_params(axis='both', labelsize=7)
 
-    # Summary stats
-    p90 = np.percentile(multipliers, 90)
+    # Top reducer line
     top_mult = np.max(multipliers)
-    early_str = f'  |  Early: {early_mult:.1f}x' if early_mult else ''
-    stats_text = f'Top: {top_mult:.0f}x  |  p90: {p90:.0f}x{early_str}  |  N = {len(multipliers)}'
-    ax.text(0.50, 0.03, stats_text, transform=ax.transAxes, fontsize=5.5,
-            va='bottom', ha='center', color='#444',
-            bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#ccc', alpha=0.8))
+    ax.axhline(top_mult, color=COL_TOP1, linestyle='--', linewidth=1.0, alpha=0.85)
+    ax.text(97, top_mult * 1.08, f'Top: {top_mult:.0f}x', fontsize=6, color=COL_TOP1,
+            va='bottom', ha='right')
 
     plt.tight_layout()
 
@@ -944,15 +941,11 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
     ax.spines['right'].set_visible(False)
     ax.tick_params(axis='both', labelsize=7)
 
-    # Stats annotation
+    # Top reducer line (ensemble median of per-run maxima)
     top_mult = np.median([np.max(r) for r in mult_runs])
-    p90 = np.median(mult_mat[:, int(0.1 * len(rank_pct))])
-    early_str = f'  |  Early: {early_mult:.1f}x' if early_mults else ''
-    stats_text = (f'Top: {top_mult:.0f}x  |  p90: {p90:.0f}x{early_str}'
-                  f'  |  n={len(data)} runs')
-    ax.text(0.50, 0.03, stats_text, transform=ax.transAxes, fontsize=5.5,
-            va='bottom', ha='center', color='#444',
-            bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#ccc', alpha=0.8))
+    ax.axhline(top_mult, color=COL_TOP1, linestyle='--', linewidth=1.0, alpha=0.85)
+    ax.text(97, top_mult * 1.08, f'Top: {top_mult:.0f}x', fontsize=6, color=COL_TOP1,
+            va='bottom', ha='right')
 
     plt.tight_layout()
 
