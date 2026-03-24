@@ -311,7 +311,7 @@ def analyze_network_properties(G):
 # --- Ensemble analysis (all runs) ---
 
 def run_ensemble(data, n_runs=None):
-    """Run correlations across multiple runs for stability check."""
+    """Run correlations across multiple runs. Returns ensemble summary DataFrames."""
     if n_runs is None:
         n_runs = len(data)
     n_runs = min(n_runs, len(data))
@@ -323,7 +323,6 @@ def run_ensemble(data, n_runs=None):
         'adoption': {'results': [], 'stat': 'r_pb'},
         'amplification': {'results': [], 'stat': 'rho_s'},
     }
-    # Only include contagion if data supports it
     snap0 = _resolve_snap(data.iloc[0]['snapshots'])
     has_contagion = 'direct_conversions' in snap0 or 'influence_parents' in snap0
     if has_contagion:
@@ -361,17 +360,27 @@ def run_ensemble(data, n_runs=None):
                     con_r[p] = {'val': rho, 'sig': pval < 0.05}
             dvs['contagion']['results'].append(con_r)
 
-    # Print summary
+    # Build summary DataFrames and print
+    ensemble_dfs = {}
     for dv_name, dv in dvs.items():
         stat_name = dv['stat']
         print(f"\n  --- {dv_name.upper()} ({stat_name}) across {n_runs} runs ---")
-        print(f"  {'Predictor':<16} {'mean':>8} {'std':>8} {'frac_sig':>8}")
+        print(f"  {'Predictor':<16} {'median':>8} {'IQR_lo':>8} {'IQR_hi':>8} {'frac_sig':>8}")
+        rows = []
         for p in ALL_PREDS:
             vals = [r[p]['val'] for r in dv['results'] if p in r]
             sigs = [r[p]['sig'] for r in dv['results'] if p in r]
             if vals:
-                print(f"  {p:<16} {np.mean(vals):>8.3f} {np.std(vals):>8.3f} "
-                      f"{np.mean(sigs):>7.0%}")
+                med = np.median(vals)
+                q25, q75 = np.percentile(vals, [25, 75])
+                frac_sig = np.mean(sigs)
+                print(f"  {p:<16} {med:>8.3f} {q25:>8.3f} {q75:>8.3f} {frac_sig:>7.0%}")
+                rows.append({'predictor': p, stat_name: med,
+                             'q25': q25, 'q75': q75, 'frac_sig': frac_sig,
+                             'p': 0.001 if frac_sig > 0.5 else 0.1})
+        ensemble_dfs[dv_name] = pd.DataFrame(rows)
+
+    return ensemble_dfs
 
 
 def extract_features_fast(row):
@@ -466,12 +475,17 @@ def make_three_panel_figure(df, adopt_corr, contag_corr, amp_corr,
     return fig
 
 
-def make_two_panel_figure(adopt_corr, amp_corr, output_dir='../visualisations_output'):
-    """Publication two-panel: adoption vs amplification predictor comparison."""
+def make_two_panel_figure(adopt_corr, amp_corr, output_dir='../visualisations_output',
+                          ensemble=False, n_runs=None):
+    """Publication two-panel: adoption vs amplification predictor comparison.
+
+    If ensemble=True, adopt_corr/amp_corr should have 'q25'/'q75' columns
+    for IQR error bars, and 'frac_sig' for significance (>50% of runs).
+    """
     set_publication_style()
     os.makedirs(output_dir, exist_ok=True)
 
-    SIG_COLOR = '#5e4fa2'   # muted violet — distinct from veg teal
+    SIG_COLOR = '#5e4fa2'
     NS_COLOR = '#bbb'
     PRED_LABELS = {
         'degree': 'Degree', 'betweenness': 'Betweenness', 'eigenvector': 'Eigenvector',
@@ -487,12 +501,21 @@ def make_two_panel_figure(adopt_corr, amp_corr, output_dir='../visualisations_ou
     ]
     for ax, (cdf, vcol, xlabel, letter) in zip(axes, panels):
         preds, vals = cdf['predictor'].values, cdf[vcol].values
-        sigs = cdf['p'].values < 0.05
+        if ensemble and 'frac_sig' in cdf.columns:
+            sigs = cdf['frac_sig'].values > 0.5
+        else:
+            sigs = cdf['p'].values < 0.05
         colors = [SIG_COLOR if s else NS_COLOR for s in sigs]
         y_pos = np.arange(len(preds))
         labels = [PRED_LABELS.get(p, p) for p in preds]
 
         ax.barh(y_pos, vals, color=colors, height=0.6, alpha=0.85)
+        # IQR error bars for ensemble
+        if ensemble and 'q25' in cdf.columns:
+            xerr_lo = vals - cdf['q25'].values
+            xerr_hi = cdf['q75'].values - vals
+            ax.errorbar(vals, y_pos, xerr=[xerr_lo, xerr_hi], fmt='none',
+                        ecolor='#333', elinewidth=0.7, capsize=2, capthick=0.7)
         ax.axvline(0, color='#555', lw=0.7, ls='--')
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels, fontsize=7)
@@ -505,6 +528,8 @@ def make_two_panel_figure(adopt_corr, amp_corr, output_dir='../visualisations_ou
 
     axes[0].set_title('Adoption', fontsize=9, fontstyle='italic', pad=4)
     axes[1].set_title('Amplification', fontsize=9, fontstyle='italic', pad=4)
+    if n_runs:
+        fig.suptitle(f'Ensemble median (n={n_runs} runs)', fontsize=8, y=1.02)
     plt.tight_layout()
     out = f'{output_dir}/agency_two_dvs.pdf'
     plt.savefig(out, dpi=300, bbox_inches='tight')
@@ -562,11 +587,11 @@ if __name__ == '__main__':
     N_agents = len(_resolve_snap(data.iloc[0]['snapshots'])['reductions'])
     print(f"Loaded {len(data)} runs, N={N_agents} agents")
 
-    # Detailed analysis on median run
+    # Detailed analysis on median run (for degree scaling, network props, three-panel)
     median_row = get_median_row(data)
     df = extract_features(median_row)
 
-    # Three DVs
+    # Three DVs (single-run, for detailed printout)
     adopt_corr = analyze_adoption(df)
     contag_corr = analyze_contagion(df)
     amp_corr, pos, amp_model = analyze_amplification(df)
@@ -578,13 +603,15 @@ if __name__ == '__main__':
     G = _resolve_snap(median_row['snapshots'])['graph']
     r_assort = analyze_network_properties(G)
 
-    # Ensemble stability (skip complex_cent for speed)
-    print("\nRunning ensemble analysis (this may take a while)...")
-    run_ensemble(data, n_runs=min(len(data), 20))
+    # Ensemble analysis — used for the two-panel figure
+    n_ens = min(len(data), 50)
+    print(f"\nRunning ensemble analysis ({n_ens} runs, this may take a while)...")
+    ensemble_dfs = run_ensemble(data, n_runs=n_ens)
 
     # Figures
     make_three_panel_figure(df, adopt_corr, contag_corr, amp_corr)
-    make_two_panel_figure(adopt_corr, amp_corr)
+    make_two_panel_figure(ensemble_dfs['adoption'], ensemble_dfs['amplification'],
+                          ensemble=True, n_runs=n_ens)
     make_degree_scaling_figure(df)
 
     plt.show()

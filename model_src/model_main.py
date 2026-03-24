@@ -354,6 +354,8 @@ class Model():
             self.G1.generate()
         elif topo == "homophilic_emp":
             self.G1 = nx.empty_graph(N)
+        elif topo == "prebuilt":
+            self.G1 = nx.empty_graph(N)  # placeholder; caller sets G1 before run()
 
     def record_fraction(self):
         self.fraction_veg.append(
