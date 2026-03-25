@@ -1,0 +1,17 @@
+variable,group,matched_mean,matched_sd,matched_n,unmatched_mean,unmatched_sd,unmatched_n,diff,t_stat,p_raw,cohens_d,p_fdr,sig_fdr,effect_size
+gender,Female,0.681,0.24,1415,0.686,0.249,1239,-0.004,-0.446,0.6554,-0.017,0.9771,False,negligible
+gender,Male,0.672,0.245,1313,0.667,0.244,977,0.005,0.475,0.6349,0.02,0.9771,False,negligible
+age_group,18-29,0.66,0.211,269,0.665,0.219,389,-0.004,-0.262,0.7935,-0.021,0.9771,False,negligible
+age_group,30-39,0.666,0.222,346,0.68,0.239,337,-0.014,-0.783,0.4339,-0.06,0.954,False,negligible
+age_group,40-49,0.67,0.24,507,0.682,0.22,356,-0.012,-0.758,0.4488,-0.053,0.954,False,negligible
+age_group,50-59,0.697,0.232,689,0.7,0.24,358,-0.003,-0.183,0.855,-0.012,0.9771,False,negligible
+age_group,60-69,0.669,0.266,659,0.686,0.269,391,-0.017,-1.001,0.3172,-0.064,0.954,False,negligible
+age_group,70+,0.689,0.265,258,0.655,0.281,385,0.034,1.54,0.124,0.125,0.954,False,negligible
+incquart,Q1 (lowest),0.657,0.24,605,0.656,0.252,531,0.0,0.03,0.9759,0.002,0.9885,False,negligible
+incquart,Q2,0.675,0.265,665,0.673,0.252,602,0.003,0.184,0.8541,0.01,0.9771,False,negligible
+incquart,Q3,0.682,0.237,677,0.678,0.252,560,0.004,0.28,0.7795,0.016,0.9771,False,negligible
+incquart,Q4 (highest),0.69,0.228,781,0.704,0.226,523,-0.014,-1.124,0.2611,-0.064,0.954,False,negligible
+educlevel,Low,0.677,0.289,207,0.629,0.304,241,0.049,1.723,0.0856,0.164,0.954,False,negligible
+educlevel,Mid-low,0.662,0.255,1000,0.67,0.249,883,-0.008,-0.711,0.477,-0.033,0.954,False,negligible
+educlevel,Mid-high,0.674,0.239,641,0.674,0.24,461,-0.0,-0.014,0.9885,-0.001,0.9885,False,negligible
+educlevel,High,0.696,0.217,880,0.709,0.219,631,-0.013,-1.119,0.2631,-0.058,0.954,False,negligible
