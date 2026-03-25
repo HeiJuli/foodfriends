@@ -77,25 +77,25 @@ class Agent():
 
     
     
-    def choose_alpha_beta(self, mean):
+   # def choose_alpha_beta(self, mean):
+   #     
+   #     lower, upper = 0, 1
+   #     mu=mean
+   #     sigma=0.2
+   #     a, b = (lower - mu) / sigma, (upper - mu) / sigma
+   #     val = truncnorm.rvs(a, b, loc=mean, scale=sigma)
         
-        lower, upper = 0, 1
-        mu=mean
-        sigma=0.2
-        a, b = (lower - mu) / sigma, (upper - mu) / sigma
-        val = truncnorm.rvs(a, b, loc=mean, scale=sigma)
-        
-        return val
+   #     return val
     
-    def choose_theta(self, mean):
+   # def choose_theta(self, mean):
         
-        lower, upper = -1, 1
-        mu=mean
-        sigma=0.33
-        a, b = (lower - mu) / sigma, (upper - mu) / sigma
-        val = truncnorm.rvs(a, b, loc=mean, scale=sigma)
+   #     lower, upper = -1, 1
+   #     mu=mean
+   #     sigma=0.33
+   #     a, b = (lower - mu) / sigma, (upper - mu) / sigma
+   #     val = truncnorm.rvs(a, b, loc=mean, scale=sigma)
         
-        return val
+   #     return val
         
         
     def prob_calc(self, other_agent):
@@ -257,10 +257,10 @@ class Agent():
 
 #%% Model 
 class Model():
-    def __init__(self, params, survey_file):
+    def __init__(self, params, survey_data):
         
         self.params = params
-        self.survey_data = pd.read_csv(survey_file)
+        self.survey_data = survey_data
         if params['topology'] == "complete":
             
             self.G1 = nx.complete_graph(params["N"])
@@ -288,14 +288,15 @@ class Model():
     def agent_ini_survey(self, paramas):
         
         self.agents=[]
+        choices = ["veg","meat"]
         for index, row in self.survey_data.iterrows():
             agent = Agent(
                 i=row["nomem_encr"],
                 params=params,
-                alpha=row["alpha"],
-                beta=row["beta"],
-                theta=row["theta"],
-                diet =row["diet"]
+                alpha=row["alpha"] if "alpha" in self.survey_data.columns else self.params["alpha"],
+                beta=row["beta"] if "beta" in self.survey_data.columns else self.params["beta"],
+                theta=row["theta"] if "theta" in self.survey_data.columns else truncnorm.rvs(-1,1),
+                diet =row["diet"] if "diet" in self.survey_data.columns else np.random.choice(choices, p=[params["veg_f"], params["meat_f"]])
             )
             self.agents.append(agent)
         print(f"Created {len(self.agents)} agents for {self.G1.number_of_nodes()} nodes")
@@ -361,7 +362,8 @@ class Model():
 # %%
 if  __name__ ==  '__main__': 
     survey_file = "final_data_parameters.csv" 
-    test_model = Model(params, survey_file) 
+    survey_data=pd.read_csv(survey_file)
+    test_model = Model(params, survey_data) 
     
     test_model.run() 
     trajec = test_model.fraction_veg
