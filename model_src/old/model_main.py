@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Mar 18 14:25:49 2025
+Created on Tue Apr  9 18:36:06 2024
 
-@author: emma.thill
+@author: everall
 """
+
 import networkx as nx
 import numpy as np
 import random
@@ -12,7 +13,6 @@ from scipy.stats import truncnorm
 import math
 import seaborn as sns
 import matplotlib.pyplot as plt
-import pandas as pd
 
 # %% Preliminary settings
 #random.seed(30)
@@ -22,39 +22,40 @@ import pandas as pd
 params = {"veg_CO2": 1390,
           "vegan_CO2": 1054,
           "meat_CO2": 2054,
-          "N": 699,
+          "N": 100,
           "erdos_p": 3,
-          "steps":50000,
+          "steps":2000,
           "w_i": 5, #weight of the replicator function
           "immune_n": 0.1,
-          "M": 10, # memory length
-          "veg_f":0.3, #vegetarian fraction
-          "meat_f": 0.7,  #meat eater fraciton
+          "M": 4,
+          "veg_f":0.6, #vegetarian fraction
+          "meat_f": 0.4,  #meat eater fraciton
           "n": 5,
           "v": 10,
-          'topology': "complete", #can either be barabasi albert with "BA", or fully connected with "complete"
-          "alpha": 0.35, #self dissonance
-          "beta": 0.65 #social dissonance
+          'topology': "BA", #can either be barabasi albert with "BA", or fully connected with "complete"
+          "alpha": 0.8,
+          "beta": 0.2
+          
           }
 
 # %% Agent
 
 class Agent():
 
-    def __init__(self, i, params, alpha, beta, theta, diet):
+    def __init__(self, i, params):
 
         # types can be vegetarian or meat eater
         self.params = params
-        self.diet = diet #self.choose_diet(self.params) set diet from durvey
+        self.diet = self.choose_diet(self.params)
         self.C = self.diet_emissions(self.diet, self.params)
         self.memory = []
         self.i = i
-        self.individual_norm = theta #self.choose_theta(0.45)
+        self.individual_norm = truncnorm.rvs(-1, 1)
         self.global_norm = 0.5
         self.reduction_out = 0
         # implement other distributions (pareto)
-        self.alpha = alpha #self.choose_alpha_beta(params["alpha"])
-        self.beta = beta #1-self.alpha
+        self.alpha = self.params["alpha"]
+        self.beta = self.params["beta"]
         self.diet_duration = 0  # Track how long agent maintains current diet
         self.diet_history = []  # Track diet changes
         self.last_change_time = 0  # Track when diet last changed
@@ -76,41 +77,30 @@ class Agent():
         return lookup[diet]
 
     
-    
-   # def choose_alpha_beta(self, mean):
-   #     
-   #     lower, upper = 0, 1
-   #     mu=mean
-   #     sigma=0.2
-   #     a, b = (lower - mu) / sigma, (upper - mu) / sigma
-   #     val = truncnorm.rvs(a, b, loc=mean, scale=sigma)
-        
-   #     return val
-    
-   # def choose_theta(self, mean):
-        
-   #     lower, upper = -1, 1
-   #     mu=mean
-   #     sigma=0.33
-   #     a, b = (lower - mu) / sigma, (upper - mu) / sigma
-   #     val = truncnorm.rvs(a, b, loc=mean, scale=sigma)
-        
-   #     return val
-        
-        
-    def prob_calc(self, other_agent):
+
+    def prob_calc(self):
         """
-        Calculates probability of diet change based on pairwise comparison
-        
+        Calculates the probability of a dietry change in either direction
         Args:
-            other_agent: the agent being compared with
+            params (dic): a dictionary of model parameters
+            sign (bool): indicates positive or negative interaction
+    
+        Returns:
+            float: the probability of change
         """
-        u_i = self.calc_utility(other_agent, mode="same")
-        u_s = self.calc_utility(other_agent, mode="diff")
+    
+        #actually utility, if you don;t change, mode means whether calcing same diet or opposite 
+        u_i = self.calc_utility(mode = "same")
         
+        #utlity shadow - alternative utlity - if agent were to change
+        u_s = self.calc_utility(mode = "diff")
+        
+    
         prob_switch = 1/(1+math.exp(-5*(u_s-u_i)))
-        
+        #print(f"u_s: {u_s}, u_i: {u_i}, Switching p: {prob_switch}")
+     
         return prob_switch
+    
 
 
     def dissonance_new(self, case, mode):
@@ -147,19 +137,73 @@ class Agent():
 
         return neighbour_node
     
-    def reduction_tracker(self, old_c, influencer):
+    # def reduction_tracker(self, old_c, similar_neighbours):
+    #     """
+    #    Takes the reduction of consumption emissions as a result of an 
+    #    interaction with agent j, and adds it to agent i's total reduction caused
+    
+    #    Args:
+    #        agents: agent objects
+    
+    #    Returns:
+    #        int: The product of a and b.
+    #     """
+        
+        
+    #     delta = old_c - self.C
+        
+    #     if delta <= 0:  # Only track actual reductions
+    #         return
+        
+    #     #TODO: this is uneccesarily intensive, optimise
+    #     for i in self.neighbours:
+    #         # get current reduction amount
+    #         current = getattr(i, "reduction_out")
+    #         #set the new reduction amount
+    #         setattr(i, "reduction_out", current + delta/len(self.neighbours))
+    
+    def reduction_tracker(self, old_c, similar_neighbours, G):
         """
-        Tracks emission reductions attributed to single influencing agent
+        Tracks emission reductions and attributes them to influential neighbors
+        based on their relative contribution to the agent's decision
         
         Args:
             old_c: previous consumption level
-            influencer: agent who influenced the change
+            similar_neighbours: list of neighbors with same diet
         """
         delta = old_c - self.C
-        current = getattr(influencer, "reduction_out")
-        setattr(influencer, "reduction_out", current + delta)
+        
+        if delta <= 0:  # Only track actual reductions
+            return
+            
+        # Calculate influence weights based on each neighbor's characteristics
+        weights = []
+        for neighbor in similar_neighbours:
+            # Weight based on:
+            # 1. Neighbor's time with current diet (stability)
+            # 2. Neighbor's network centrality 
+            # 3. Neighbor's influence history
+            w = 1.0  # Base weight
+            
+            # Add weight if neighbor maintained diet for longer
+            if hasattr(neighbor, 'diet_duration'):
+                w *= (1 + 0.1 * neighbor.diet_duration)
+                
+            # Add centrality-based weight (degree centrality as proxy)
+            w *= (1 + 0.1 * sum(G.neighbors(neighbor.i)))
+            
+            weights.append(w)
     
-    
+        # Normalize weights
+        if weights:
+            total_weight = sum(weights)
+            weights = [w/total_weight for w in weights] if total_weight > 0 else [1.0/len(weights)] * len(weights)
+            
+            # Attribute reductions proportionally
+            for neighbor, weight in zip(similar_neighbours, weights):
+                current = getattr(neighbor, "reduction_out")
+                setattr(neighbor, "reduction_out", current + delta * weight)
+        
     def get_neighbour_attributes(self, attribute):
         """
        gets a list of neighbour attributes
@@ -183,36 +227,47 @@ class Agent():
     #get ratio of meat eaters for a given agent
     #if mode = same, 
     #working
-
-    #working
-    def calc_utility(self, other_agent, mode):
+    def get_ratio(self, mode = "same"):
         """
-        Calculates utility for pairwise interaction
+       gets the ratio of agents with a certain diet over k neighbours of the agent
+       object. This ratio is based on neighbours with the same diet of the agent with
+       mode = same, or the opposite diet if anything else.
+    
+       Args:
+           mode (str): the mode of counting
+    
+       Returns:
+           float: fraction of specified diet over the total neighbours k
+        """
         
-        Args:
-            other_agent: the agent being compared with
-            mode: whether calculating utility for same or different diet
-        """
         if mode == "same":
             diet = self.diet
         else:
             diet = "meat" if self.diet == "veg" else "veg"
+            
+        neighbour_diets = self.get_neighbour_attributes("diet")
         
+        count=0
+        for i in neighbour_diets:
+            if i == diet:
+                count += 1 
+        ratio_diet = count/len(neighbour_diets)
         
-        # Calculate ratio based on single comparison
-        if len(self.memory) == 0:
-            return
-        mem_same = sum(1 for x in self.memory[-params["M"]:] if x == diet)
+      
         
-        ratio =  [mem_same/len(self.memory[-params["M"]:])][0]
+        return ratio_diet 
 
-        
-        util = self.beta*(2*ratio-1) + self.alpha*self.dissonance_new("simple", mode)
-        
-        return util
+    #working
+    def calc_utility(self, mode):
+       
     
+        util = self.beta*(1-2*self.get_ratio(mode)) + self.alpha*self.dissonance_new("simple", mode)#- self.beta*self.global_norm)
+        
+        
+       
+        return util 
     
-    def step(self, G, agents, params):
+    def step(self, G, agents, params, t):
         """
        Steps agent i forward one t
     
@@ -224,31 +279,40 @@ class Agent():
            
         """
         
-        # Select random neighbor
+        # need to implent this recursively to avoid high-degree node bias
         self.neighbours = [agents[neighbour] for neighbour in G.neighbors(self.i)]
-        if not self.neighbours:  # Skip if isolated node
-            return
-            
-        other_agent = random.choice(self.neighbours)
-        self.memory.append(other_agent.diet)
         
-        # Calculate probability of switching based on pairwise comparison
-        prob_switch = self.prob_calc(other_agent)
         
+        prob_switch = self.prob_calc()
+      
         if self.flip(prob_switch):
             old_C = self.C
             self.diet = "meat" if self.diet == "veg" else "veg"
             
-            # Update consumption based on influencer
-            self.C = other_agent.C if other_agent.diet == self.diet else \
+            
+            self.diet_duration = 0
+            self.last_change_time = t  # Assuming you pass current time t
+            self.diet_history.append((t, self.diet))
+            #getting neighbours with similar diet
+            similar_neighbours = [i for i in self.neighbours if i.diet == self.diet]
+            
+            #getting list
+            neighbours_C = [neighbour.C for neighbour in self.neighbours]
+            
+            #makes C (emissions) the average of neighbours with the same diet
+            self.C = np.mean(neighbours_C) if len(neighbours_C) >= 1 else \
                 self.diet_emissions(self.diet, params)
-                
-            # If emissions reduced, attribute to influencing agent
+            
+          
+            # if dietry emissions are reduced, attribute this to veg network neighbours
             if self.diet == "veg":
-                self.reduction_tracker(old_C, other_agent)
-        
+                self.reduction_tracker(old_C, similar_neighbours, G)
+            
+        else:
+            self.diet_duration += 1
+            
+            
         self.C = self.diet_emissions(self.diet, self.params)
-        
       
         
         
@@ -257,10 +321,9 @@ class Agent():
 
 #%% Model 
 class Model():
-    def __init__(self, params, survey_data):
+    def __init__(self, params):
         
         self.params = params
-        self.survey_data = survey_data
         if params['topology'] == "complete":
             
             self.G1 = nx.complete_graph(params["N"])
@@ -268,8 +331,8 @@ class Model():
             self.G1 = nx.erdos_renyi_graph(
                 self.params["N"], self.params["erdos_p"])
         
-        elif params['topology'] == "CSF":  
-             self.G1 = nx.powerlaw_cluster_graph(params["N"], 6, 0.4)
+        # elif params['topology'] == "FB":  
+        #     self.G1 = 
         
         self.system_C = []
         self.fraction_veg = []  
@@ -285,21 +348,7 @@ class Model():
         # Ensure agents are created for each node specifically
         self.agents = [Agent(node, params) for node in self.G1.nodes()]
         
-    def agent_ini_survey(self, paramas):
-        
-        self.agents=[]
-        choices = ["veg","meat"]
-        for index, row in self.survey_data.iterrows():
-            agent = Agent(
-                i=row["nomem_encr"],
-                params=params,
-                alpha=row["alpha"] if "alpha" in self.survey_data.columns else self.params["alpha"],
-                beta=row["beta"] if "beta" in self.survey_data.columns else self.params["beta"],
-                theta=row["theta"] if "theta" in self.survey_data.columns else truncnorm.rvs(-1,1),
-                diet =row["diet"] if "diet" in self.survey_data.columns else np.random.choice(choices, p=[params["veg_f"], params["meat_f"]])
-            )
-            self.agents.append(agent)
-        print(f"Created {len(self.agents)} agents for {self.G1.number_of_nodes()} nodes")
+
 
     def get_attribute(self, attribute):
         """
@@ -341,37 +390,34 @@ class Model():
     
 
     def run(self):
-        self.agent_ini_survey(self.params)
+        #initiate agents
+        self.agent_ini(self.params)
+        #self.map_agents() 
         self.record_fraction()
-        
         time_array = list(range(self.params["steps"]))
         for t in time_array:
-            # Select random agent
+            #selecting an index at random
             i = np.random.choice(range(len(self.agents)))
-            
-            # Update based on pairwise interaction
-            self.agents[i].step(self.G1, self.agents, self.params)
-            
-            # Record system state
+            #for i in self.agents:
+            self.agents[i].step(self.G1, self.agents, self.params, t)
             self.system_C.append(self.get_attribute("C")/self.params["N"])
             self.record_fraction()
+            #print(self.G1.nodes[1]["agent"].C, self.agents[1].C)
     
     
 
 
 # %%
 if  __name__ ==  '__main__': 
-    survey_file = "final_data_parameters.csv" 
-    survey_data=pd.read_csv(survey_file)
-    test_model = Model(params, survey_data) 
-    
-    test_model.run() 
-    trajec = test_model.fraction_veg
-    
-    plt.plot(trajec)
-    plt.ylabel("Vegetarian Fraction")
-    plt.xlabel("t (steps)") 
-    plt.show()
+	test_model = Model(params)
+
+	test_model.run()
+	trajec = test_model.fraction_veg
+
+	plt.plot(trajec)
+	plt.ylabel("Vegetarian Fraction")
+	plt.xlabel("t (steps)")
+	plt.show()
 # end_state_A = test_model.get_attributes("reduction_out")
 # end_state_frac = test_model.get_attributes("threshold")
 
