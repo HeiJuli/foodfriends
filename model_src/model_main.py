@@ -111,12 +111,12 @@ def boltzmann_prob(H_switch, H_stay, beta):
 
 
 def sample_from_pmf(demo_key, pmf_tables, param, theta=None):
-    """Sample parameter from theta-stratified PMF."""
+    """Sample parameter from conditional PMF (rho: theta-stratified, alpha: demographics-only)."""
     if not pmf_tables:
         return 0.5
 
     metadata = pmf_tables.get('_metadata', {})
-    stratified_params = metadata.get('stratified_params', ['alpha', 'rho'])
+    stratified_params = metadata.get('stratified_params', ['rho'])
 
     if param in stratified_params and theta is not None:
         theta_bins = metadata.get('theta_bins', [-1.0, 0.2, 0.4, 0.6, 0.8, 1.0])

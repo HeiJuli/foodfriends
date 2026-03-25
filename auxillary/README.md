@@ -20,9 +20,11 @@ Creates the hierarchical agent dataset from raw survey data.
 **When to run**: When raw survey data is updated or when recreating the agent population.
 
 ### `create_pmf_tables.py`
-Generates theta-stratified probability mass function (PMF) tables for parameter imputation.
+Generates conditional PMF tables for parameter imputation.
 
-**Purpose**: Creates demographic PMF tables stratified by theta to preserve parameter correlations when imputing missing alpha/rho values.
+**Purpose**: Creates demographic PMF tables for imputing missing alpha/rho values.
+- **Alpha**: demographics only (n=4944). Theta stratification removed (2026-03-25) due to selection bias -- only 54.6% of alpha respondents have theta, with biased subgroups in 70+ and low-education cells. Weak alpha-theta correlation (r=0.14) does not justify the data loss.
+- **Rho**: demographics + theta bins (n=2391, 96.3% theta overlap, r=-0.30).
 
 **Input**:
 - `../data/theta_diet_demographics.xlsx`
@@ -32,9 +34,7 @@ Generates theta-stratified probability mass function (PMF) tables for parameter 
 **Output**:
 - `../data/demographic_pmfs.pkl`
 
-**When to run**: After updating survey data or when modifying theta stratification bins.
-
-**Key feature**: Alpha and rho PMFs are stratified by theta bins to preserve empirical correlations.
+**When to run**: After updating survey data or when modifying imputation strategy.
 
 ### `sampling_utils.py`
 **STRATIFIED SAMPLING UTILITY** (NEW: 2025-01-27)
@@ -98,7 +98,7 @@ Demonstrates improvement of stratified sampling over random sampling.
 ### `validate_theta_stratification.py`
 **PRIMARY VALIDATION SCRIPT**
 
-Validates that the theta-stratified PMF sampling approach preserves parameter correlations and produces stable model dynamics.
+Validates that the PMF sampling approach preserves parameter correlations and produces stable model dynamics. Rho uses theta-stratified PMFs; alpha uses demographics-only PMFs.
 
 **What it tests**:
 1. Correlation preservation (theta-rho, theta-alpha, rho-alpha)
@@ -158,7 +158,7 @@ Test script for network homophily measures.
    - If N < 5602: applies **stratified sampling** to preserve demographics
    - If N = 5602: uses all participants
    - Loads `demographic_pmfs.pkl`
-   - Samples missing parameters using theta-stratified PMFs
+   - Samples missing parameters using conditional PMFs (alpha: demographics-only; rho: theta-stratified)
 
 3. **Recommended N**: Use N=2000 for optimal balance (see `analyze_sample_size.py`)
 
