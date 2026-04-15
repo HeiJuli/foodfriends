@@ -47,7 +47,7 @@ UPDATES_PER_AGENT = 50    # match N=2000 baseline: 100k steps / 2000
 MU = 0.20                 # inter-community mixing; Q~0.5 (Newman 2006)
 ATTR_WEIGHTS = np.array([0.20, 0.35, 0.18, 0.32, 0.05])
 
-ALL_SIZES = [2000, 4000, 6000, 10000, 20000]
+ALL_SIZES = [2000, 4000, 6000, 10000, 20000, 100000]
 
 BASE_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,
@@ -420,25 +420,27 @@ if __name__ == '__main__':
         return UPDATES_PER_AGENT * N
 
     n_cores = max(1, int(0.75 * os.cpu_count()))
-    total_tasks = sum(N_RUNS for _ in sizes)
+    runs_per = {N: (3 if N >= 100000 else N_RUNS) for N in sizes}
+    total_tasks = sum(runs_per[N] for N in sizes)
     print(f"System-size scaling sweep (corrected)")
     print(f"  N values: {sizes}")
-    print(f"  Runs per N: {N_RUNS}")
+    print(f"  Runs per N: {dict(runs_per)}")
     print(f"  Total sims: {total_tasks}")
     print(f"  Updates/agent: {UPDATES_PER_AGENT}")
     print(f"  Community size: {COMMUNITY_SIZE}")
     print(f"  Inter-community mu: {MU}")
-    print(f"  Total agent-steps: {sum(N * steps_for_N(N) * N_RUNS for N in sizes):,.0f}")
+    print(f"  Total agent-steps: {sum(N * steps_for_N(N) * runs_per[N] for N in sizes):,.0f}")
     print(f"  Cores: {n_cores}")
     print()
 
     t0 = time.time()
     results = []
     for N in sizes:
-        tasks = [(N, run, steps_for_N(N)) for run in range(N_RUNS)]
+        n_runs = 3 if N >= 100000 else N_RUNS
+        tasks = [(N, run, steps_for_N(N)) for run in range(n_runs)]
         # Cap concurrency for large N to prevent OOM
-        n_workers = max(1, min(n_cores, 2 if N >= 20000 else 4 if N >= 10000 else n_cores))
-        print(f"  Running N={N} ({N_RUNS} runs, {n_workers} workers, "
+        n_workers = max(1, min(n_cores, 1 if N >= 100000 else 2 if N >= 20000 else 4 if N >= 10000 else n_cores))
+        print(f"  Running N={N} ({n_runs} runs, {n_workers} workers, "
               f"{steps_for_N(N):,} steps)...")
         with Pool(n_workers) as pool:
             results.extend(pool.map(run_single, tasks))

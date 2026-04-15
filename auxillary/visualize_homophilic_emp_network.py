@@ -15,7 +15,7 @@ import networkx as nx
 import pickle
 import argparse
 from pathlib import Path
-from model_main_single import Model
+from model_main import Model
 from compute_normalized_homophily import compute_normalized_homophily
 
 def visualize_diet_network(G, pos, title="Homophilic Network by Diet", ax=None):

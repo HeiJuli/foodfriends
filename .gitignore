@@ -6,3 +6,5 @@ claude_stuff/
 model_src/__pycache__
 model_src/visualisations_output
 **__pycache__
+old/
+**/.claude/

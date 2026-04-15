@@ -5,7 +5,6 @@ Three dependent variables from the spreader's perspective:
   1. Adoption:      did agent i switch? (binary, logistic)
   2. Contagion:      how many agents did i directly convert? (count)
   3. Amplification:  total cascade credit in kg CO2 (continuous)
-
 Plus: degree-amplification scaling (linear vs super-linear) and
 network degree assortativity.
 
@@ -25,7 +24,8 @@ from plot_styles import set_publication_style, COLORS
 cm = 1/2.54
 DIRECT_REDUCTION_KG = 664  # 2054 - 1390
 
-DEFAULT_FILE = '../model_output/trajectory_analysis_twin_20260317.pkl'
+DEFAULT_FILE = '../model_output/trajectory_analysis_twin_20260402.pkl'
+CACHE_FILE  = '../model_output/agency_two_dvs_cache.pkl'
 
 TOPO_PREDS = ['degree', 'betweenness', 'eigenvector', 'clustering', 'complex_cent']
 PSYCH_PREDS = ['rho', 'alpha', 'theta']
@@ -46,7 +46,7 @@ def load_latest(file_path=None):
     print(f"Loading: {files[-1]}")
     return pd.read_pickle(files[-1])
 
-ANALYSIS_T = 130000  # analysis cutoff — must match results_analysis.py
+ANALYSIS_T = 139000  # analysis cutoff — ensemble-median logistic 95% t_end
 
 def get_median_row(data):
     if 'is_median_twin' in data.columns and data['is_median_twin'].any():
@@ -408,8 +408,7 @@ def extract_features_fast(row):
     betweenness = nx.betweenness_centrality(G)
     eigenvector = nx.eigenvector_centrality_numpy(G)
     clustering = nx.clustering(G)
-    # Skip complex centrality for speed in ensemble
-    cc = {n: 0.0 for n in nodes}
+    cc = compute_complex_centrality(G, T=2)
 
     df = pd.DataFrame({
         'node': nodes,
@@ -494,7 +493,7 @@ def make_two_panel_figure(adopt_corr, amp_corr, output_dir='../visualisations_ou
         'theta': r'Dietary pref. ($\theta$)',
     }
 
-    fig, axes = plt.subplots(1, 2, figsize=(14*cm, 7*cm), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(14*cm, 8.5*cm), sharey=True)
     panels = [
         (adopt_corr, 'r_pb', r'$r_{pb}$', 'A'),
         (amp_corr, 'rho_s', r'$\rho_s$', 'B'),
@@ -528,8 +527,6 @@ def make_two_panel_figure(adopt_corr, amp_corr, output_dir='../visualisations_ou
 
     axes[0].set_title('Adoption', fontsize=9, fontstyle='italic', pad=4)
     axes[1].set_title('Amplification', fontsize=9, fontstyle='italic', pad=4)
-    if n_runs:
-        fig.suptitle(f'Ensemble median (n={n_runs} runs)', fontsize=8, y=1.02)
     plt.tight_layout()
     out = f'{output_dir}/agency_two_dvs.pdf'
     plt.savefig(out, dpi=300, bbox_inches='tight')
@@ -582,8 +579,27 @@ def make_degree_scaling_figure(df, output_dir='../visualisations_output'):
 # --- Main ---
 
 if __name__ == '__main__':
-    fp = sys.argv[1] if len(sys.argv) > 1 else None
-    data = load_latest(fp)
+    import pickle, argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('pkl', nargs='?', help='path to trajectory pkl')
+    parser.add_argument('--plot-only', action='store_true',
+                        help='skip analysis; load cached results and regenerate figure')
+    args = parser.parse_args()
+
+    if args.plot_only:
+        if not os.path.exists(CACHE_FILE):
+            print(f"ERROR: cache file not found: {CACHE_FILE}")
+            print("Run without --plot-only first to generate the cache.")
+            sys.exit(1)
+        with open(CACHE_FILE, 'rb') as fh:
+            cache = pickle.load(fh)
+        print(f"Loaded cache: {CACHE_FILE}  (n_runs={cache['n_runs']})")
+        make_two_panel_figure(cache['adoption'], cache['amplification'],
+                              ensemble=True, n_runs=cache['n_runs'])
+        plt.show()
+        sys.exit(0)
+
+    data = load_latest(args.pkl)
     N_agents = len(_resolve_snap(data.iloc[0]['snapshots'])['reductions'])
     print(f"Loaded {len(data)} runs, N={N_agents} agents")
 
@@ -607,6 +623,13 @@ if __name__ == '__main__':
     n_ens = min(len(data), 50)
     print(f"\nRunning ensemble analysis ({n_ens} runs, this may take a while)...")
     ensemble_dfs = run_ensemble(data, n_runs=n_ens)
+
+    # Save cache so --plot-only can regenerate the figure without re-running analysis
+    cache = {'adoption': ensemble_dfs['adoption'], 'amplification': ensemble_dfs['amplification'],
+             'n_runs': n_ens}
+    with open(CACHE_FILE, 'wb') as fh:
+        pickle.dump(cache, fh)
+    print(f"Cache saved: {CACHE_FILE}")
 
     # Figures
     make_three_panel_figure(df, adopt_corr, contag_corr, amp_corr)
