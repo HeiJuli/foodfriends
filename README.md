@@ -39,7 +39,7 @@ Defines two classes:
   - `rho` ∈ [0, 1]: behavioral intention
   - `alpha` ∈ [0.05, 0.80]: self-identity weight (compressed for social
     desirability correction)
-  - `beta`: social-influence weight (= 1 − alpha)
+  - `w_i`: social-influence weight (= 1 − alpha, per-agent)
   - `memory`: rolling buffer (length M=9) of recent contacts' diets
 
   Each step the agent samples a neighbor, updates memory, and stochastically
@@ -168,7 +168,8 @@ cd ../plotting && python publication_plots_main.py
 |------------------|------------------|--------------------------------------------------|
 | `N`              | 2000             | Population size                                  |
 | `steps`          | 150,000          | Interaction steps                                |
-| `beta`           | 1 − alpha        | Social weight (per-agent)                        |
+| `beta`           | 20               | Inverse temperature / attention to dissonance    |
+| `w_i`            | 1 − alpha        | Social weight (per-agent)                        |
 | `alpha`          | survey/imputed   | Self-identity weight, compressed [0.05, 0.80]    |
 | `rho`            | survey/imputed   | Behavioral intention                             |
 | `theta`          | survey           | Intrinsic veg preference                         |

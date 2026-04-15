@@ -87,8 +87,7 @@ def compute_complex_centrality(G, T=2):
                     dist[v] = dist[u] + 1
                     queue.append(v)
         ni = closed_nbr[i]
-        n_targets = n - len(ni)
-        cc[i] = sum(d for v, d in dist.items() if v not in ni) / n_targets if n_targets > 0 else 0.0
+        cc[i] = sum(d for v, d in dist.items() if v not in ni) / (n - 1) if n > 1 else 0.0
     return cc
 
 
