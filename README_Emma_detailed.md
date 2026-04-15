@@ -1,5 +1,4 @@
 # Foodfriends — Detailed Project Guide
-*A plain-language walkthrough of what everything is and how it all fits together.*
 
 ---
 
@@ -16,12 +15,13 @@ The model is grounded in **real survey data** from the Netherlands (5,602 partic
 ```
 Foodfriends-fresh/
 │
-├── README.md                         ← Original short README (keep as-is)
-├── README_Emma_detailed.md           ← This file
+├── README.md                         ← Short project overview
+├── README_Emma_detailed.md           ← This detailed guide
+├── data_sampling.md                  ← Technical documentation on sampling & PMF imputation
 ├── environment_foodfriends.yml       ← Conda environment (list of Python packages)
 ├── requirements_foodfriends.txt      ← Alternative pip package list
 │
-├── data/                             ← Input data (survey files)
+├── data/                             ← Input data (survey files) and data analysis
 ├── model_src/                        ← Core simulation code
 ├── auxillary/                        ← Data prep & utility scripts
 ├── analysis/                         ← Post-run analysis scripts
@@ -33,7 +33,9 @@ Foodfriends-fresh/
 
 ## 1. `data/` — The Inputs
 
-This folder contains all the raw and processed data the model needs.
+This folder contains all the raw and processed data the model needs, along with supporting analysis and the raw data construction files.
+
+### Survey & model input files
 
 | File | What it is |
 |------|-----------|
@@ -48,8 +50,31 @@ This folder contains all the raw and processed data the model needs.
 | `rho_empirical_pmfs_by_group.csv` | Same, for rho |
 | `DataForFoodProject.xlsx` | Raw project data file |
 
-**Why is data prep necessary?**
-Only 23.2% of the 5,602 survey participants have *all three* parameters (theta + rho + alpha) measured. For the rest, missing values are filled in ("imputed") using demographic-matched statistical tables — this is what the PMF files are for.
+**Why is data preparation necessary?**
+Only 23.2% of the 5,602 survey participants have *all three* parameters (theta + rho + alpha) measured. For the rest, missing values are filled in ("imputed") using demographic-matched statistical tables — this is what the PMF files are for. See `data_sampling.md` for full technical details.
+
+### `data/data_analysis/` — Parameter distribution analysis
+
+Scripts and outputs examining the empirical parameter distributions used to characterize and report the agent population.
+
+| File | What it is |
+|------|-----------|
+| `parameter_distributions_paper.py` | Generates the parameter distribution figure for the paper |
+| `parameter_distributions_ABM.py` | Generates parameter distributions for the ABM population |
+| `demographic_parameter_distributions.py` | Analyses parameter distributions broken down by demographics |
+| `alpha_differences.py` | Analyses differences in alpha across subgroups |
+| `parameter_distributions_paper.pdf/.png` | Output figures |
+| `parameter_distributions_ABM.pdf/.png` | Output figures |
+| `demographic_parameter_distributions.png` | Output figure |
+| `alpha_differences.png` | Output figure |
+| `demographic_parameter_findings.md` | Written summary of demographic parameter findings |
+| `demographic_parameter_summary.csv` | Summary statistics table |
+| `alpha_differences_summary.csv` | Summary statistics for alpha differences |
+| `alpha_differences.md` | Written summary of alpha differences |
+
+### `data/data_construction_paper/` — Raw data and Stata pipeline
+
+Contains the original Stata `.dta` survey files and the do-file (`paper_dofile.do`) used to construct the clean survey datasets from raw LISS panel waves. These are the upstream inputs to the Python data pipeline.
 
 ---
 
@@ -141,25 +166,30 @@ Not run directly from the command line. Contains helper functions for:
 
 ### `model_runn.py` — Variant Runner
 
-An earlier or alternative version of the model runner. Less important than `model_runner_mp.py`.
+An earlier variant of the model runner, retained for reference.
 
 ---
 
 ### `model_src/testing/` — Development & Validation Tests
 
-These scripts were used during model development to test specific behaviors. You don't need to run them for normal use, but they're useful for understanding how the model works.
+These scripts were used during model development to test specific behaviors. They are not required for standard use but are useful for understanding model dynamics and validating specific components.
 
 | Script | What it tests |
 |--------|--------------|
 | `test_initial_dynamics.py` | How the model behaves right at the start |
 | `test_threshold_variants.py` | Different ways agents can have inertia |
+| `test_threshold_model.py` | Threshold-based decision rule variant |
 | `diagnose_initial_state.py` | Checks what the network and agents look like at t=0 |
 | `test_system_size_scaling.py` | What happens if you run with N=500 vs N=5000? |
 | `test_seeding_experiment.py` | If you start with 5% vs 15% veg, how does it change outcomes? |
 | `beta_sweep.py` | How sensitive is the model to the beta parameter? |
 | `gamma_sweep_complex_cent.py` | Tests the diminishing-returns parameter |
+| `sweep_wt_m_tc.py` | Grid sweep over social weight, memory length, and triadic closure |
 | `test_contagion_transition.py` | Phase transition: at what point does adoption accelerate? |
 | `test_phase2_2d_sweep.py` | Two-parameter grid sweep |
+| `test_adoption_complex_centrality.py` | How network centrality affects adoption via complex contagion |
+| `test_alpha_complex_centrality.py` | Interaction between self-identity (alpha) and centrality |
+| `test_memory_complex_centrality.py` | Memory buffer effects in high-centrality nodes |
 
 ---
 
@@ -422,19 +452,21 @@ python publication_plots_main.py
 
 | Location | Status | Notes |
 |----------|--------|-------|
-| `model_src/model_main.py` | ✅ Current | Main model — use this |
-| `model_src/model_runner_mp.py` | ✅ Current | Main runner — use this |
-| `model_src/extended_model_runner.py` | ✅ Current | Supplementary analyses |
-| `model_src/model_runn.py` | ⚠️ Variant | Older runner, check before using |
-| `model_src/model_main_backup_*.py` | 🗄️ Archive | Snapshots before major changes |
-| `model_src/model_main_cumulative_test.py` | 🧪 Experimental | Cumulative attribution test |
-| `model_src/old/` | 🗄️ Archive | Earlier model variants |
-| `model_src/testing/` | 🧪 Dev tests | Useful for understanding model behavior |
-| `auxillary/homophily_network_v2_original.py` | 🗄️ Archive | Original before v2 refactor |
-| `auxillary/old/` | 🗄️ Archive | Archived development scripts |
-| `plotting/publication_plots_backup.py` | 🗄️ Archive | Backup before last plotting refactor |
-| `plotting/old/` | 🗄️ Archive | Earlier figure scripts |
+| `model_src/model_main.py` | Current | Main model |
+| `model_src/model_runner_mp.py` | Current | Main runner |
+| `model_src/extended_model_runner.py` | Current | Supplementary analyses |
+| `model_src/model_runn.py` | Variant | Earlier runner variant |
+| `model_src/model_main_backup_*.py` | Archive | Snapshots before major changes |
+| `model_src/model_main_cumulative_test.py` | Experimental | Cumulative attribution test |
+| `model_src/old/` | Archive | Earlier model variants |
+| `model_src/testing/` | Dev tests | Useful for understanding model behavior |
+| `auxillary/homophily_network_v2_original.py` | Archive | Original before v2 refactor |
+| `auxillary/old/` | Archive | Archived development scripts |
+| `plotting/publication_plots_backup.py` | Archive | Backup before last plotting refactor |
+| `plotting/old/` | Archive | Earlier figure scripts |
+| `data/data_analysis/` | Current | Parameter distribution analysis scripts and outputs |
+| `data/data_construction_paper/` | Archive | Raw Stata files and do-file for upstream data construction |
 
 ---
 
-*This README was written to help new collaborators (and returning collaborators!) quickly understand the codebase. Last updated: March 2026.*
+*Last updated: April 2026.*
