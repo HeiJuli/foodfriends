@@ -4,11 +4,11 @@
 
 network_agency_evolution:
   big_n:
-    file: trajectory_analysis_twin_20260317.pkl
+    file: trajectory_analysis_twin_20260402.pkl
     truncate_steps: null        # null = full run
-    analysis_t_end: 130000      # analysis window cutoff
+    analysis_t_end: 139000       # ensemble-median logistic 95% t_end
   small_n:
-    file: trajectory_analysis_sample-max_20260317.pkl
+    file: trajectory_analysis_sample-max_20260413.pkl
     truncate_steps: null        # null = full run
     mid_t: null                 # null = auto (trajectory midpoint); int = target timestep
     analysis_t_end: null        # null = auto-steady; int = explicit timestep for network t_end
@@ -18,23 +18,23 @@ network_agency_evolution:
 
 amplification:
   file: trajectory_analysis_twin_20260317.pkl
-  analysis_t_end: 130000
+  analysis_t_end: 139000        # ensemble-median logistic 95% t_end
 
 agency_predictors:
   file: trajectory_analysis_twin_20260317.pkl
-  analysis_t_end: 130000
+  analysis_t_end: 139000        # ensemble-median logistic 95% t_end
 
 network_agency_evolution_ensemble:
   big_n:
-    file: trajectory_analysis_twin_20260317.pkl
-    analysis_t_end: 130000
+    file: trajectory_analysis_twin_20260402.pkl
+    analysis_t_end: 139000      # ensemble-median logistic 95% t_end (IQR [134k,145k])
   small_n:
-    file: trajectory_analysis_sample-max_20260317.pkl
+    file: trajectory_analysis_sample-max_20260413.pkl
     analysis_t_end: null
   rescale:
     reference_fveg: 0.5
   savgol_window: 10001
 
 amplification_ensemble:
-  file: trajectory_analysis_twin_20260317.pkl
-  analysis_t_end: 130000
+  file: trajectory_analysis_twin_20260402.pkl
+  analysis_t_end: 139000        # ensemble-median logistic 95% t_end

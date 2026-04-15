@@ -1,78 +1,195 @@
-# Intention 
+# Foodfriends
 
-This repository is meant to be used in order to store data and code for the group porject *food-friends/fights* of the CSH Winterschool. 
+An **agent-based model** of how vegetarian dietary behavior spreads through a
+social network, grounded in survey data from 5,602 Dutch participants. The
+model tracks adoption dynamics, CO2 reduction, and how influence cascades
+attribute "credit" for triggering chains of dietary change.
 
-## Software implementation
+Originally started at the CSH Winterschool. Manuscript currently in submission
 
-All source code used to generate the results and figures in the paper are in
-the `model_src` folder. The main models are `model_main_single.py` (utility-based) and `model_main_threshold.py` (threshold-based). Results are saved in `model_output`, and figures in `visualisations_output`.
+---
 
-**Recommended model parameters**: Use N=2000 for optimal balance of finite-size effects vs empirical accuracy. The model automatically applies stratified sampling to preserve demographic representativeness.
-
-For detailed documentation, see `CLAUDE.md`.
+## Repository layout
 
 ```
 .
-├── data
-├── model_output
-├── model_src
-│   └── old
-├── plotting
-│   └── old
-└── visualisations_output
+├── data/                 Survey inputs and processed parameter tables
+├── model_src/            Core simulation engine and runners
+│   └── testing/          Validation tests
+├── auxillary/            Data preparation, sampling, network utilities
+├── analysis/             Post-run statistical analysis
+├── plotting/             Figure generation for the paper
+├── viz/                  LaTeX schematic for the cascade attribution diagram
+├── model_output/         Simulation results (.pkl)
+├── visualisations_output/  Generated figures
+└── old/                  Archived legacy code (gitignored, kept for posterity)
 ```
 
-## Getting the code
+---
 
-You can download a copy of all the files in this repository by cloning the
-[git](https://git-scm.com/) repository:
+## The model (`model_src/`)
 
-    git clone https://github.com/HeiJuli/foodfriends.git
+### `model_main.py` — core engine
 
-or [download a zip archive](https://github.com/HeiJuli/foodfriends/archive/refs/heads/main.zip).
+Defines two classes:
 
+- **`Agent`** — one person in the simulation. Holds:
+  - `diet`: `'veg'` or `'omnivore'`
+  - `theta` ∈ [-1, 1]: intrinsic vegetarian preference (survey-derived)
+  - `rho` ∈ [0, 1]: behavioral intention
+  - `alpha` ∈ [0.05, 0.80]: self-identity weight (compressed for social
+    desirability correction)
+  - `beta`: social-influence weight (= 1 − alpha)
+  - `memory`: rolling buffer (length M=9) of recent contacts' diets
 
-## Dependencies
+  Each step the agent samples a neighbor, updates memory, and stochastically
+  switches diet by Boltzmann probability over a Hamiltonian energy:
 
-You'll need a working Python environment to run the code.
-The recommended way to set up your environment is through the
-[Anaconda Python distribution](https://www.anaconda.com/download/) which
-provides the `conda` package manager.
-Anaconda can be installed in your user directory and does not interfere with
-the system Python installation.
-The required dependencies are specified in the file `environment_foodfriends.yml`, as well as `requirements_foodfriends.txt` .
+  ```
+  H(s) = (1 − w)·(s − h_ind)² + w·(s − h_soc)² − tau·s
+  ```
 
-We use `conda` virtual environments to manage the project dependencies in
-isolation.
-Thus, you can install our dependencies without causing conflicts with your
-setup (even with different Python versions).
+  with `h_ind` shifting toward theta on dissonance, `h_soc` from neighbor diet
+  shares (with diminishing-returns gamma), `tau` an external pro-veg field.
 
-Run the following command in the repository folder (where `environment_foodfriends.yml`
-is located) to create a separate environment and install all required
-dependencies in it:
+- **`Model`** — population, network, and simulation loop. Builds the network
+  (default `homophilic_emp`, empirically calibrated homophily), loads agents
+  from survey data, runs the dynamics, detects steady state, and computes
+  cascade attribution (cumulative-activation accounting with depth decay and
+  dwell-time weighting).
 
-    conda env create
+### Runners
 
+- **`model_runner_mp.py`** — main multiprocessing CLI runner for parameter
+  sweeps and batch ensembles. Output as `.pkl` in `model_output/`.
+  ```bash
+  python model_runner_mp.py --analysis trajectory --agent_ini twin --runs 50
+  ```
+- **`model_runn.py`** — lighter single-process runner used by some testing
+  scripts. Stores `steady_state_t` alongside snapshots.
+- **`extended_model_runner.py`** — helper functions for emissions analysis,
+  vegetarian-fraction studies, and topology comparisons.
 
-## Reproducing the results
+### `testing/`
 
-Before running any code you must activate the conda environment:
+- `test_system_size_scaling.py` — verifies scale invariance of key
+  observables across N=2k–20k with modular networks and KDE-synthetic agents.
 
-    source activate ENVIRONMENT_NAME
+---
 
-or, if you're on Windows:
+## Data preparation (`auxillary/`)
 
-    activate ENVIRONMENT_NAME
+Run once before simulating:
 
-This will enable the environment for your current terminal session.
-Any subsequent commands will use software that is installed in the environment.
+1. **`create_hierarchical_agents.py`** — merges the three raw survey files
+   (`theta_diet_demographics.xlsx`, `rho_demographics.xlsx`,
+   `alpha_demographics.xlsx`) into `data/hierarchical_agents.csv` (5,602
+   participants, 1,298 with all three parameters measured).
+2. **`create_pmf_tables.py`** — builds conditional PMFs for hot-deck
+   imputation of missing alpha/rho. Alpha conditioned on demographics only;
+   rho stratified by demographics × theta-bin (preserves the empirical
+   theta–rho correlation r=−0.30). Output: `data/demographic_pmfs.pkl`.
+3. **`validate_theta_stratification.py`** — confirms that PMF imputation
+   preserves the empirical correlations.
+4. **`analyze_sample_size.py`** — finite-size vs. imputation trade-off; lands
+   on **N=2000** (CV=2.2%, ±0.21% demographic deviation).
 
+Other utilities:
+
+- **`sampling_utils.py`** — stratified sampler used automatically when N <
+  5602 to preserve gender/age/income/education distributions.
+- **`homophily_network_v2.py`** — homophilic network generator (Lackner-style
+  blend of preferential attachment and demographic similarity across
+  age/gender/income/education/theta, with triadic closure).
+- **`network_stats.py`** — homophily and topology measures.
+- **`parameter_diagnostics.py`**, **`test_homophilly.py`**,
+  **`visualize_homophilic_emp_network.py`** — diagnostics.
+
+See `auxillary/README.md` for more.
+
+---
+
+## Analysis (`analysis/`)
+
+- **`results_analysis.py`** — power-law fits, Gini, network assortativity,
+  degree–amplification scaling, inflection detection. Snapshot priority:
+  explicit `t_cutoff` (CLI arg) > steady-state snapshot > logistic 95%
+  asymptote > final snapshot.
+- **`verify_descendants_scaling.py`** — sanity-checks influence-tree size
+  against system size.
+
+---
+
+## Plotting (`plotting/`)
+
+- **`publication_plots_main.py`** — main 7-panel paper figure: network
+  snapshots over time, trajectory ensemble, CCDF of CO2 reductions, Lorenz
+  curve. All non-trajectory panels share a single ensemble-fixed analysis
+  cutoff (`analysis_t_end` from `plot_config.yaml`) for temporal consistency.
+- **`publication_plots_supp.py`** — supplementary figures.
+- **`agency_predictor_analysis.py`** — regression of cascade amplification on
+  structural and psychological predictors.
+- **`trajectory_t_end_facet.py`** — visual QA: per-run trajectory + logistic
+  fit + t_end marker.
+- **`plot_styles.py`**, **`plot_config.yaml`** — shared style and inputs.
+- **`utility_probability_plot.py`**, **`compare_social_functions.py`**,
+  **`demo_patch_network.py`**, **`explore_derivatives.py`** — exploratory.
+
+---
+
+## Setup
+
+```bash
+conda env create -f environment_foodfriends.yml
+conda activate foodfriends
+```
+
+Or `pip install -r requirements_foodfriends.txt`.
+
+## Typical workflow
+
+```bash
+# Data prep (one-time)
+cd auxillary
+python create_hierarchical_agents.py
+python create_pmf_tables.py
+
+# Simulation
+cd ../model_src
+python model_runner_mp.py --analysis trajectory --agent_ini twin --runs 50
+
+# Analysis + figures
+cd ../analysis && python results_analysis.py
+cd ../plotting && python publication_plots_main.py
+```
+
+## Key parameters (defaults)
+
+| Param            | Default          | Meaning                                          |
+|------------------|------------------|--------------------------------------------------|
+| `N`              | 2000             | Population size                                  |
+| `steps`          | 150,000          | Interaction steps                                |
+| `beta`           | 1 − alpha        | Social weight (per-agent)                        |
+| `alpha`          | survey/imputed   | Self-identity weight, compressed [0.05, 0.80]    |
+| `rho`            | survey/imputed   | Behavioral intention                             |
+| `theta`          | survey           | Intrinsic veg preference                         |
+| `gamma`          | 0.45             | Diminishing returns on repeat contacts           |                           |
+| `M`              | 9                | Memory buffer length                             |
+| `decay`          | 0.7              | Cascade-credit depth decay                       |
+| `tau_persistence`| M·2·N            | Dwell-time weighting timescale                   |
+| `immune_n`       | 0.10–0.15        | Fraction of immune (extreme-conviction) agents   |
+| `topology`       | `homophilic_emp` | Network type                                     |
+| `agent_ini`      | `sample-max`     | Agent initialization mode                        |
+
+Topology options: `homophilic_emp`, `BA`, `complete`, `WS`, `CSF`, `PATCH`,
+`prebuilt`. Initialization modes: `twin`, `sample-max`, `synthetic`,
+`parameterized`.
+
+For deeper notes on parameter choices, see `CLAUDE.md` and `claude_stuff/`.
+
+---
 
 ## License
 
-All source code is made available under a BSD 3-clause license. You can freely
-use and modify the code, without warranty, so long as you provide attribution
-to the authors. See `LICENSE.md` for the full license text.
-
-The manuscript text is not open source. The authors reserve the rights to the
-article content, which is currently submitted for publication in Nature Human Behaviour.
+Source code: BSD 3-clause (see `LICENSE.md`). Manuscript text is not open
+source — rights reserved by the authors.

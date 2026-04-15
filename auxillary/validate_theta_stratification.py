@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import sys
 sys.path.append('../model_src')
-from model_main_single import sample_from_pmf
+from model_main import sample_from_pmf
 
 def load_empirical_correlations():
     """Calculate empirical correlations from complete cases"""
