@@ -98,8 +98,7 @@ Other utilities:
 
 - **`sampling_utils.py`** — stratified sampler used automatically when N <
   5602 to preserve gender/age/income/education distributions.
-- **`homophily_network_v2.py`** — homophilic network generator (Lackner-style
-  blend of preferential attachment and demographic similarity across
+- **`homophily_network_v2.py`** — homophilic network generator (Blend of preferential attachment and demographic similarity across
   age/gender/income/education/theta, with triadic closure).
 - **`network_stats.py`** — homophily and topology measures.
 - **`parameter_diagnostics.py`**, **`test_homophilly.py`**,
