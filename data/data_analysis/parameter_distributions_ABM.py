@@ -1,25 +1,20 @@
 """
 Publication-quality distribution plots for theta, rho, and alpha.
-Uses original LISS survey data (full empirical populations, pre-ABM filtering).
+Version for paper: no subplot titles, uniform histogram colour.
 
 - theta: continuous — histogram + best-fit parametric curve (skewnorm vs norm by AIC)
 - rho:   discrete 4-point Likert scale → bar chart only
 - alpha: discrete 7-point Likert scale → bar chart only
 
-Data sources (original Stata files):
-- theta: theta_diet.dta  (N~5742)
-- alpha: alpha.dta        (N~5095)
-- rho:   rho.dta          (N~2505)
-
 Saves:
-- parameter_distributions_paper.pdf  — vector, editable in Illustrator
-- parameter_distributions_paper.png  — raster preview
+- parameter_distributions_ABM.pdf  — vector, editable in Illustrator
+- parameter_distributions_ABM.png  — raster preview
 """
 import sys
-import warnings
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 from scipy import stats
 from pathlib import Path
 
@@ -27,22 +22,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "plotting"))
 from plot_styles import set_publication_style, apply_axis_style, COLORS
 
 OUT_DIR    = Path(__file__).parent
-DATA_DIR   = Path("C:/Users/emma.thill/Dropbox/Projects/Foodfriends/Data/Final_paper_data")
+DATA_FILE  = Path(__file__).parent.parent / "hierarchical_agents.csv"
+ALPHA_FILE = Path(__file__).parent.parent / "alpha_demographics.xlsx"
 
-# ── Load original survey data ──────────────────────────────────────────────────
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    theta_raw = pd.read_stata(DATA_DIR / "theta_diet.dta")
-    alpha_raw = pd.read_stata(DATA_DIR / "alpha.dta")
-    rho_raw   = pd.read_stata(DATA_DIR / "rho.dta")
+# ── Load data ─────────────────────────────────────────────────────────────────
+df         = pd.read_csv(DATA_FILE)
+theta_vals = df['theta'].dropna().values
+rho_vals   = df[df['has_rho']]['rho'].dropna().values
 
-theta_vals = pd.to_numeric(theta_raw['theta'], errors='coerce').dropna().values
-alpha_vals = pd.to_numeric(alpha_raw['alpha'], errors='coerce').dropna().values
-rho_vals   = pd.to_numeric(rho_raw['rho'],   errors='coerce').dropna().values
-
-print(f"theta: N={len(theta_vals)}, mean={theta_vals.mean():.2f}, SD={theta_vals.std():.2f}")
-print(f"alpha: N={len(alpha_vals)}, mean={alpha_vals.mean():.2f}, SD={alpha_vals.std():.2f}")
-print(f"rho:   N={len(rho_vals)},   mean={rho_vals.mean():.2f}, SD={rho_vals.std():.2f}")
+alpha_raw  = pd.read_excel(ALPHA_FILE)
+alpha_vals = pd.to_numeric(alpha_raw['Self-identity weight (alpha)'], errors='coerce').dropna().values
 
 # ── Distribution fitting for theta only ───────────────────────────────────────
 def fit_best(data, candidates):
@@ -109,7 +98,7 @@ for ax, data, xlabel in [
     ax.set_xlim(-0.05, 1.05)
     apply_axis_style(ax)
 
-fig.savefig(OUT_DIR / "parameter_distributions_paper.pdf", bbox_inches='tight')
-fig.savefig(OUT_DIR / "parameter_distributions_paper.png", dpi=200, bbox_inches='tight')
-print("Saved: parameter_distributions_paper.pdf and .png")
+fig.savefig(OUT_DIR / "parameter_distributions_ABM.pdf", bbox_inches='tight')
+fig.savefig(OUT_DIR / "parameter_distributions_ABM.png", dpi=200, bbox_inches='tight')
+print("Saved: parameter_distributions_ABM.pdf and .png")
 plt.close()
