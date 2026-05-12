@@ -185,7 +185,6 @@ Topology options: `homophilic_emp`, `BA`, `complete`, `WS`, `CSF`, `PATCH`,
 `prebuilt`. Initialization modes: `twin`, `sample-max`, `synthetic`,
 `parameterized`.
 
-For deeper notes on parameter choices, see `CLAUDE.md` and `claude_stuff/`.
 
 ---
 
