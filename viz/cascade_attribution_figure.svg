@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="836" height="280" viewBox="0 0 836 280" xmlns="http://www.w3.org/2000/svg">
+<defs>
+
+  <marker id="arr-fwd" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+    <polygon points="0 0.5,8 3.5,0 6.5" fill="#222"></polygon>
+  </marker>
+
+  <marker id="arr-cr1" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+    <polygon points="0 0.5,8 3.5,0 6.5" fill="#7E3F98"></polygon>
+  </marker>
+
+  <marker id="arr-cr2" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+    <polygon points="0 0.5,8 3.5,0 6.5" fill="#B084C2"></polygon>
+  </marker>
+</defs>
+
+
+<line x1="175" y1="152" x2="267" y2="152" stroke="#222" stroke-width="2.0" marker-end="url(#arr-fwd)"></line>
+<line x1="363" y1="152" x2="455" y2="152" stroke="#222" stroke-width="2.0" marker-end="url(#arr-fwd)"></line>
+<line x1="551" y1="152" x2="620" y2="152" stroke="#888" stroke-width="1.6" stroke-dasharray="5,3" marker-end="url(#arr-fwd)"></line>
+
+
+<path d="M 291,138 Q 234,80 178,138" stroke="#7E3F98" stroke-width="1.9" fill="none" stroke-dasharray="6,3" marker-end="url(#arr-cr1)"></path>
+<text x="234" y="68" font-size="11" fill="#7E3F98" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-weight="600">Δw<tspan font-size="8" dy="2">A</tspan></text>
+
+<path d="M 479,138 Q 422,80 341,138" stroke="#7E3F98" stroke-width="1.9" fill="none" stroke-dasharray="6,3" marker-end="url(#arr-cr1)"></path>
+<text x="422" y="68" font-size="11" fill="#7E3F98" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-weight="600">Δw<tspan font-size="8" dy="2">B</tspan></text>
+
+<path d="M 479,128 Q 330,25 170,122" stroke="#B084C2" stroke-width="1.7" fill="none" stroke-dasharray="2,3" marker-end="url(#arr-cr2)"></path>
+<text x="330" y="50" font-size="11" fill="#7E3F98" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-weight="600">Δw<tspan font-size="8" dy="2">A</tspan><tspan dy="-2"> · δ</tspan></text>
+
+
+<circle cx="152" cy="152" r="24" fill="#2a9d8f" stroke="#1f7a6e" stroke-width="1.5"></circle>
+<text x="152" y="158" font-size="16" fill="#fff" text-anchor="middle" font-weight="700" font-family="&#39;Inter&#39;,&#39;Helvetica Neue&#39;,Arial">A</text>
+
+<path d="M 315,128 A 24,24 0 0,0 315,176 Z" fill="#e76f51"></path>
+<path d="M 315,128 A 24,24 0 0,1 315,176 Z" fill="#2a9d8f"></path>
+<circle cx="315" cy="152" r="24" fill="none" stroke="#444" stroke-width="1.5"></circle>
+<text x="315" y="158" font-size="16" fill="#fff" text-anchor="middle" font-weight="700" font-family="&#39;Inter&#39;,&#39;Helvetica Neue&#39;,Arial">B</text>
+
+<path d="M 503,128 A 24,24 0 0,0 503,176 Z" fill="#e76f51"></path>
+<path d="M 503,128 A 24,24 0 0,1 503,176 Z" fill="#2a9d8f"></path>
+<circle cx="503" cy="152" r="24" fill="none" stroke="#444" stroke-width="1.5"></circle>
+<text x="503" y="158" font-size="16" fill="#fff" text-anchor="middle" font-weight="700" font-family="&#39;Inter&#39;,&#39;Helvetica Neue&#39;,Arial">C</text>
+
+<circle cx="645" cy="152" r="21" fill="#e76f51" stroke="#b54e35" stroke-width="1.2"></circle>
+<text x="645" y="158" font-size="16" fill="#fff" text-anchor="middle" font-weight="700" font-family="&#39;Inter&#39;,&#39;Helvetica Neue&#39;,Arial">D</text>
+
+
+<text x="152" y="191" font-size="10.5" fill="#222" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-weight="600">t₀</text>
+<text x="315" y="191" font-size="10.5" fill="#222" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-weight="600">t₁</text>
+<text x="503" y="191" font-size="10.5" fill="#222" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-weight="600">t₂</text>
+<text x="645" y="191" font-size="10.5" fill="#555" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-weight="600" font-style="italic">t &gt; t₂</text>
+
+
+<line x1="152" y1="204" x2="315" y2="204" stroke="#444" stroke-width="1.0" opacity="0.7"></line>
+<line x1="152" y1="200" x2="152" y2="208" stroke="#444" stroke-width="1.0" opacity="0.7"></line>
+<line x1="315" y1="200" x2="315" y2="208" stroke="#444" stroke-width="1.0" opacity="0.7"></line>
+<text x="234" y="219" font-size="9.5" fill="#333" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-style="italic" font-weight="500">dwell time τ<tspan font-size="7" dy="2">A</tspan></text>
+
+<line x1="315" y1="204" x2="503" y2="204" stroke="#444" stroke-width="1.0" opacity="0.55"></line>
+<line x1="315" y1="200" x2="315" y2="208" stroke="#444" stroke-width="1.0" opacity="0.55"></line>
+<line x1="503" y1="200" x2="503" y2="208" stroke="#444" stroke-width="1.0" opacity="0.55"></line>
+<text x="409" y="219" font-size="9.5" fill="#333" text-anchor="middle" font-family="&#39;Inter&#39;,Arial" font-style="italic" font-weight="500">dwell time τ<tspan font-size="7" dy="2">B</tspan></text>
+
+
+<circle cx="100" cy="255" r="5.5" fill="#2a9d8f" stroke="#1f7a6e" stroke-width="0.8"></circle>
+<text x="112" y="259" font-size="9" fill="#222" font-family="&#39;Inter&#39;,Arial" font-weight="500">vegetarian</text>
+
+<circle cx="178" cy="255" r="5.5" fill="#e76f51" stroke="#b54e35" stroke-width="0.8"></circle>
+<text x="190" y="259" font-size="9" fill="#222" font-family="&#39;Inter&#39;,Arial" font-weight="500">omnivore</text>
+
+<path d="M 255,249.5 A 5.5,5.5 0 0,0 255,260.5 Z" fill="#e76f51"></path>
+<path d="M 255,249.5 A 5.5,5.5 0 0,1 255,260.5 Z" fill="#2a9d8f"></path>
+<circle cx="255" cy="255" r="5.5" fill="none" stroke="#444" stroke-width="0.8"></circle>
+<text x="267" y="259" font-size="9" fill="#222" font-family="&#39;Inter&#39;,Arial" font-weight="500">switching</text>
+
+<line x1="330" y1="255" x2="350" y2="255" stroke="#222" stroke-width="2.0" marker-end="url(#arr-fwd)"></line>
+<text x="357" y="259" font-size="9" fill="#222" font-family="&#39;Inter&#39;,Arial" font-weight="500">direct influence</text>
+
+<line x1="455" y1="255" x2="475" y2="255" stroke="#7E3F98" stroke-width="1.9" stroke-dasharray="4,2" marker-end="url(#arr-cr1)"></line>
+<text x="482" y="259" font-size="9" fill="#222" font-family="&#39;Inter&#39;,Arial" font-weight="500">cascade credit</text>
+
+<line x1="575" y1="255" x2="595" y2="255" stroke="#B084C2" stroke-width="1.7" stroke-dasharray="2,2" marker-end="url(#arr-cr2)"></line>
+<text x="602" y="259" font-size="9" fill="#222" font-family="&#39;Inter&#39;,Arial" font-weight="500">indirect (decayed)</text>
+
+</svg>
