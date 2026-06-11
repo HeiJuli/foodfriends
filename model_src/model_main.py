@@ -30,6 +30,7 @@ import sys
 import os
 sys.path.append('..')
 from auxillary.homophily_network_v2 import generate_homophily_network_v2
+from auxillary.homophily_network_theta import generate_homophily_network_theta
 from auxillary.sampling_utils import stratified_sample_agents
 from auxillary import network_stats
 
@@ -352,8 +353,15 @@ class Model():
             self.G1 = PATCH(N, self.params["k"], float(self.params["veg_f"]),
                             h_MM=0.6, tc=self.params["tc"], h_mm=0.7)
             self.G1.generate()
+        elif topo == "ER":
+            p = self.params["k"] / (N - 1)
+            self.G1 = nx.erdos_renyi_graph(N, p, seed=self.params.get("seed"))
         elif topo == "homophilic_emp":
             self.G1 = nx.empty_graph(N)
+        elif topo == "homophilic_theta":
+            self.G1 = nx.empty_graph(N)  # built in _init_survey_agents (needs agents)
+        elif topo == "CM":
+            self.G1 = nx.empty_graph(N)  # built in _init_survey_agents (needs agents)
         elif topo == "prebuilt":
             self.G1 = nx.empty_graph(N)  # placeholder; caller sets G1 before run()
 
@@ -402,7 +410,7 @@ class Model():
                 old_N = self.params["N"]
                 self.params["N"] = len(self.survey_data)
                 print(f"INFO: Overriding N={old_N} -> {self.params['N']} for sample-max mode")
-                if self.params['topology'] != "homophilic_emp":
+                if self.params['topology'] not in ("homophilic_emp", "homophilic_theta", "CM"):
                     self._generate_network()
         else:
             self.survey_data = pd.read_csv(self.params["survey_file"])
@@ -463,6 +471,51 @@ class Model():
                 tc=self.params.get("tc", 0.7)
             )
             print(f"INFO: Network: {self.G1.number_of_edges()} edges, "
+                  f"mean degree {np.mean([d for _, d in self.G1.degree()]):.2f}")
+
+        elif self.params['topology'] == "homophilic_theta":
+            # EXPERIMENTAL (post-submission): theta-assortative network.
+            # Frozen calibration: theta_w=1.0, sim_power=4.0, tc_sim=True, pa_power=1.0
+            # -> Newman theta-assortativity ~0.27 (measured 2026-06-03, 5 seeds;
+            # the "~0.22" target was an underestimate), degree std/clustering preserved.
+            theta_w = self.params.get("theta_w", 1.0)
+            print(f"INFO: Generating theta-homophily network "
+                  f"(theta_w={theta_w}, sim_power={self.params.get('sim_power', 4.0)}, "
+                  f"pa_power={self.params.get('pa_power', 1.0)}, tc_sim={self.params.get('tc_sim', True)})")
+            self.G1, self.sim_matrix = generate_homophily_network_theta(
+                N=self.params["N"], avg_degree=8,
+                agents_df=self.survey_data,
+                attribute_weights=np.array([0.20, 0.35, 0.18, 0.32, theta_w]),
+                sim_power=self.params.get("sim_power", 4.0),
+                pa_power=self.params.get("pa_power", 1.0),
+                tc_sim=self.params.get("tc_sim", True),
+                seed=self.params.get("seed", 42),
+                tc=self.params.get("tc", 0.7)
+            )
+            print(f"INFO: Network: {self.G1.number_of_edges()} edges, "
+                  f"mean degree {np.mean([d for _, d in self.G1.degree()]):.2f}")
+
+        elif self.params['topology'] == "CM":
+            # Configuration model null: match degree sequence of homophilic_theta network
+            # so the only difference from homophilic_theta is the theta-assortativity.
+            theta_w = self.params.get("theta_w", 1.0)
+            G_ref, _ = generate_homophily_network_theta(
+                N=self.params["N"], avg_degree=8,
+                agents_df=self.survey_data,
+                attribute_weights=np.array([0.20, 0.35, 0.18, 0.32, theta_w]),
+                sim_power=self.params.get("sim_power", 4.0),
+                pa_power=self.params.get("pa_power", 1.0),
+                tc_sim=self.params.get("tc_sim", True),
+                seed=self.params.get("seed", 42),
+                tc=self.params.get("tc", 0.7)
+            )
+            deg_seq = [d for _, d in G_ref.degree()]
+            G_cm = nx.configuration_model(deg_seq, seed=self.params.get("seed"))
+            G_cm = nx.Graph(G_cm)
+            G_cm.remove_edges_from(nx.selfloop_edges(G_cm))
+            self.G1 = G_cm
+            print(f"INFO: Configuration model (matched theta-hom degree seq): "
+                  f"{self.G1.number_of_edges()} edges, "
                   f"mean degree {np.mean([d for _, d in self.G1.degree()]):.2f}")
 
         for agent in self.agents:

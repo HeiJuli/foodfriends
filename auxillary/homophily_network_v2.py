@@ -181,7 +181,9 @@ def generate_homophily_network_v2(
     """
     Generate homophily-based social network with triadic closure.
     Follows Holme-Kim (2002) incremental growth model with homophily
-    replacing preferential attachment:
+    COMBINED WITH preferential attachment (target weight = similarity * degree;
+    the PA term was re-added deliberately to fix core-periphery collapse, see
+    network_homophily.md section 3 -- it does NOT replace PA):
 
     1. Nodes arrive one at a time, each adding m = avg_degree // 2 edges
     2. First edge per node: similarity-weighted selection from existing nodes
