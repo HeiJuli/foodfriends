@@ -28,7 +28,7 @@ in model_main) actually measures ~0.27 (5-seed avg 0.283; visual-script seed 42 
 i.e. slightly above the 0.2-0.25 target but inside the empirical range. The self-test
 below uses theta_w=3.0 (~0.36) as a STRONGER illustration, not the production setting.
 
-See claude_stuff/homophily_network_audit_2026-05-29.md sections 6-7.
+See claude_stuff/Infrastructure/homophily_network_audit_2026-05-29.md sections 6-7.
 """
 import os
 import sys

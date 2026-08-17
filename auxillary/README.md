@@ -188,7 +188,7 @@ These are kept for reference but have been replaced by the current validation su
 ## Key Findings Documented
 
 ### Optimal Sample Size (2025-01-27)
-**See**: `../claude_stuff/optimal_sample_size_analysis_2025-01-27.md`
+**See**: `../claude_stuff/Archive/optimal_sample_size_analysis_2025-01-27.md`
 
 Key findings:
 - **N=2000 recommended** for optimal balance of finite-size effects vs empirical grounding
