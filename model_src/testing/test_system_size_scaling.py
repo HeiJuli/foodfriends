@@ -13,7 +13,7 @@ Corrects artifacts in prior version (2026-03-22):
   2. tau_persistence ~ N was correct but steps didn't keep pace
   3. Holme-Kim network had no community structure at any scale
   4. Agent cloning above N=5602 reduced parameter heterogeneity
-  See: claude_stuff/system_size_scaling_artifacts_2026-03-23.md
+  See: claude_stuff/Infrastructure/system_size_scaling_artifacts_2026-03-23.md
 
 N values: 2000, 4000, 6000, 10000, 20000
   - N=2000 is the baseline (single community, matches validated model)

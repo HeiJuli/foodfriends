@@ -24,7 +24,7 @@ Plus printed: network properties, degree-amplification scaling, and the two-DV
 Run from model_src/:
     python topology_comparison.py [--runs N] [--steps S] [--quick]
 
-See claude_stuff/homophily_network_audit_2026-05-29.md sections 6-7.
+See claude_stuff/Infrastructure/homophily_network_audit_2026-05-29.md sections 6-7.
 """
 import sys, os, random, pickle, argparse
 from multiprocessing import Pool
