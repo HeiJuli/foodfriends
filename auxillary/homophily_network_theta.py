@@ -24,8 +24,8 @@ Calibration target: Newman numeric theta-assortativity ~0.2-0.25 (empirical Mora
 I 0.17-0.39, Groningen 2025 / Nezlek 2020), subject to keeping degree std near
 the production value and clustering ~0.30 with a single connected component.
 NB: the FROZEN production config (theta_w=1.0, sim_power=4.0, pa_power=1.0, tc_sim=True
-in model_main) actually measures ~0.27 (5-seed avg 0.283; visual-script seed 42 = 0.266),
-i.e. slightly above the 0.2-0.25 target but inside the empirical range. The self-test
+in model_main) measures +0.25 ensemble-mean t0 (30 runs, 0529 pkl; single seeds range
+~0.20-0.30), i.e. at the top of the 0.2-0.25 target and inside the empirical range. The self-test
 below uses theta_w=3.0 (~0.36) as a STRONGER illustration, not the production setting.
 
 See claude_stuff/Infrastructure/homophily_network_audit_2026-05-29.md sections 6-7.

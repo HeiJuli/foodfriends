@@ -141,6 +141,7 @@ def extract_features(row):
         'initial_diet': [init_diets[i] for i in range(N)],
         'final_diet': [final_diets[i] for i in range(N)],
     })
+    df['immune'] = list(snap_final.get('immune', [False] * N))
     if direct_conv is not None:
         df['direct_conversions'] = direct_conv
     df['init_meat'] = (df['initial_diet'] == 'meat').astype(int)
@@ -169,6 +170,17 @@ def analyze_adoption(df):
         r, pval = pointbiserialr(meat['adopted'], meat[p])
         print(f"{p:<16} {r:>8.3f} {pval:>12.2e}  {_sig_stars(pval):>4}")
         results.append({'predictor': p, 'r_pb': r, 'p': pval})
+
+    # Robustness: immune agents are selected on extreme (theta+rho)/2 tails, i.e. on
+    # the DV1 predictors themselves, so report the correlations without them too.
+    if 'immune' in meat.columns and meat['immune'].any():
+        ni = meat[~meat['immune'].astype(bool)]
+        print(f"\n--- Robustness: excluding immune agents (n={len(ni)}) ---")
+        for p in ALL_PREDS:
+            r, pval = pointbiserialr(ni['adopted'], ni[p])
+            print(f"{p:<16} {r:>8.3f} {pval:>12.2e}  {_sig_stars(pval):>4}")
+    else:
+        print("\nWARNING: snapshot lacks immune flags (old pkl), immune robustness skipped")
 
     # Logistic regression: psychology-only vs topology-only vs full
     for label, preds in [('psychology', PSYCH_PREDS), ('topology', TOPO_PREDS), ('full', ALL_PREDS)]:
@@ -326,6 +338,14 @@ def run_ensemble(data, n_runs=None):
     has_contagion = 'direct_conversions' in snap0 or 'influence_parents' in snap0
     if has_contagion:
         dvs['contagion'] = {'results': [], 'stat': 'rho_s'}
+    # Immune agents are selected on the DV1 predictors themselves; report adoption
+    # without them as an ensemble-level robustness check (old pkls lack the flag).
+    has_immune = 'immune' in snap0
+    if has_immune:
+        dvs['adoption_ex_immune'] = {'results': [], 'stat': 'r_pb'}
+    else:
+        print("  WARNING: snapshots lack immune flags (old pkl), "
+              "immune-excluded adoption skipped")
 
     for i in range(n_runs):
         row = data.iloc[i]
@@ -338,6 +358,14 @@ def run_ensemble(data, n_runs=None):
             r, pval = pointbiserialr(meat['adopted'], meat[p])
             adoption_r[p] = {'val': r, 'sig': pval < 0.05}
         dvs['adoption']['results'].append(adoption_r)
+
+        if has_immune:
+            ni = meat[~meat['immune'].astype(bool)]
+            ni_r = {}
+            for p in ALL_PREDS:
+                r, pval = pointbiserialr(ni['adopted'], ni[p])
+                ni_r[p] = {'val': r, 'sig': pval < 0.05}
+            dvs['adoption_ex_immune']['results'].append(ni_r)
 
         # Amplification
         pos = df[df['reduction_kg'] > 0]
@@ -424,6 +452,7 @@ def extract_features_fast(row):
         'initial_diet': [init_diets[i] for i in range(N)],
         'final_diet': [final_diets[i] for i in range(N)],
     })
+    df['immune'] = list(snap_final.get('immune', [False] * N))
     if direct_conv is not None:
         df['direct_conversions'] = direct_conv
     df['init_meat'] = (df['initial_diet'] == 'meat').astype(int)

@@ -9,3 +9,12 @@ model_src/visualisations_output
 old/
 **/.claude/
 submission/
+**nohup.out
+
+# visualisation outputs
+*.pdf
+*.png
+*.svg
+*.eps
+*.jpg
+*.jpeg

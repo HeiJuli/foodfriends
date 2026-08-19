@@ -16,11 +16,12 @@ import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 from scipy.signal import savgol_filter
 import networkx as nx
+from t_end_logistic import estimate_t_end
 import warnings
 warnings.filterwarnings('ignore')
 
-TWIN = '../model_output/trajectory_analysis_twin_20260317.pkl'
-SMAX = '../model_output/trajectory_analysis_sample-max_20260317.pkl'
+TWIN = '../model_output/trajectory_analysis_twin_20260402.pkl'
+SMAX = '../model_output/trajectory_analysis_sample-max_20260413.pkl'
 
 def _apply_diets(G, diets):
     """Return graph copy with node diet attributes updated from diets list."""
@@ -30,22 +31,33 @@ def _apply_diets(G, diets):
     return G2
 DIRECT_REDUCTION_KG = 664  # 2054 - 1390
 
-def _resolve_snapshot(snapshots, t_cutoff=None):
+def _resolve_snapshot(snapshots, t_cutoff=None, traj=None):
     """Return the snapshot key to use as 'final'.
-    Priority: explicit t_cutoff > auto-detected 'steady' > true 'final'."""
+    Priority: explicit t_cutoff > auto-detected 'steady' > logistic 95% > true 'final'."""
+    int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
     if t_cutoff is not None:
-        int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
         return min(int_times, key=lambda t: abs(t - t_cutoff)) if int_times else 'final'
-    return 'steady' if 'steady' in snapshots else 'final'
+    if 'steady' in snapshots:
+        return 'steady'
+    if traj is not None and int_times:
+        t_fit = estimate_t_end(traj, pct=0.95)
+        if t_fit is not None:
+            best = min(int_times, key=lambda t: abs(t - t_fit))
+            print(f"INFO: Logistic t_end={t_fit}, using snapshot t={best}")
+            return best
+    return 'final'
 
 def load(path):
     d = pd.read_pickle(path)
     median = d[d['is_median_twin']].iloc[0] if d['is_median_twin'].any() else d.iloc[0]
     return d, median
 
+def _traj(row):
+    return row.get('fraction_veg_trajectory', row.get('fraction_veg'))
+
 def analysis_1_powerlaw(median_row, label='twin', t_cutoff=None):
     """Fit heavy-tail distribution to emission reductions CCDF."""
-    snap_key = _resolve_snapshot(median_row['snapshots'], t_cutoff)
+    snap_key = _resolve_snapshot(median_row['snapshots'], t_cutoff, _traj(median_row))
     print(f"\n{'='*60}")
     print(f"  1. HEAVY-TAIL CHARACTERIZATION  [{label}, N={len(median_row['snapshots'][snap_key]['reductions'])}, t={snap_key}]")
     print(f"{'='*60}")
@@ -94,7 +106,7 @@ def analysis_2_gini(median_row, all_data, label='twin', t_cutoff=None):
     print(f"{'='*60}")
 
     snapshots = median_row['snapshots']
-    snap_key = _resolve_snapshot(snapshots, t_cutoff)
+    snap_key = _resolve_snapshot(snapshots, t_cutoff, _traj(median_row))
     int_times = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
     if t_cutoff is not None:
         int_times = [t for t in int_times if t <= t_cutoff]
@@ -133,7 +145,7 @@ def analysis_2_gini(median_row, all_data, label='twin', t_cutoff=None):
     # Ensemble Gini (resolved snapshot across all runs)
     ginis = []
     for _, row in all_data.iterrows():
-        sk = _resolve_snapshot(row['snapshots'], t_cutoff)
+        sk = _resolve_snapshot(row['snapshots'], t_cutoff, _traj(row))
         reds = np.array(row['snapshots'][sk]['reductions'])
         pos = reds[reds > 0]
         if len(pos) < 2:
@@ -155,7 +167,7 @@ def analysis_3_network_assortativity(median_row, label='twin', t_cutoff=None):
     print(f"{'='*60}")
 
     snaps = median_row['snapshots']
-    snap_key = _resolve_snapshot(snaps, t_cutoff)
+    snap_key = _resolve_snapshot(snaps, t_cutoff, _traj(median_row))
 
     for t_key, tlabel in [(0, 't0'), (snap_key, 't_end')]:
         snap = snaps[t_key]
@@ -189,7 +201,7 @@ def analysis_3_network_assortativity(median_row, label='twin', t_cutoff=None):
 
 def analysis_4_degree_scaling(median_row, label='twin', t_cutoff=None):
     """Fit amplification ~ k^gamma scaling."""
-    snap_key = _resolve_snapshot(median_row['snapshots'], t_cutoff)
+    snap_key = _resolve_snapshot(median_row['snapshots'], t_cutoff, _traj(median_row))
     print(f"\n{'='*60}")
     print(f"  4. DEGREE-AMPLIFICATION SCALING  [{label}, t={snap_key}]")
     print(f"{'='*60}")

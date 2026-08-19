@@ -66,7 +66,10 @@ def stratified_sample_agents(df, n_target, strata_cols=['gender', 'age_group', '
                                      random_state=random_state if random_state else None)
         sampled_dfs.append(sampled)
 
-    result = pd.concat(sampled_dfs, ignore_index=True)
+    # Shuffle so stratum-block row order does not confound growth-model arrival order
+    # with demographics (see network_generation_review_2026-06-10.md).
+    result = (pd.concat(sampled_dfs, ignore_index=True)
+              .sample(frac=1, random_state=random_state).reset_index(drop=True))
     result = result.drop(columns=['_strata'])
 
     if verbose:
@@ -82,7 +85,7 @@ def stratified_sample_agents(df, n_target, strata_cols=['gender', 'age_group', '
 
     return result
 
-def load_sample_max_agents(filepath):
+def load_sample_max_agents(filepath, shuffle_seed=42):
     """Load 385 demographically representative complete-case agents (has_alpha=True & has_rho=True)"""
     df = pd.read_csv(filepath)
     complete = df[df['has_alpha'] & df['has_rho']].copy()
@@ -109,6 +112,9 @@ def load_sample_max_agents(filepath):
         else:
             sampled.append(group.sample(n=n_target, replace=False, random_state=42))
 
-    result = pd.concat(sampled, ignore_index=True)
+    # Shuffle arrival order (see model_main.load_sample_max_agents; keeps this
+    # duplicate consistent -- no active consumers import it).
+    result = (pd.concat(sampled, ignore_index=True)
+              .sample(frac=1, random_state=shuffle_seed).reset_index(drop=True))
     print(f"Sample-max mode: {len(result)} agents with perfect age stratification")
     return result

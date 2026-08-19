@@ -36,7 +36,7 @@ DEFAULT_PARAMS = {
     "target_veg_fraction": 0.06,   # NL demographics target
     "tau": 0.035,          # external field strength
     "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
-    "theta_gate_k": 35,    # gate steepness
+    "theta_gate_k": 35,    # gate steepness (submission value; verified 2026-08-18)
     "alpha_min": 0.05,     # alpha compression lower bound
     "alpha_max": 0.80,     # alpha compression upper bound
     "mu": 0.5,             # status-quo bias strength (currently inactive in model)
@@ -185,6 +185,7 @@ def run_parameter_analysis(params=None, alpha_range=None,
                     seed = 42 + run
                     np.random.seed(seed)
                     random.seed(seed)
+                    p["seed"] = seed   # per-run network + arrival order
                     print(f"Run {count}/{total}: α={a:.2f}, θ={t:.2f}, veg_f={vf:.2f}")
 
                     model = get_model(p)
@@ -253,6 +254,7 @@ def run_trajectory_analysis(params=None, runs_per_combo=5):
         seed = 42 + i
         np.random.seed(seed)
         random.seed(seed)
+        twn["seed"] = seed   # per-run network + arrival order (was silently falling back to 42)
         model = get_model(twn)
         model.run()
         agent_means = {k: np.mean([getattr(ag, k) for ag in model.agents]) for k in ['alpha', 'theta']}
