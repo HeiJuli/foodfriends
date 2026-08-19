@@ -58,7 +58,7 @@ params = {
     "target_veg_fraction": 0.06,
     "tau": 0.015,
     "theta_gate_c": 0.35,
-    "theta_gate_k": 25,
+    "theta_gate_k": 35,   # submission value (verified by pkl reproduction 2026-08-18)
     "alpha_min": 0.05,
     "alpha_max": 0.80,
     "mu": 0.3,
@@ -76,7 +76,7 @@ def _status_quo_bias(s, s_cur, p_opp, mu):
 
 def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
                 theta_gate_c=0.3, theta_gate_k=10, tau=0.0, mu=0.1, gamma=0.5):
-    """H(s) = (1-w)(s-h_ind)^2 + w(s-h_soc)^2 - tau*s
+    """H(s) = (1-w)(s-h_ind)^2 + w(s-h_soc)^2
 
     h_ind = (1-gate)*rho + gate*theta_01  where gate = sigmoid(k*(p_opp - c))
     h_soc uses diminishing marginal returns per source: n contacts -> n^gamma
@@ -99,7 +99,7 @@ def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
     p_opp = sum(1 for d, _ in mem if d != current_diet) / len(mem)
     gate = 1 / (1 + math.exp(-theta_gate_k * (p_opp - theta_gate_c)))
 
-    s, s_cur = s_num, 1.0 if current_diet == "veg" else 0.0
+    s = s_num
     h_ind = (1 - gate) * rho + gate * (theta + 1.0) / 2.0
     return (1 - w) * (s - h_ind)**2 + w * (s - h_soc)**2
 
@@ -151,7 +151,7 @@ def sample_from_pmf(demo_key, pmf_tables, param, theta=None):
     return np.random.choice(all_vals) if all_vals else 0.5
 
 
-def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
+def load_sample_max_agents(filepath="../data/hierarchical_agents.csv", shuffle_seed=42):
     """Load demographically stratified complete-case agents."""
     df = pd.read_csv(filepath)
     complete = df[df['has_alpha'] & df['has_rho']].copy().sort_values('nomem_encr').reset_index(drop=True)
@@ -164,7 +164,11 @@ def load_sample_max_agents(filepath="../data/hierarchical_agents.csv"):
             sampled.append(group)
         else:
             sampled.append(group.sample(n=n_target, replace=False, random_state=42))
-    result = pd.concat(sampled, ignore_index=True)
+    # Shuffle arrival order: the growth model assigns node IDs in row order and PA
+    # gives early arrivals the hubs; age-block ordering otherwise confounds degree
+    # with age (r=-0.58, see network_generation_review_2026-06-10.md).
+    result = (pd.concat(sampled, ignore_index=True)
+              .sample(frac=1, random_state=shuffle_seed).reset_index(drop=True))
     print(f"Sample-max: {len(result)} agents with perfect age stratification")
     return result
 
@@ -301,11 +305,15 @@ class Agent():
             delta = self.C_base["meat"] - self.C_base["veg"]
 
             if old_diet == "meat" and self.diet == "veg":
-                # meat -> veg: credit the influence chain
-                self.influence_parent = other_agent.i
                 self.change_time = t
-                other_agent.influenced_agents.add(self.i)
-                self._cascade_attribute(delta, other_agent, agents, t)
+                if other_agent.diet == "veg":
+                    # meat -> veg with veg partner: credit the influence chain
+                    self.influence_parent = other_agent.i
+                    other_agent.influenced_agents.add(self.i)
+                    self._cascade_attribute(delta, other_agent, agents, t)
+                # meat partner cannot supply veg exposure -> no influencer booked.
+                # NOT "spontaneous": h_soc and the theta gate are still buffer-
+                # conditioned; only the trigger draw was meat.
 
             elif old_diet == "veg" and self.diet == "meat":
                 # veg -> meat: detach from tree only -- no debits (Holme & Saramäki 2012; Zhou et al. 2014)
@@ -344,7 +352,7 @@ class Model():
         if topo == "complete":
             self.G1 = nx.complete_graph(N)
         elif topo == "BA":
-            self.G1 = nx.erdos_renyi_graph(N, self.params["erdos_p"])
+            self.G1 = nx.barabasi_albert_graph(N, self.params["k"] // 2)
         elif topo == "CSF":
             self.G1 = nx.powerlaw_cluster_graph(N, 6, self.params["tc"])
         elif topo == "WS":
@@ -405,7 +413,9 @@ class Model():
     def _init_survey_agents(self):
         """Initialize agents from survey data (twin/sample-max mode)."""
         if self.params["agent_ini"] == "sample-max":
-            self.survey_data = load_sample_max_agents(self.params["survey_file"])
+            self.survey_data = load_sample_max_agents(
+                self.params["survey_file"],
+                shuffle_seed=self.params.get("seed", 42))
             if self.params["N"] != len(self.survey_data):
                 old_N = self.params["N"]
                 self.params["N"] = len(self.survey_data)
@@ -476,8 +486,8 @@ class Model():
         elif self.params['topology'] == "homophilic_theta":
             # EXPERIMENTAL (post-submission): theta-assortative network.
             # Frozen calibration: theta_w=1.0, sim_power=4.0, tc_sim=True, pa_power=1.0
-            # -> Newman theta-assortativity ~0.27 (measured 2026-06-03, 5 seeds;
-            # the "~0.22" target was an underestimate), degree std/clustering preserved.
+            # -> Newman theta-assortativity +0.25 (30-run ensemble t0 mean, 0529 pkl;
+            # single seeds range ~0.20-0.30), degree std/clustering preserved.
             theta_w = self.params.get("theta_w", 1.0)
             print(f"INFO: Generating theta-homophily network "
                   f"(theta_w={theta_w}, sim_power={self.params.get('sim_power', 4.0)}, "
@@ -526,8 +536,10 @@ class Model():
             return
         target = self.params.get("target_veg_fraction", 0.06)
         current_veg = sum(1 for a in self.agents if a.diet == "veg")
+        # NOTE: runs before immunity is assigned (agent_ini); high-conviction seeds
+        # flipped here may later become immune vegetarians -- intended.
         candidates = sorted(
-            (a for a in self.agents if a.diet == "meat" and not a.immune),
+            (a for a in self.agents if a.diet == "meat"),
             key=lambda a: (a.rho, a.alpha), reverse=True)
         needed = max(0, int(target * len(self.agents)) - current_veg)
         flipped = 0
@@ -572,6 +584,7 @@ class Model():
             'veg_fraction': self.fraction_veg[-1],
             'influence_parents': [a.influence_parent for a in self.agents],
             'direct_conversions': [len(a.influenced_agents) for a in self.agents],
+            'immune': self.get_attributes("immune"),
         }
 
     def cascade_statistics(self):

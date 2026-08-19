@@ -129,6 +129,7 @@ def run_single_model(params):
     np.random.seed(seed)
     import random
     random.seed(seed)
+    params["seed"] = seed   # per-run network + arrival order
     model = get_model(params)
     model.run()
     return {
@@ -154,6 +155,7 @@ def run_single_trajectory_model(params):
     np.random.seed(seed)
     import random
     random.seed(seed)
+    params["seed"] = seed   # per-run network + arrival order
 
     if params["agent_ini"] == "parameterized":
         survey_data = load_survey_data(params["survey_file"],
