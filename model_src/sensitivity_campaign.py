@@ -97,6 +97,12 @@ HEADLINE = ["F_veg_final", "F_c", "amp_mean", "amp_max"]
 BASE_PARAMS = dict(model_main.params)
 BASE_PARAMS.update({
     "agent_ini": "sample-max",
+    "N": 385,   # MUST be explicit: Model.__init__ fixes tau_persistence = M*2*N before
+                # the sample-max loader overrides N, so leaving model_main.params' stale
+                # 650 here gives tau=11700 instead of 6930 and depresses every
+                # amplification observable by ~24%. Dynamics are unaffected.
+                # (2026-08-19 campaign ran with the stale value -- see
+                #  claude_stuff/Review/regeneration_results_2026-08-20.md section 6.)
     "survey_file": "../data/hierarchical_agents.csv",
     "topology": "homophilic_emp",
     "snapshot_dense_start": 0,   # observables computed in-worker; dense snaps unused
