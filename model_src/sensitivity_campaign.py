@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
-One-at-a-time (OAT) sensitivity campaign for the sample-max ensemble.
+One-at-a-time (OAT) sensitivity campaign for the twin ensemble (N=2000).
+
+Swept around the configuration the reported results come from. Every headline
+number in the manuscript is twin N=2000, so the sensitivity analysis has to
+sweep that configuration. This is not a relabelled sample-max campaign: N=385
+is not a choice of N but the complete-case count that sample-max mode forces
+(model_main.py:415-422), and tau_persistence = M*2*N makes the M sweep span
+tau 12,000-60,000 at N=2000 against 2,310-11,550 at N=385 -- a different
+response, not a rescale of the same one.
 
 Answers three reviewer comments in one pass:
   R1.3  -- which inputs is the model most sensitive to?
@@ -29,25 +37,29 @@ moves the dwell-time window with the memory length. That is the model's definiti
 of M, not a confound introduced here, but it must be stated wherever the M sweep is
 reported.
 
-Outputs (per date):
-  model_output/sensitivity_campaign_<date>.pkl        raw per-run rows
-  model_output/sensitivity_summary_<date>.csv         per sweep point, mean/std
-  visualisations_output/sensitivity_tornado_<date>.pdf
-  visualisations_output/sensitivity_heatmap_<date>.pdf
-  visualisations_output/sensitivity_response_curves_<date>.pdf
-  visualisations_output/sensitivity_lambda_<date>.pdf
-  visualisations_output/sensitivity_table_<date>.tex  SI table
-  visualisations_output/sensitivity_interaction_<date>.pdf   (--interaction only)
+Outputs are tagged <date>_N<N>, because a campaign is only interpretable against
+the configuration it swept and sample-max (385) and twin (2000) runs are not
+comparable on any amplification observable:
+  model_output/sensitivity_campaign_<tag>.pkl        raw per-run rows
+  model_output/sensitivity_summary_<tag>.csv         per sweep point, mean/std
+  visualisations_output/sensitivity_tornado_<tag>.pdf
+  visualisations_output/sensitivity_heatmap_<tag>.pdf
+  visualisations_output/sensitivity_response_curves_<tag>.pdf
+  visualisations_output/sensitivity_lambda_<tag>.pdf
+  visualisations_output/sensitivity_table_<tag>.tex  SI table
+  visualisations_output/sensitivity_interaction_<tag>.pdf   (--interaction only)
 
 RUN THIS ON THE COMPUTE SERVER, not the laptop. The full campaign is 870 model
-runs (1370 with --interaction) at roughly 5 s each.
+runs (1370 with --interaction). Measured on this laptop at N=2000: ~14 s fixed
+setup (network build + agent init) plus 0.62 ms/step, so ~106 s per 150k-step run
+-- about 26 core-hours for the OAT campaign, 40 with --interaction.
 
     python sensitivity_campaign.py --runs 30 --interaction --cores <n>
 
 Figures and the SI table can then be rebuilt locally from the returned pickles
 without rerunning anything:
 
-    python sensitivity_campaign.py --plot-only <date>
+    python sensitivity_campaign.py --plot-only <tag>
 
 See claude_stuff/Review/revision_triage.md, Wave 4 item 1.
 """
@@ -63,6 +75,7 @@ sys.path.append('.')
 sys.path.append('..')
 sys.path.append('../plotting')
 import model_main
+import model_runner_mp
 from plot_styles import (set_publication_style, apply_axis_style, COLORS,
                          ECO_CMAP, ECO_DIV_CMAP)
 
@@ -94,19 +107,41 @@ OLABEL = {"F_veg_final": r"$F_{veg}$ (final)", "F_c": r"$F_c$ (max accel.)",
           "amp_p90": "p90 amplification", "amp_max": "max amplification"}
 HEADLINE = ["F_veg_final", "F_c", "amp_mean", "amp_max"]
 
-BASE_PARAMS = dict(model_main.params)
+# Inherit from the runner that produced the reported ensemble, NOT from
+# model_main.params -- the latter is for ad-hoc single runs and differs. Starting
+# from the wrong runner is what put the 2026-08-19 campaign on tau = 11,700
+# (claude_stuff/Review/regeneration_results_2026-08-20.md section 6).
+BASE_PARAMS = dict(model_runner_mp.DEFAULT_PARAMS)
 BASE_PARAMS.update({
-    "agent_ini": "sample-max",
-    "N": 385,   # MUST be explicit: Model.__init__ fixes tau_persistence = M*2*N before
-                # the sample-max loader overrides N, so leaving model_main.params' stale
-                # 650 here gives tau=11700 instead of 6930 and depresses every
-                # amplification observable by ~24%. Dynamics are unaffected.
-                # (2026-08-19 campaign ran with the stale value -- see
-                #  claude_stuff/Review/regeneration_results_2026-08-20.md section 6.)
+    "agent_ini": "twin",         # the reported ensemble; sample-max would force N to 385
+    "N": 2000,
     "survey_file": "../data/hierarchical_agents.csv",
     "topology": "homophilic_emp",
+    "decay": 0.7,                # absent from both runners' DEFAULT_PARAMS; the reported
+                                 # ensemble got it from model_main's .get("decay", 0.7)
+                                 # fallback (model_main.py:278). Pinned here so the
+                                 # lambda sweep's baseline arm is explicit.
     "snapshot_dense_start": 0,   # observables computed in-worker; dense snaps unused
 })
+
+# Population the loaded results were swept at. Set from the tag in main() so that
+# --plot-only on an older pkl labels its figures with the N it actually ran at.
+CFG_N = BASE_PARAMS["N"]
+
+_PMF = None
+
+
+def pmf_tables():
+    """Twin mode imputes alpha/rho from the demographic PMFs. Loaded lazily so
+    --plot-only does no I/O; fork gives each worker its own copy on first job."""
+    global _PMF
+    if _PMF is None:
+        _PMF = model_runner_mp.load_pmf_tables()
+        if _PMF is None:
+            raise SystemExit("ERROR: ../data/demographic_pmfs.pkl missing. Twin mode "
+                             "would silently fall back to synthetic alpha/rho for the "
+                             "whole campaign. Run auxillary/create_pmf_tables.py first.")
+    return _PMF
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +195,7 @@ def _run_one(job):
     if param != "baseline":
         p[param] = value
     with contextlib.redirect_stdout(io.StringIO()):
-        m = model_main.Model(p, pmf_tables=None)
+        m = model_main.Model(p, pmf_tables=pmf_tables())
         m.run()
     return {"param": param, "value": value, "seed": seed, **_observables(m)}
 
@@ -258,7 +293,7 @@ def fig_tornado(sens, out, observables=HEADLINE):
                     label='submitted configuration')]
     fig.legend(handles=h, frameon=False, fontsize=8, ncol=3,
                loc='lower center', bbox_to_anchor=(0.5, -0.015))
-    fig.suptitle("One-at-a-time parameter sensitivity (sample-max, $N=385$)", fontsize=11)
+    fig.suptitle(f"One-at-a-time parameter sensitivity ($N={CFG_N}$)", fontsize=11)
     fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"INFO: Saved -> {out}")
@@ -400,13 +435,13 @@ def _run_cell(job):
     p = BASE_PARAMS.copy()
     p.update({"seed": seed, "steps": steps, "tau_persistence": None, pa: va, pb: vb})
     with contextlib.redirect_stdout(io.StringIO()):
-        m = model_main.Model(p, pmf_tables=None)
+        m = model_main.Model(p, pmf_tables=pmf_tables())
         m.run()
     o = _observables(m); o.pop("mult")
     return {pa: va, pb: vb, "seed": seed, **o}
 
 
-def run_interaction(runs, steps, cores, today):
+def run_interaction(runs, steps, cores, tag):
     (pa, va), (pb, vb) = list(GRID.items())
     jobs = [((pa, a), (pb, b), 42 + i, steps)
             for a in va for b in vb for i in range(runs)]
@@ -414,7 +449,7 @@ def run_interaction(runs, steps, cores, today):
           f"{len(jobs)} runs on {cores} cores")
     with Pool(cores) as pool:
         df = pd.DataFrame(pool.map(_run_cell, jobs))
-    df.to_pickle(f"../model_output/sensitivity_interaction_{today}.pkl")
+    df.to_pickle(f"../model_output/sensitivity_interaction_{tag}.pkl")
     return df
 
 
@@ -463,8 +498,8 @@ def write_table(summary, sens, out):
     n = int(summary.n_runs.max())
     L = [r"% generated by model_src/sensitivity_campaign.py -- do not edit by hand",
          r"\begin{table}[htbp]", r"\centering", r"\small",
-         r"\caption{One-at-a-time parameter sensitivity for the sample-max "
-         rf"ensemble ($N=385$, {n} runs per sweep point, seeds paired across "
+         rf"\caption{{One-at-a-time parameter sensitivity for the $N={CFG_N}$ "
+         rf"ensemble ({n} runs per sweep point, seeds paired across "
          r"points). Entries give the mean over runs with the standard deviation "
          r"in parentheses; bold rows are the submitted configuration. $S$ is the "
          r"signed relative range: the span of each observable across the sweep, "
@@ -538,11 +573,12 @@ def print_report(summary, sens):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=30, help='runs per sweep point')
-    ap.add_argument('--steps', type=int, default=30000)
+    ap.add_argument('--steps', type=int, default=150000)
     ap.add_argument('--cores', type=int, default=max(1, int(0.75 * os.cpu_count())))
-    ap.add_argument('--quick', action='store_true', help='4 runs x 30000 steps smoke test')
-    ap.add_argument('--plot-only', metavar='DATE',
-                    help='regenerate figures/table from an existing campaign pkl')
+    ap.add_argument('--quick', action='store_true', help='4 runs per sweep point, smoke test')
+    ap.add_argument('--plot-only', metavar='TAG',
+                    help='regenerate figures/table from an existing campaign pkl; '
+                         'TAG is <date>_N<N>, e.g. 20260820_N2000')
     ap.add_argument('--interaction', action='store_true',
                     help='also run the M x theta_gate_k 2D grid')
     ap.add_argument('--interaction-runs', type=int, default=20)
@@ -553,8 +589,14 @@ def main():
     os.makedirs("../visualisations_output", exist_ok=True)
     os.makedirs("../model_output", exist_ok=True)
     set_publication_style()
-    today = args.plot_only or date.today().strftime('%Y%m%d')
-    pkl = f"../model_output/sensitivity_campaign_{today}.pkl"
+    # N goes in the filename: a campaign is only interpretable against the
+    # configuration it swept, and sample-max (385) and twin (2000) runs are not
+    # comparable on any amplification observable.
+    tag = args.plot_only or f"{date.today().strftime('%Y%m%d')}_N{BASE_PARAMS['N']}"
+    global CFG_N
+    if "_N" in tag:
+        CFG_N = int(tag.split("_N")[1].split("_")[0])
+    pkl = f"../model_output/sensitivity_campaign_{tag}.pkl"
 
     if args.plot_only:
         df = pd.read_pickle(pkl)
@@ -569,22 +611,22 @@ def main():
         print(f"INFO: Saved -> {pkl}")
 
     summary = summarise(df)
-    summary.to_csv(f"../model_output/sensitivity_summary_{today}.csv", index=False)
+    summary.to_csv(f"../model_output/sensitivity_summary_{tag}.csv", index=False)
     sens = sensitivity_index(summary)
 
     print_report(summary, sens)
     V = "../visualisations_output"
-    fig_tornado(sens, f"{V}/sensitivity_tornado_{today}.pdf")
-    fig_heatmap(sens, f"{V}/sensitivity_heatmap_{today}.pdf")
-    fig_response_curves(summary, f"{V}/sensitivity_response_curves_{today}.pdf")
-    fig_lambda(df, summary, f"{V}/sensitivity_lambda_{today}.pdf")
-    write_table(summary, sens, f"{V}/sensitivity_table_{today}.tex")
+    fig_tornado(sens, f"{V}/sensitivity_tornado_{tag}.pdf")
+    fig_heatmap(sens, f"{V}/sensitivity_heatmap_{tag}.pdf")
+    fig_response_curves(summary, f"{V}/sensitivity_response_curves_{tag}.pdf")
+    fig_lambda(df, summary, f"{V}/sensitivity_lambda_{tag}.pdf")
+    write_table(summary, sens, f"{V}/sensitivity_table_{tag}.tex")
 
-    ipkl = f"../model_output/sensitivity_interaction_{today}.pkl"
+    ipkl = f"../model_output/sensitivity_interaction_{tag}.pkl"
     if args.interaction or (args.plot_only and os.path.exists(ipkl)):
         gdf = pd.read_pickle(ipkl) if args.plot_only and os.path.exists(ipkl) \
-            else run_interaction(args.interaction_runs, args.steps, args.cores, today)
-        fig_interaction(gdf, f"{V}/sensitivity_interaction_{today}.pdf")
+            else run_interaction(args.interaction_runs, args.steps, args.cores, tag)
+        fig_interaction(gdf, f"{V}/sensitivity_interaction_{tag}.pdf")
     print("\nINFO: done.")
 
 
