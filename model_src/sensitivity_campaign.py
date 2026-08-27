@@ -293,7 +293,6 @@ def fig_tornado(sens, out, observables=HEADLINE):
                     label='submitted configuration')]
     fig.legend(handles=h, frameon=False, fontsize=8, ncol=3,
                loc='lower center', bbox_to_anchor=(0.5, -0.015))
-    fig.suptitle(f"One-at-a-time parameter sensitivity ($N={CFG_N}$)", fontsize=11)
     fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"INFO: Saved -> {out}")
@@ -321,9 +320,6 @@ def fig_heatmap(sens, out):
     cb = fig.colorbar(im, ax=ax, fraction=0.035, pad=0.02)
     cb.set_label("signed relative range  $S$", fontsize=8)
     cb.ax.tick_params(labelsize=7)
-    ax.set_title("Sensitivity index: sweep range as a fraction of the submitted value\n"
-                 "(sign = direction of response; rows ordered by maximum $|S|$)",
-                 fontsize=9.5)
     fig.tight_layout(); fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"INFO: Saved -> {out}")
 
@@ -352,46 +348,23 @@ def fig_response_curves(summary, out, observables=HEADLINE):
                 ax.set_xlabel("value", fontsize=8)
             if j == 0:
                 ax.set_ylabel(OLABEL[ob], fontsize=8)
-    fig.suptitle("OAT response curves (mean $\\pm$ 1 sd over runs; dashed = submitted value)",
-                 fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.97))
+    fig.tight_layout()
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"INFO: Saved -> {out}")
 
 
 def fig_lambda(df, summary, out):
-    """R4.21: the attenuation sweep, with the tail separated from the mean --
-    the claim under test is that the representative multiplier is robust while
-    the ceiling is lambda-dependent."""
+    """R4.21: the attenuation sweep in one panel. The pooled distribution carries
+    the argument -- the body sits on top of itself while the tail slides -- so the
+    summary statistics go in an inset rather than a second panel of equal weight."""
     d = summary[summary.param == "decay"].sort_values("value")
-    x = d.value.values
-    fig, axes = plt.subplots(1, 2, figsize=(9.4, 4.0))
-
-    ax = axes[0]
-    for ob, c, lbl in [("amp_mean", COLORS['primary'], "mean"),
-                       ("amp_p90", COLORS['vegetation'], "90th pct."),
-                       ("amp_max", COLORS['meat'], "maximum")]:
-        y, sd = d[f"{ob}_mean"].values, d[f"{ob}_std"].values
-        ax.fill_between(x, y - sd, y + sd, color=c, alpha=0.16)
-        ax.plot(x, y, 'o-', color=c, ms=5, lw=1.9)
-        ax.annotate(lbl, (x[-1], y[-1]), textcoords="offset points",
-                    xytext=(6, 0), va='center', fontsize=8, color=c)
-    ax.axvline(BASELINE["decay"], color=COLORS['highlight'], ls='--', lw=1.3, zorder=3)
-    ax.set_yscale('log')
-    ax.yaxis.set_major_formatter(plt.matplotlib.ticker.ScalarFormatter())
-    ax.yaxis.set_minor_formatter(plt.matplotlib.ticker.ScalarFormatter())
-    ax.tick_params(axis='y', which='minor', labelsize=6)
-    ax.set_xlim(x[0] - 0.02, x[-1] + 0.12)
-    ax.set_xlabel(r"attenuation factor $\lambda$")
-    ax.set_ylabel("amplification multiplier over credited agents")
-    apply_axis_style(ax)
-    ax.set_title("Amplification vs. attenuation", fontsize=10)
-
-    # right: pooled CCDF -- shows the body of the distribution barely moving
-    # while the tail slides, which is the substance of the R4.21 answer
-    ax = axes[1]
-    cmap = plt.get_cmap('viridis')
     lo, hi = min(SWEEPS["decay"]), max(SWEEPS["decay"])
+    cmap = plt.get_cmap('viridis')
+    col = lambda v: cmap(0.12 + 0.76 * (v - lo) / (hi - lo))
+
+    fig, ax = plt.subplots(figsize=(5.4, 4.2))
+
+    # main: pooled CCDF, one curve per lambda
     for v in SWEEPS["decay"]:
         pool = np.sort(np.concatenate(
             df[(df.param == "decay") & (df.value == v)]["mult"].values))
@@ -399,18 +372,37 @@ def fig_lambda(df, summary, out):
             continue
         ccdf = 1.0 - np.arange(1, len(pool) + 1) / len(pool)
         base = v == BASELINE["decay"]
-        ax.plot(pool, ccdf, color=cmap(0.12 + 0.76 * (v - lo) / (hi - lo)),
-                lw=2.6 if base else 1.6, ls='-' if base else '--',
+        ax.plot(pool, ccdf, color=col(v), lw=2.4 if base else 1.4,
+                ls='-' if base else '--', zorder=3 if base else 2,
                 label=rf"$\lambda={v:g}$" + (" (submitted)" if base else ""))
-    ax.axvline(1.0, color='#555', ls=':', lw=1.0)
+    ax.axvline(1.0, color='#555', ls=':', lw=1.0, zorder=1)
     ax.set_xscale('log'); ax.set_yscale('log'); ax.set_xlim(left=0.05)
-    ax.set_xlabel("amplification multiplier"); ax.set_ylabel(r"CCDF  $P(X>x)$")
-    ax.legend(frameon=False, fontsize=7.5)
+    ax.set_xlabel("amplification multiplier")
+    ax.set_ylabel(r"CCDF  $P(X>x)$")
+    ax.legend(frameon=False, fontsize=7, loc='lower left', handlelength=1.8,
+              borderpad=0.2, labelspacing=0.35)
     apply_axis_style(ax)
-    ax.set_title("Pooled distribution over all runs", fontsize=10)
 
-    fig.suptitle(r"Sensitivity to the attenuation factor $\lambda$ (R4.21)", fontsize=11)
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    # inset: summary statistics against lambda
+    ins = ax.inset_axes((0.60, 0.62, 0.38, 0.35))
+    x = d.value.values
+    for ob, c, lbl in [("amp_max", COLORS['meat'], "max"),
+                       ("amp_p90", COLORS['vegetation'], "p90"),
+                       ("amp_mean", COLORS['primary'], "mean")]:
+        y, sd = d[f"{ob}_mean"].values, d[f"{ob}_std"].values
+        ins.fill_between(x, y - sd, y + sd, color=c, alpha=0.16)
+        ins.plot(x, y, 'o-', color=c, ms=3, lw=1.3)
+        ins.annotate(lbl, (x[-1], y[-1]), textcoords="offset points",
+                     xytext=(4, 0), va='center', fontsize=6.5, color=c)
+    ins.axvline(BASELINE["decay"], color=COLORS['highlight'], ls='--', lw=1.0)
+    ins.set_yscale('log')
+    ins.set_xlim(x[0] - 0.02, x[-1] + 0.10)
+    ins.set_xticks(x)
+    ins.set_xlabel(r"$\lambda$", fontsize=7, labelpad=1)
+    ins.tick_params(labelsize=6, pad=1.5)
+    apply_axis_style(ins)
+
+    fig.tight_layout()
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"INFO: Saved -> {out}")
 
@@ -478,10 +470,7 @@ def fig_interaction(df, out):
         cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
         cb.ax.tick_params(labelsize=6)
         ax.set_title(lbl, fontsize=9)
-    fig.suptitle("Memory length against gate steepness: the two parameters that set "
-                 "whether a sharp threshold can form\n"
-                 "(gold square = submitted configuration)", fontsize=10)
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    fig.tight_layout()
     fig.savefig(out, dpi=200, bbox_inches="tight")
     print(f"INFO: Saved -> {out}")
 
