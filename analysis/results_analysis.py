@@ -20,8 +20,8 @@ from t_end_logistic import estimate_t_end
 import warnings
 warnings.filterwarnings('ignore')
 
-TWIN = '../model_output/trajectory_analysis_twin_20260402.pkl'
-SMAX = '../model_output/trajectory_analysis_sample-max_20260413.pkl'
+TWIN = '../model_output/trajectory_analysis_twin_20260820.pkl'
+SMAX = '../model_output/trajectory_analysis_sample-max_20260820.pkl'
 
 def _apply_diets(G, diets):
     """Return graph copy with node diet attributes updated from diets list."""
@@ -251,6 +251,57 @@ def analysis_4_degree_scaling(median_row, label='twin', t_cutoff=None):
     return gamma, r2
 
 
+DERIV_STRIDE = 10   # F_veg moves by 1/N per step; every 10th sample loses nothing
+                    # and cuts the Savitzky-Golay cost by ~100x
+
+
+def _smooth_derivs(traj, win, burnin, stride=DERIV_STRIDE, poly=3):
+    """Decimated Savitzky-Golay: returns (t_index, smoothed, dF/dt, d2F/dt2) in per-step units.
+
+    The burn-in mask is widened to the window length: a kernel of width w still
+    straddles the initial equilibration jump for its first w/2 steps, and at
+    w = 15001 that artefact otherwise wins the argmax outright.
+    """
+    y = np.asarray(traj, dtype=float)[::stride]
+    w = max(5, int(win // stride) | 1)
+    if len(y) < w * 2:
+        return None
+    idx = np.arange(len(y)) * stride
+    sm = savgol_filter(y, w, poly)
+    d1 = savgol_filter(y, w, poly, deriv=1, delta=stride)
+    d2 = savgol_filter(y, w, poly, deriv=2, delta=stride)
+    mask = idx < max(burnin, win)
+    d1[mask] = 0
+    d2[mask] = 0
+    return idx, sm, d1, d2
+
+
+def _filter_sensitivity(all_data, burnin, windows=(2001, 5001, 10001, 15001)):
+    """A2: how much of F_c is the Savitzky-Golay window (reviewer R4.3(2), R1.4)."""
+    print(f"\n  Filter sensitivity of F_c (max d2F/dt2 below F=0.5):")
+    meds = []
+    for win in windows:
+        vals = []
+        for _, row in all_data.iterrows():
+            r = _smooth_derivs(row['fraction_veg_trajectory'], win, burnin)
+            if r is None:
+                continue
+            _, sm, _, d2 = r
+            d2 = d2.copy(); d2[sm > 0.5] = 0
+            j = np.argmax(d2)
+            if d2[j] > 0:
+                vals.append(sm[j])
+        if not vals:
+            continue
+        v = np.array(vals); meds.append(np.median(v))
+        print(f"    win={win:>6}: median = {np.median(v):.3f}  "
+              f"IQR = [{np.percentile(v,25):.3f}, {np.percentile(v,75):.3f}]  "
+              f"range = [{v.min():.3f}, {v.max():.3f}]  (n={len(v)})")
+    if meds:
+        print(f"    -> median F_c moves {min(meds):.3f}-{max(meds):.3f} across windows "
+              f"(spread {max(meds)-min(meds):.3f})")
+
+
 def analysis_5_inflection(all_data, label='twin'):
     """Find inflection point (max dF/dt) across ensemble."""
     print(f"\n{'='*60}")
@@ -261,22 +312,19 @@ def analysis_5_inflection(all_data, label='twin'):
     veloc_fveg, veloc_times = [], []  # max dF/dt (inflection proper)
     win = 10001
     burnin = 5000
+    n_boundary = 0   # runs whose masked argmax sits against the F<0.5 search cap (A2)
 
     for _, row in all_data.iterrows():
-        traj = np.array(row['fraction_veg_trajectory'], dtype=float)
-        if len(traj) < burnin + win * 2:
+        traj = np.asarray(row['fraction_veg_trajectory'], dtype=float)
+        r = _smooth_derivs(traj, win, burnin)
+        if r is None:
             continue
-
-        smoothed = savgol_filter(traj, window_length=win, polyorder=3)
-        d1 = savgol_filter(traj, window_length=win, polyorder=3, deriv=1)
-        d2 = savgol_filter(traj, window_length=win, polyorder=3, deriv=2)
-        d1[:burnin] = 0
-        d2[:burnin] = 0
+        tix, smoothed, d1, d2 = r
 
         # Max velocity (inflection point)
         idx1 = np.argmax(d1)
         veloc_fveg.append(smoothed[idx1])
-        veloc_times.append(idx1)
+        veloc_times.append(tix[idx1])
 
         # Max acceleration below F=0.5 (onset of rapid spread)
         d2_masked = d2.copy()
@@ -284,7 +332,10 @@ def analysis_5_inflection(all_data, label='twin'):
         idx2 = np.argmax(d2_masked)
         if d2_masked[idx2] > 0:
             accel_fveg.append(smoothed[idx2])
-            accel_times.append(idx2)
+            accel_times.append(tix[idx2])
+            below = np.where(smoothed <= 0.5)[0]
+            if len(below) and (tix[below.max()] - tix[idx2]) < 0.01 * len(traj):
+                n_boundary += 1
 
     for name, fv_list, tv_list in [
         ('Max acceleration (d2F/dt2, F<0.5)', accel_fveg, accel_times),
@@ -297,6 +348,11 @@ def analysis_5_inflection(all_data, label='twin'):
         print(f"    F_veg:  median = {np.median(fv):.3f}  ({np.median(fv)*100:.1f}%)")
         print(f"            IQR = [{np.percentile(fv,25):.3f}, {np.percentile(fv,75):.3f}]")
         print(f"    Time:   median = {np.median(tv):.1f}k steps")
+        print(f"            full range = [{fv.min():.3f}, {fv.max():.3f}]")
+
+    print(f"\n  Runs with max d2F/dt2 against the F<0.5 search cap: "
+          f"{n_boundary}/{len(all_data)}  (censoring check, A2)")
+    _filter_sensitivity(all_data, burnin)
 
     # Also report "tipping thresholds" at 25% and 50%
     for threshold in [0.25, 0.50]:

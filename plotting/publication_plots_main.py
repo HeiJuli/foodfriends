@@ -314,14 +314,12 @@ def plot_network_agency_evolution(data=None, file_path=None,
     traj_arr = np.array(big_traj)
     _burnin = 5000
     if len(traj_arr) > _burnin + _sw * 2:
-        COL_TIP = '#9b59b6'
         _d2 = savgol_filter(traj_arr, window_length=_sw, polyorder=3, deriv=2)
         _sm = savgol_filter(traj_arr, window_length=_sw, polyorder=3)
         _d2[:_burnin] = 0
         _d2[_sm > 0.5] = 0
         _t_tip = int(np.argmax(_d2))
         _t_tip_k = _t_tip / 1000
-        traj_ax.axvline(_t_tip_k, color=COL_TIP, linestyle=':', linewidth=0.9, alpha=0.8)
         print(f"INFO: Tipping point at t={_t_tip} ({_t_tip_k:.1f}k), F_veg={traj_arr[_t_tip]:.3f}")
 
     traj_ax.set_ylim(0, 1.0)
@@ -807,11 +805,10 @@ def plot_network_agency_evolution_ensemble(
         traj_ax.text(t_k_pt, 1.02, label, transform=traj_ax.get_xaxis_transform(),
                     fontsize=5, ha='center', va='bottom', color='#555')
 
-    # F_c: single median-run value (anchored to visible trajectory) +
-    #       ensemble median in parentheses for cross-run context
+    # F_c: reported to stdout only (max-acceleration estimator, not drawn --
+    #      the paper no longer presents it as a threshold)
     _sw = savgol_window
     if min_len > 5000 + _sw * 2:
-        COL_TIP = '#9b59b6'
         # Single median run
         _d2 = savgol_filter(big_traj_arr, window_length=_sw, polyorder=3, deriv=2)
         _sm = savgol_filter(big_traj_arr, window_length=_sw, polyorder=3)
@@ -833,12 +830,6 @@ def plot_network_agency_evolution_ensemble(
         _fc_ens = float(np.median(_fc_list)) if _fc_list else None
         if _fc_run is not None:
             _t_tip_k = _t_tip / 1000
-            _label = f'$F_c$ = {_fc_run:.2f}'
-            if _fc_ens is not None:
-                _label += f' ({_fc_ens:.2f})'
-            traj_ax.axhline(_fc_run, color=COL_TIP, linestyle=':', linewidth=0.9, alpha=0.8)
-            traj_ax.text(0.02, _fc_run + 0.02, _label, fontsize=5.5, color=COL_TIP,
-                        ha='left', va='bottom', transform=traj_ax.get_yaxis_transform())
             print(f"INFO: F_c = {_fc_run:.3f} (this run), {_fc_ens:.3f} (ens. median, n={len(_fc_list)}) "
                   f"at t={_t_tip} ({_t_tip_k:.1f}k)")
 

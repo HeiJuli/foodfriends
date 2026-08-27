@@ -186,6 +186,7 @@ class Agent():
         self.memory = []  # list of (diet, source_id) tuples
         self.survey_id = kwargs.get('survey_id', i)
         self.reduction_out = 0  # cumulative cascade credit (monotonically non-decreasing; Zhou et al. 2014)
+        self.reduction_out_unw = 0  # same ledger with dwell weight w==1 (diagnostic only, A4a)
         self.diet_duration = 0
         self.diet_history = []
         self.last_change_time = 0
@@ -285,6 +286,7 @@ class Agent():
         dur = (t - influencer.change_time) if influencer.change_time is not None else t
         w = 1.0 - np.exp(-dur / tau_p)
         influencer.reduction_out += delta * w * (decay ** (cascade_depth - 1))
+        influencer.reduction_out_unw += delta * (decay ** (cascade_depth - 1))
         if influencer.influence_parent is not None:
             self._cascade_attribute(delta, agents_list[influencer.influence_parent],
                                     agents_list, t, cascade_depth + 1, decay, visited)
@@ -577,6 +579,7 @@ class Model():
         self.snapshots[t] = {
             'diets': self.get_attributes("diet"),
             'reductions': self.get_attributes("reduction_out"),
+            'reductions_unw': self.get_attributes("reduction_out_unw"),
             'change_times': self.get_attributes("change_time"),
             'alphas': self.get_attributes("alpha"),
             'rhos': self.get_attributes("rho"),
