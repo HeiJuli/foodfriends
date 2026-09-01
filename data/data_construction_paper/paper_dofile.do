@@ -172,14 +172,23 @@ save "alpha.dta", replace
 // consumption in the near future.
 //
 // Variable su19a047: behavioral intention to eat less meat, measured on a
-//   1–4 ordinal scale (1 = no intention, 4 = strong intention).
-//   Value 88 = "not applicable" (respondent is already vegetarian/vegan);
-//   recoded to 1 (no intention to change, already at target behavior).
+//   1–4 ordinal scale. VALUE LABELS IN THE .dta FILE: 1 = "Yes, definitely",
+//   2 = "Yes, maybe", 3 = "No, probably not", 4 = "No, definitely not".
+//   Value 88 = "Not applicable, I don't eat meat" (already vegetarian/vegan);
+//   recoded to 1 ("Yes, definitely": already at the target behaviour, so the
+//   individual field pulls maximally toward the vegetarian state).
+//
+// CORRECTION 2026-09-02: an earlier version of this file read the scale as
+//   1 = no intention, 4 = strong intention, which is the reverse of the stored
+//   value labels, and computed rho = (item - 1)/3. That put rho = 1 on the
+//   "No, definitely not" respondents and rho = 0 on every vegetarian, the
+//   opposite of the meaning used by the model and the manuscript. The formula
+//   below is now rho = (4 - item)/3, i.e. exactly 1 - rho_old for every row.
 //
 // Variable su19a046: self-reported diet at time of survey (used as an
 //   additional diet indicator; retained for cross-validation with oi18a016).
 //
-// Rho is rescaled to [0, 1]: rho = (item - 1) / (4 - 1).
+// Rho is rescaled to [0, 1]: rho = (4 - item) / (4 - 1), so 1 = "Yes, definitely".
 // =============================================================================
 
 use "su19a_EN_1.0p.dta", clear
@@ -188,11 +197,11 @@ keep nomem_encr su19a047 su19a046
 rename su19a047 index_rho
 rename su19a046 diet_veggie
 
-// Recode "not applicable" (already vegetarian/vegan) as minimum intention score
+// Recode "not applicable" (already vegetarian/vegan) as "Yes, definitely" (item 1)
 replace index_rho = 1 if index_rho == 88
 
-// Rescale to [0, 1]
-gen rho = (index_rho - 1) / (4 - 1)
+// Rescale to [0, 1] with 1 = "Yes, definitely" (item 1), 0 = "No, definitely not" (item 4)
+gen rho = (4 - index_rho) / (4 - 1)
 
 label variable rho "Behavioral intention (rho), rescaled to [0,1]"
 

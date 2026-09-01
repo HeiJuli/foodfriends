@@ -38,7 +38,6 @@ from auxillary import network_stats
 params = {
     "veg_CO2": 1390, "meat_CO2": 2054,
     "N": 650,
-    "erdos_p": 3,
     "steps": 35000,
     "k": 8,
     "immune_n": 0.10,
@@ -56,12 +55,10 @@ params = {
     "survey_file": "../data/hierarchical_agents.csv",
     "adjust_veg_fraction": True,
     "target_veg_fraction": 0.06,
-    "tau": 0.015,
     "theta_gate_c": 0.35,
     "theta_gate_k": 35,   # submission value (verified by pkl reproduction 2026-08-18)
     "alpha_min": 0.05,
     "alpha_max": 0.80,
-    "mu": 0.3,
     "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
     "tau_persistence": None,  # computed as M*2*N (memory renewal window); Takaguchi et al. 2012 / Newman 2002 infectious period
     "decay": 0.7,  # geometric decay per cascade depth for emission credit attribution
@@ -70,12 +67,8 @@ params = {
 
 # %% Helpers
 
-def _status_quo_bias(s, s_cur, p_opp, mu):
-    """Inertia term (Samuelson & Zeckhauser 1988): erodes with opposite-diet exposure.
-    Ignore this for now"""
-
 def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
-                theta_gate_c=0.3, theta_gate_k=10, tau=0.0, mu=0.1, gamma=0.5):
+                theta_gate_c=0.3, theta_gate_k=10, gamma=0.5):
     """H(s) = (1-w)(s-h_ind)^2 + w(s-h_soc)^2
 
     h_ind = (1-gate)*rho + gate*theta_01  where gate = sigmoid(k*(p_opp - c))
@@ -219,7 +212,7 @@ class Agent():
                     self.rho = sample_from_pmf(self.demographics, self.pmf_tables, 'rho', theta=self.theta)
                 self.beta = 1 - self.alpha
             else:
-                self.rho = st.truncnorm.rvs(-1, 1, loc=0.48, scale=0.31)
+                self.rho = st.truncnorm.rvs(-1, 1, loc=0.52, scale=0.31)  # survey mean after the 2026-09-02 sign correction
                 self.alpha = st.truncweibull_min.rvs(248.69, 0, 1, loc=-47.38, scale=48.2)
                 self.beta = 1 - self.alpha
             self.w_i = self.beta
@@ -262,10 +255,9 @@ class Agent():
         """P(switch) via Boltzmann comparison of H_stay vs H_switch."""
         s_stay = 1.0 if self.diet == "veg" else 0.0
         gate_c, gate_k = self.params.get("theta_gate_c", 0.3), self.params.get("theta_gate_k", 10)
-        tau, mu = self.params.get("tau", 0.0), self.params.get("mu", 0.1)
         M, gamma = self.params["M"], self.params.get("gamma", 0.5)
-        H_stay   = hamiltonian(s_stay,       self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
-        H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, tau, mu, gamma)
+        H_stay   = hamiltonian(s_stay,       self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, gamma)
+        H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, gamma)
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
     def _cascade_attribute(self, delta, influencer, agents_list, t,
@@ -292,12 +284,20 @@ class Agent():
                                     agents_list, t, cascade_depth + 1, decay, visited)
 
     def step(self, G, agents, t):
-        """Step agent forward one timestep via pairwise interaction."""
+        """Step agent forward one timestep via pairwise interaction.
+        Returns an event tuple on a diet switch, else None:
+          ("conv", t, i, partner, partner_diet, buffer)  meat->veg; buffer is the
+              last M (diet, source) entries as seen by prob_calc (partner included)
+          ("rev", t, i)                                  veg->meat
+        The log is what analysis/attribution_ledger.py replays; every credit
+        convention (parent rule, dwell weight, lambda, unit) is computed from it
+        offline, so the ledger below never has to be rerun."""
         neighbours = [agents[n] for n in G.neighbors(self.i)]
         if not neighbours:
-            return
+            return None
         other_agent = random.choice(neighbours)
         self.memory.append((other_agent.diet, other_agent.i))
+        event = None
 
         if not self.immune and self.flip(self.prob_calc(other_agent)):
             old_diet = self.diet
@@ -308,6 +308,8 @@ class Agent():
 
             if old_diet == "meat" and self.diet == "veg":
                 self.change_time = t
+                event = ("conv", t, self.i, other_agent.i, other_agent.diet,
+                         tuple(self.memory[-self.params["M"]:]))
                 if other_agent.diet == "veg":
                     # meat -> veg with veg partner: credit the influence chain
                     self.influence_parent = other_agent.i
@@ -318,6 +320,7 @@ class Agent():
                 # conditioned; only the trigger draw was meat.
 
             elif old_diet == "veg" and self.diet == "meat":
+                event = ("rev", t, self.i)
                 # veg -> meat: detach from tree only -- no debits (Holme & Saramäki 2012; Zhou et al. 2014)
                 if self.influence_parent is not None:
                     agents[self.influence_parent].influenced_agents.discard(self.i)
@@ -325,6 +328,7 @@ class Agent():
                     self.change_time = None
         else:
             self.C = st.lognorm.rvs(s=0.20, scale=self.C_base[self.diet])
+        return event
 
     def flip(self, p):
         return np.random.random() < p
@@ -348,6 +352,7 @@ class Model():
         self.system_C = []
         self.fraction_veg = []
         self.steady_state_t = None
+        self.events = []   # conversion/reversion log, see Agent.step
 
     def _generate_network(self):
         topo, N = self.params['topology'], self.params["N"]
@@ -714,7 +719,9 @@ class Model():
         for t in range(self.params["steps"]):
             i = np.random.choice(len(self.agents))
             if self.flip(0.50):
-                self.agents[i].step(self.G1, self.agents, t)
+                event = self.agents[i].step(self.G1, self.agents, t)
+                if event is not None:
+                    self.events.append(event)
                 self.rewire(self.agents[i])
 
             self.system_C.append(self.get_attribute("C") / self.params["N"])

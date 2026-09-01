@@ -14,7 +14,6 @@ import model_main
 DEFAULT_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 2000,             # population size
-    "erdos_p": 3,          # ER graph edge prob
     "steps": 150000,        # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
     "immune_n": 0.10,      # fraction of immune agents
@@ -22,7 +21,6 @@ DEFAULT_PARAMS = {
     "veg_f": 0.5,          # initial veg fraction
     "meat_f": 0.5,         # initial meat fraction
     "p_rewire": 0.01,       # rewire probability per step
-    "rewire_h": 0.1,       # homophily bias in rewiring
     "tc": 0.7,             # triadic closure probability
     "topology": "homophilic_emp",  # network type
     "beta": 13,            # inverse temperature (low~5 noisy, mid~25 gradual, high~50+ sharp)
@@ -33,12 +31,10 @@ DEFAULT_PARAMS = {
     "survey_file": "../data/hierarchical_agents.csv",
     "adjust_veg_fraction": True,  # flip meat->veg to hit target
     "target_veg_fraction": 0.06,   # NL demographics target
-    "tau": 0.035,          # external field strength
     "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
     "theta_gate_k": 35,    # gate steepness
     "alpha_min": 0.05,     # alpha compression lower bound
     "alpha_max": 0.80,     # alpha compression upper bound
-    "mu": 0.2,             # status-quo bias strength
     "gamma": 0.3,          # diminishing returns exponent for repeated same-source contacts
     "tau_persistence": None,   # computed as M*2*N in Model.__init__ (memory renewal window; Takaguchi et al. 2012)
     "snapshot_dense_start": 100000,  # take snapshots every 2k from this step onwards (0 = disabled)
@@ -141,6 +137,10 @@ def run_single_model(params):
         'tipped': model.fraction_veg[-1] > (params.get('veg_f', 0) * 1.2),
         'final_CO2': model.system_C[-1],
         'individual_reductions': model.get_attributes("reduction_out"),
+        'individual_reductions_unw': model.get_attributes("reduction_out_unw"),
+        'events': model.events,
+        'initial_diets': model.snapshots[0]['diets'],
+        'params': dict(model.params),
         'fraction_veg_trajectory': model.fraction_veg if params.get('record_trajectories') else None,
         'system_C_trajectory': model.system_C if params.get('record_trajectories') else None,
         'parameter_set': params.get('parameter_set', ''),
@@ -172,7 +172,12 @@ def run_single_trajectory_model(params):
         'initial_veg_f': params["veg_f"], 'final_veg_f': model.fraction_veg[-1],
         'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
         'run': params.get('run', 0), 'parameter_set': params.get('parameter_set', ''),
-        'is_median_twin': False
+        'is_median_twin': False,
+        'individual_reductions': model.get_attributes("reduction_out"),
+        'individual_reductions_unw': model.get_attributes("reduction_out_unw"),
+        'events': model.events,
+        'initial_diets': model.snapshots[0]['diets'],
+        'params': dict(model.params),
     }
 
     if params["agent_ini"] == "twin":

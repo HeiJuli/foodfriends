@@ -92,7 +92,7 @@ Run once before simulating:
 2. **`create_pmf_tables.py`** — builds conditional PMFs for hot-deck
    imputation of missing alpha/rho. Alpha conditioned on demographics only;
    rho stratified by demographics × theta-bin (preserves the empirical
-   theta–rho correlation r=−0.30). Output: `data/demographic_pmfs.pkl`.
+   theta–rho correlation r=+0.34; sign corrected 2026-09-02). Output: `data/demographic_pmfs.pkl`.
 3. **`validate_theta_stratification.py`** — confirms that PMF imputation
    preserves the empirical correlations.
 4. **`analyze_sample_size.py`** — finite-size vs. imputation trade-off; lands
