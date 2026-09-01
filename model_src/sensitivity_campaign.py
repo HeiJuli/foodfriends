@@ -15,7 +15,7 @@ Answers three reviewer comments in one pass:
   R4.16 -- why is memory fixed at M=9?
   R4.21 -- a sensitivity analysis of the attenuation factor lambda is necessary.
 
-Seven parameters are swept one at a time around the submitted configuration, each
+Seven parameters are swept one at a time around the default configuration, each
 against six observables. Every sweep point uses the SAME seed set (42..42+runs-1),
 so arms are paired on network realisation and initial condition: differences are
 the parameter, not the draw.
@@ -290,7 +290,7 @@ def fig_tornado(sens, out, observables=HEADLINE):
     h = [plt.Line2D([], [], color=COLORS['primary'], lw=6, label='increases with parameter'),
          plt.Line2D([], [], color=COLORS['meat'], lw=6, label='decreases with parameter'),
          plt.Line2D([], [], color='#222', marker='|', ms=12, mew=2, ls='none',
-                    label='submitted configuration')]
+                    label='default configuration')]
     fig.legend(handles=h, frameon=False, fontsize=8, ncol=3,
                loc='lower center', bbox_to_anchor=(0.5, -0.015))
     fig.tight_layout(rect=(0, 0.05, 1, 1))
@@ -374,7 +374,7 @@ def fig_lambda(df, summary, out):
         base = v == BASELINE["decay"]
         ax.plot(pool, ccdf, color=col(v), lw=2.4 if base else 1.4,
                 ls='-' if base else '--', zorder=3 if base else 2,
-                label=rf"$\lambda={v:g}$" + (" (submitted)" if base else ""))
+                label=rf"$\lambda={v:g}$" + (" (default)" if base else ""))
     ax.axvline(1.0, color='#555', ls=':', lw=1.0, zorder=1)
     ax.set_xscale('log'); ax.set_yscale('log'); ax.set_xlim(left=0.05)
     ax.set_xlabel("amplification multiplier")
@@ -464,7 +464,7 @@ def fig_interaction(df, out):
                 if np.isfinite(mat[i, j]):
                     ax.text(j, i, f"{mat[i, j]:.3g}", ha='center', va='center',
                             fontsize=6.5, color='#222')
-        # submitted configuration
+        # default configuration
         ax.plot(vb.index(BASELINE[pb]), va.index(BASELINE[pa]), marker='s',
                 ms=15, mfc='none', mec=COLORS['highlight'], mew=2.0)
         cb = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
@@ -490,9 +490,9 @@ def write_table(summary, sens, out):
          rf"\caption{{One-at-a-time parameter sensitivity for the $N={CFG_N}$ "
          rf"ensemble ({n} runs per sweep point, seeds paired across "
          r"points). Entries give the mean over runs with the standard deviation "
-         r"in parentheses; bold rows are the submitted configuration. $S$ is the "
+         r"in parentheses; bold rows are the default configuration. $S$ is the "
          r"signed relative range: the span of each observable across the sweep, "
-         r"expressed as a fraction of its value at the submitted configuration "
+         r"expressed as a fraction of its value at the default configuration "
          r"and signed by the direction of the response. $S$ is conditional on "
          r"the ranges swept here, so it ranks parameters within those ranges "
          r"rather than globally. Note that $\tau_{p}$ is defined as $2MN$, so "

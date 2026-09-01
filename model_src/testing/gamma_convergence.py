@@ -42,28 +42,45 @@ OUTDIR = '../model_output'
 
 
 def summarise(model, t):
-    """Everything we want from a snapshot, without keeping the snapshot."""
+    """Everything we want from a snapshot, without keeping the snapshot.
+
+    Both ledgers are fitted. `reduction_out` carries the dwell weight
+    w = 1 - exp(-dur/tau_persistence) (model_main.py:287); `reduction_out_unw` is the same
+    accrual with w == 1. tau_persistence is fixed at M*2*N = 36,000 while these runs go to
+    800,000, so the weight saturates as the run lengthens -- gamma_unw isolates how much of
+    the exponent's drift is the weighting rather than the cascade. w > 0 always, so both
+    ledgers share the same support and the pair is exactly comparable.
+    """
     G = model.G1
     reds = np.array([a.reduction_out for a in model.agents], float)
+    reds_u = np.array([a.reduction_out_unw for a in model.agents], float)
     deg = np.array([G.degree(a.i) for a in model.agents], float)
     m = (reds > 0) & (deg > 0)
     row = {'t': t, 'f_veg': model.fraction_veg[-1] if model.fraction_veg else np.nan,
-           'n_pos': int(m.sum())}
+           'n_pos': int(m.sum()), 'n_pos_unw': int(((reds_u > 0) & (deg > 0)).sum()),
+           'n_iso': int((deg == 0).sum())}
     if m.sum() < 20:
         return {**row, 'gamma': np.nan, 'r2': np.nan, 'mean_A': np.nan,
-                'p90_A': np.nan, 'max_A': np.nan, 'gini': np.nan}
+                'p90_A': np.nan, 'max_A': np.nan, 'gini': np.nan,
+                'gamma_unw': np.nan, 'r2_unw': np.nan, 'mean_A_unw': np.nan}
 
-    A = reds[m] / DIRECT_REDUCTION_KG
-    lk, lA = np.log10(deg[m]), np.log10(A)
-    slope, icept = np.polyfit(lk, lA, 1)
-    ss_tot = np.sum((lA - lA.mean()) ** 2)
-    r2 = 1 - np.sum((lA - (slope * lk + icept)) ** 2) / ss_tot if ss_tot > 0 else np.nan
+    def fit(vals):
+        A = vals[m] / DIRECT_REDUCTION_KG
+        lk, lA = np.log10(deg[m]), np.log10(A)
+        slope, icept = np.polyfit(lk, lA, 1)
+        ss_tot = np.sum((lA - lA.mean()) ** 2)
+        r2 = 1 - np.sum((lA - (slope * lk + icept)) ** 2) / ss_tot if ss_tot > 0 else np.nan
+        return slope, r2, A
+
+    slope, r2, A = fit(reds)
+    slope_u, r2_u, A_u = fit(reds_u)
 
     pos = np.sort(reds[m])
     n = len(pos)
     gini = (2 * np.sum(np.arange(1, n + 1) * pos) / (n * pos.sum())) - (n + 1) / n
     return {**row, 'gamma': slope, 'r2': r2, 'mean_A': A.mean(),
-            'p90_A': np.percentile(A, 90), 'max_A': A.max(), 'gini': gini}
+            'p90_A': np.percentile(A, 90), 'max_A': A.max(), 'gini': gini,
+            'gamma_unw': slope_u, 'r2_unw': r2_u, 'mean_A_unw': A_u.mean()}
 
 
 def run_one(params):
@@ -161,6 +178,8 @@ def main():
     print(f"\nINFO: {len(df)} rows -> {out}  ({time.time() - t0:.0f}s total)")
 
     g = df.groupby('t').agg(gamma=('gamma', 'mean'), gamma_sd=('gamma', 'std'),
+                            gamma_unw=('gamma_unw', 'mean'),
+                            gamma_unw_sd=('gamma_unw', 'std'),
                             f_veg=('f_veg', 'mean'), mean_A=('mean_A', 'mean'),
                             gini=('gini', 'mean'), n_pos=('n_pos', 'mean'))
     marks = [t for t in (100000, 150000, 200000, 250000, 300000, 350000, args.steps)

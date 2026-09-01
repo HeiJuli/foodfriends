@@ -62,7 +62,7 @@ A grid-median recalibration is no better than the fixed threshold either (31% vs
 threshold wins; leave it alone. This is the same trap as normalising the gap by
 the cell range, which is why that was dropped too.
 
-Grid is 7 beta x 7 theta_gate_c = 49 cells. The submitted configuration
+Grid is 7 beta x 7 theta_gate_c = 49 cells. The default configuration
 (beta=13, c=0.35) is a grid point and is marked on both panels. The c axis is
 deliberately finer than the OAT sweep's over 0.25-0.45: that is where F_veg is
 still falling steeply and so where a discontinuity would sit, and 0.10 spacing
@@ -70,7 +70,7 @@ covers the whole steepening region with a single interior point.
 
 Nine of the 49 cells are already measured by the OAT campaign and are loaded
 from its pickle rather than rerun -- the beta sweep at the baseline gate and the
-theta_gate_c sweep at the baseline beta, i.e. the cross through the submitted
+theta_gate_c sweep at the baseline beta, i.e. the cross through the default
 configuration. Identical BASE_PARAMS and the same paired seeds, so they are on
 the same footing; they carry 30 seeds against 12 elsewhere, which is where the
 gap diagnostic most wants the power. Consequences: n varies across the grid, so
@@ -113,7 +113,7 @@ from plot_styles import (set_publication_style, apply_axis_style, COLORS,
 # --- grid ------------------------------------------------------------------
 BETAS = [5, 9, 13, 20, 30, 50, 80]
 GATES = [0.25, 0.30, 0.35, 0.40, 0.45, 0.55, 0.65]
-SUBMITTED = {"beta": 13, "theta_gate_c": 0.35}
+DEFAULT = {"beta": 13, "theta_gate_c": 0.35}
 
 BC_UNIFORM = 5.0 / 9.0     # 0.5556; reported only -- weaker than gap at n~12
 GAP_FLAG = 0.05            # F_veg units; calibration and power in the module docstring
@@ -135,7 +135,7 @@ BASE_PARAMS.update({
 # --- reuse from the OAT campaign -------------------------------------------
 # sensitivity_campaign.py swept beta at the baseline gate and theta_gate_c at
 # the baseline beta, on the same BASE_PARAMS and the same paired seeds, so the
-# cross through the submitted configuration is already measured and rerunning it
+# cross through the default configuration is already measured and rerunning it
 # would buy nothing but a smaller n.
 OAT_PKL = "../model_output/sensitivity_campaign_20260820_N2000.pkl"
 OAT_BASE = {"beta": 13, "theta_gate_c": 0.35}
@@ -155,7 +155,7 @@ def load_oat_cells(path):
     d = pd.concat(parts, ignore_index=True)
     d = d[d.beta.isin(BETAS) & d.theta_gate_c.isin(GATES)]
     # expand_baseline relabels the shared baseline block under every parameter,
-    # so the submitted cell arrives twice -- keep one copy
+    # so the default cell arrives twice -- keep one copy
     d = d.drop_duplicates(subset=["beta", "theta_gate_c", "seed"])
     d = d.drop(columns=["param", "value"])
     d["beta"] = d["beta"].astype(int)
@@ -231,14 +231,10 @@ def _beta_colour(i):
     return ECO_CMAP(0.25 + 0.75 * i / max(len(BETAS) - 1, 1))
 
 
-def fig_bifurcation(df, stats, out):
-    """A: F_veg_final against the gate threshold, one line per beta, with every
+def _panel_a(ax, df, stats, panel_label="A"):
+    """F_veg_final against the gate threshold, one line per beta, with every
     seed overplotted -- a split ensemble is visible directly, not through a
-    summary statistic. B: the bimodality diagnostic over the whole plane."""
-    fig, (axA, axB) = plt.subplots(1, 2, figsize=(11.2, 4.4),
-                                   gridspec_kw={'width_ratios': [1.15, 1.0]})
-
-    # --- A: bifurcation diagram -------------------------------------------
+    summary statistic. Shared by the two-panel figure and the SI standalone."""
     dx = 0.005                              # per-beta x offset, < gate spacing
                                             # (0.05 spacing over 0.25-0.45)
     off = (np.arange(len(BETAS)) - (len(BETAS) - 1) / 2) * dx
@@ -246,34 +242,56 @@ def fig_bifurcation(df, stats, out):
     for i, b in enumerate(BETAS):
         col = _beta_colour(i)
         d = df[df.beta == b]
-        axA.scatter(d.theta_gate_c.values + off[i], d.F_veg_final.values,
-                    s=7, color=col, alpha=0.35, lw=0, zorder=2)
+        ax.scatter(d.theta_gate_c.values + off[i], d.F_veg_final.values,
+                   s=7, color=col, alpha=0.35, lw=0, zorder=2)
         s = stats[stats.beta == b].sort_values("theta_gate_c")
-        axA.plot(s.theta_gate_c.values + off[i], s.F_mean.values, 'o-',
-                 color=col, ms=3.5, lw=1.6, zorder=3)
+        ax.plot(s.theta_gate_c.values + off[i], s.F_mean.values, 'o-',
+                color=col, ms=3.5, lw=1.6, zorder=3)
         ends.append([s.F_mean.values[-1], b, col])
     # line-end labels, pushed apart where curves converge
     ends.sort(key=lambda e: e[0])
-    span = axA.get_ylim()[1] - axA.get_ylim()[0]
+    span = ax.get_ylim()[1] - ax.get_ylim()[0]
     for k in range(1, len(ends)):
         ends[k][0] = max(ends[k][0], ends[k - 1][0] + 0.035 * span)
     for y, b, col in ends:
-        axA.annotate(rf"$\beta={b:g}$", (GATES[-1] + off[-1], y),
-                     textcoords="offset points", xytext=(7, 0), va='center',
-                     fontsize=7, color=col)
-    js = BETAS.index(SUBMITTED["beta"])
-    sub = stats[(stats.beta == SUBMITTED["beta"]) &
-                (stats.theta_gate_c == SUBMITTED["theta_gate_c"])]
-    axA.plot(SUBMITTED["theta_gate_c"] + off[js], sub.F_mean.values[0], marker='s',
-             ms=13, mfc='none', mec=COLORS['highlight'], mew=2.0, ls='none',
-             zorder=4, label='submitted configuration')
-    axA.set_xlim(GATES[0] - 0.05, GATES[-1] + 0.09)
-    axA.set_xticks(GATES)
-    axA.set_xlabel(r"$c$ (gate threshold)")
-    axA.set_ylabel(r"$F_{veg}$ (final)")
-    axA.legend(frameon=False, fontsize=7, loc='lower left')
-    apply_axis_style(axA)
-    axA.text(-0.10, 1.02, "A", transform=axA.transAxes, fontsize=11, fontweight='bold')
+        ax.annotate(rf"$\beta={b:g}$", (GATES[-1] + off[-1], y),
+                    textcoords="offset points", xytext=(7, 0), va='center',
+                    fontsize=7, color=col)
+    js = BETAS.index(DEFAULT["beta"])
+    sub = stats[(stats.beta == DEFAULT["beta"]) &
+                (stats.theta_gate_c == DEFAULT["theta_gate_c"])]
+    ax.plot(DEFAULT["theta_gate_c"] + off[js], sub.F_mean.values[0], marker='s',
+            ms=13, mfc='none', mec=COLORS['highlight'], mew=2.0, ls='none',
+            zorder=4, label='default configuration')
+    ax.set_xlim(GATES[0] - 0.05, GATES[-1] + 0.09)
+    ax.set_xticks(GATES)
+    ax.set_xlabel(r"$c$ (gate threshold)")
+    ax.set_ylabel(r"$F_{veg}$ (final)")
+    ax.legend(frameon=False, fontsize=7, loc='lower left')
+    apply_axis_style(ax)
+    if panel_label:
+        ax.text(-0.10, 1.02, panel_label, transform=ax.transAxes,
+                fontsize=11, fontweight='bold')
+
+
+def fig_panel_a(df, stats, out):
+    """Panel A alone, for the SI -- the two-panel figure is kept as well."""
+    fig, ax = plt.subplots(figsize=(5.6, 4.4))
+    _panel_a(ax, df, stats, panel_label=None)
+    fig.tight_layout()
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    print(f"INFO: Saved -> {out}")
+
+
+def fig_bifurcation(df, stats, out):
+    """A: F_veg_final against the gate threshold, one line per beta, with every
+    seed overplotted -- a split ensemble is visible directly, not through a
+    summary statistic. B: the bimodality diagnostic over the whole plane."""
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=(11.2, 4.4),
+                                   gridspec_kw={'width_ratios': [1.15, 1.0]})
+
+    # --- A: bifurcation diagram -----------------------------------------
+    _panel_a(axA, df, stats)
 
     # --- B: bimodality heatmap --------------------------------------------
     bc, gap, nn = _mat(stats, "BC"), _mat(stats, "gap"), _mat(stats, "n")
@@ -294,7 +312,7 @@ def fig_bifurcation(df, stats, out):
                 # n varies: reused OAT cells carry 30 seeds against 12 elsewhere
                 axB.text(j, i, f"BC {bc[i, j]:.2f}  n={nn[i, j]:.0f}",
                          ha='center', va='top', fontsize=4.8, color='#555')
-    axB.plot(GATES.index(SUBMITTED["theta_gate_c"]), BETAS.index(SUBMITTED["beta"]),
+    axB.plot(GATES.index(DEFAULT["theta_gate_c"]), BETAS.index(DEFAULT["beta"]),
              marker='s', ms=15, mfc='none', mec=COLORS['highlight'], mew=2.0)
     cb = fig.colorbar(im, ax=axB, fraction=0.046, pad=0.02)
     cb.set_label(r"largest gap between adjacent runs, $F_{veg}$", fontsize=8)
@@ -315,8 +333,8 @@ def print_report(stats):
         mark = ""
         if np.isfinite(r.gap) and r.gap > GAP_FLAG:
             mark += "  SPLIT"
-        if r.beta == SUBMITTED["beta"] and r.theta_gate_c == SUBMITTED["theta_gate_c"]:
-            mark += "  *submitted"
+        if r.beta == DEFAULT["beta"] and r.theta_gate_c == DEFAULT["theta_gate_c"]:
+            mark += "  *default"
         print(f"{r.beta:>6g}{r.theta_gate_c:>7g}{r.n:>4d}{r.F_mean:>9.3f}"
               f"{r.F_sd:>9.3f}{r.gap:>8.3f}{r.BC:>8.3f}{mark}")
     flagged = stats[stats.gap > GAP_FLAG]
@@ -381,6 +399,8 @@ def main():
     print_report(stats)
     fig_bifurcation(df, stats,
                     f"../visualisations_output/bifurcation_diagram_{tag}.pdf")
+    fig_panel_a(df, stats,
+                f"../visualisations_output/bifurcation_panelA_{tag}.pdf")
     print("\nINFO: done.")
 
 

@@ -106,7 +106,7 @@ import model_main
 import model_runn
 from t_end_logistic import estimate_t_end
 
-# model_runn.DEFAULT_PARAMS is the source of truth (the path the submitted
+# model_runn.DEFAULT_PARAMS is the source of truth (the path the reported
 # ensembles ran through), NOT model_main.params.
 BASE_PARAMS = dict(model_runn.DEFAULT_PARAMS)
 BASE_PARAMS.update({
