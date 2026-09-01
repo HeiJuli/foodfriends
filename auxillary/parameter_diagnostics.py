@@ -188,10 +188,10 @@ def simulate_single_population():
 
     return pd.DataFrame(results)
 
-def analyze_conditional_thresholds(df):
-    """Analyze effective thresholds stratified by theta bins"""
+def analyze_rho_by_theta_bin(df):
+    """Analyse rho and alpha for meat eaters, stratified by theta bin"""
     print("\n" + "="*80)
-    print("CONDITIONAL EFFECTIVE THRESHOLD ANALYSIS")
+    print("RHO BY THETA BIN (MEAT EATERS)")
     print("="*80)
 
     # Define theta bins
@@ -199,11 +199,9 @@ def analyze_conditional_thresholds(df):
     theta_labels = ['(-1.0,0.2)', '[0.2,0.4)', '[0.4,0.6)', '[0.6,0.8)', '[0.8,1.0]']
 
     df['theta_bin'] = pd.cut(df['theta'], bins=theta_bins, labels=theta_labels, include_lowest=True)
-    df['dissonance'] = np.where(df['diet'] == 'meat', df['theta'], 1 - df['theta'])
-    df['eff_threshold'] = df['rho'] - df['alpha'] * df['dissonance']
 
-    print("\nEffective thresholds for MEAT EATERS by theta bin:")
-    print(f"{'Theta Bin':<15} {'N':>6} {'Mean θ':>8} {'Mean ρ':>8} {'Mean α':>8} {'Mean Eff.Thresh':>16}")
+    print("\nMeat eaters by theta bin:")
+    print(f"{'Theta Bin':<15} {'N':>6} {'Mean θ':>8} {'Mean ρ':>8} {'Mean α':>8}")
     print("-"*80)
 
     meat_eaters = df[df['diet'] == 'meat']
@@ -211,12 +209,11 @@ def analyze_conditional_thresholds(df):
         bin_data = meat_eaters[meat_eaters['theta_bin'] == bin_label]
         if len(bin_data) > 0:
             print(f"{bin_label:<15} {len(bin_data):>6} {bin_data['theta'].mean():>8.3f} "
-                  f"{bin_data['rho'].mean():>8.3f} {bin_data['alpha'].mean():>8.3f} "
-                  f"{bin_data['eff_threshold'].mean():>16.3f}")
+                  f"{bin_data['rho'].mean():>8.3f} {bin_data['alpha'].mean():>8.3f}")
 
-    # Check if low-theta meat eaters have higher thresholds
+    # Check whether high-theta meat eaters have higher rho
     print("\n" + "="*80)
-    print("KEY FINDING: Do meat eaters with low theta have higher rho?")
+    print("KEY FINDING: Do meat eaters with high theta have higher rho? (expected after the 2026-09-02 rho sign correction)")
     print("="*80)
 
     low_theta_meat = meat_eaters[meat_eaters['theta'] < 0.4]
@@ -226,24 +223,20 @@ def analyze_conditional_thresholds(df):
         print(f"\nLow theta meat eaters (θ < 0.4, n={len(low_theta_meat)}):")
         print(f"  Mean theta: {low_theta_meat['theta'].mean():.3f}")
         print(f"  Mean rho:   {low_theta_meat['rho'].mean():.3f}")
-        print(f"  Mean eff. threshold: {low_theta_meat['eff_threshold'].mean():.3f}")
 
         print(f"\nHigh theta meat eaters (θ >= 0.6, n={len(high_theta_meat)}):")
         print(f"  Mean theta: {high_theta_meat['theta'].mean():.3f}")
         print(f"  Mean rho:   {high_theta_meat['rho'].mean():.3f}")
-        print(f"  Mean eff. threshold: {high_theta_meat['eff_threshold'].mean():.3f}")
 
-        rho_diff = low_theta_meat['rho'].mean() - high_theta_meat['rho'].mean()
-        thresh_diff = low_theta_meat['eff_threshold'].mean() - high_theta_meat['eff_threshold'].mean()
+        rho_diff = high_theta_meat['rho'].mean() - low_theta_meat['rho'].mean()
 
-        print(f"\nDifference (low - high):")
+        print(f"\nDifference (high - low):")
         print(f"  Rho difference: {rho_diff:+.3f}")
-        print(f"  Eff. threshold difference: {thresh_diff:+.3f}")
 
         if rho_diff > 0.05:
-            print(f"\n  ✓ SUCCESS: Low-theta meat eaters have {rho_diff:.3f} higher rho!")
+            print(f"\n  ✓ SUCCESS: High-theta meat eaters have {rho_diff:.3f} higher rho")
         else:
-            print(f"\n  ✗ CONCERN: Low-theta meat eaters don't have significantly higher rho")
+            print(f"\n  ✗ CONCERN: High-theta meat eaters don't have significantly higher rho")
 
     return df
 
@@ -351,9 +344,9 @@ def main():
     merged_data = analyze_parameter_correlations()
 
     # Analysis 4: Conditional thresholds
-    print("\n\nSimulating population for threshold analysis...")
+    print("\n\nSimulating population for rho-by-theta-bin analysis...")
     sim_df = simulate_single_population()
-    analyze_conditional_thresholds(sim_df)
+    analyze_rho_by_theta_bin(sim_df)
 
     # Analysis 5: Complete cases representativeness
     check_complete_cases_representativeness()

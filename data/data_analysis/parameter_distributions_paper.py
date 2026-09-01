@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "plotting"))
 from plot_styles import set_publication_style, apply_axis_style, COLORS
 
 OUT_DIR    = Path(__file__).parent
-DATA_DIR   = Path("C:/Users/emma.thill/Dropbox/Projects/Foodfriends/Data/Final_paper_data")
+DATA_DIR   = Path(__file__).resolve().parent.parent / "data_construction_paper"  # repo-relative (was a Dropbox path)
 
 # ── Load original survey data ──────────────────────────────────────────────────
 with warnings.catch_warnings():

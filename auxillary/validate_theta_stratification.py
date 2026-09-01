@@ -182,49 +182,6 @@ def analyze_simulated_correlations(simulation_results, empirical_corrs):
         'rho_alpha': (np.mean(sim_corrs_rho_alpha), np.std(sim_corrs_rho_alpha))
     }
 
-def check_effective_thresholds(simulation_results):
-    """Calculate effective thresholds for meat eaters"""
-    print("\n" + "="*80)
-    print("EFFECTIVE THRESHOLD ANALYSIS")
-    print("="*80)
-
-    # Use first simulation for detailed analysis
-    result = simulation_results[0]
-    df_sim = pd.DataFrame({
-        'theta': result['theta'],
-        'rho': result['rho'],
-        'alpha': result['alpha']
-    })
-
-    # Load diet info
-    df_hier = pd.read_csv("../data/hierarchical_agents.csv")
-    df_sim['diet'] = df_hier['diet']
-
-    # Analyze meat eaters
-    meat_eaters = df_sim[df_sim['diet'] == 'meat']
-
-    print(f"\nMeat eaters (n={len(meat_eaters)}):")
-    print(f"  Average theta: {meat_eaters['theta'].mean():.3f}")
-    print(f"  Average alpha: {meat_eaters['alpha'].mean():.3f}")
-    print(f"  Average rho:   {meat_eaters['rho'].mean():.3f}")
-
-    # Calculate effective thresholds
-    # Fixed: For meat-eaters, dissonance = theta when theta > 0.5 (prefer veg but eat meat)
-    # Only misaligned agents (theta > 0.5) experience dissonance
-    avg_dissonance = meat_eaters['theta'].mean()  # Fixed: was 1-theta
-    eff_threshold = meat_eaters['rho'].mean() - meat_eaters['alpha'].mean() * avg_dissonance
-
-    print(f"\n  Average dissonance (theta): {avg_dissonance:.3f}")
-    print(f"  Dissonance adjustment (alpha*dissonance): {meat_eaters['alpha'].mean() * avg_dissonance:.3f}")
-    print(f"  Effective threshold (rho - alpha*dissonance): {eff_threshold:.3f}")
-
-    if eff_threshold > 0.20:
-        print(f"\n  ✓ PASS: Effective threshold > 0.20 (stable initial conditions)")
-    else:
-        print(f"\n  ✗ FAIL: Effective threshold < 0.20 (unstable, rapid uptake expected)")
-
-    return eff_threshold
-
 def create_validation_plots(simulation_results, empirical_data):
     """Create scatter plots comparing empirical vs simulated correlations"""
     print("\n" + "="*80)
@@ -245,7 +202,7 @@ def create_validation_plots(simulation_results, empirical_data):
     axes[0].scatter(empirical_data['theta'], empirical_data['rho'], alpha=0.3, label='Empirical', s=20)
     axes[0].scatter(df_sim['theta'], df_sim['rho'], alpha=0.1, label='Simulated', s=10)
     axes[0].set_xlabel('theta (veg preference)')
-    axes[0].set_ylabel('rho (threshold)')
+    axes[0].set_ylabel('rho (behavioural intention)')
     axes[0].set_title(f"theta vs rho\nEmpirical: r={stats.pearsonr(empirical_data['theta'], empirical_data['rho'])[0]:.3f}\nSimulated: r={stats.pearsonr(df_sim['theta'], df_sim['rho'])[0]:.3f}")
     axes[0].legend()
     axes[0].grid(alpha=0.3)
@@ -262,7 +219,7 @@ def create_validation_plots(simulation_results, empirical_data):
     # rho vs alpha
     axes[2].scatter(empirical_data['rho'], empirical_data['alpha'], alpha=0.3, label='Empirical', s=20)
     axes[2].scatter(df_sim['rho'], df_sim['alpha'], alpha=0.1, label='Simulated', s=10)
-    axes[2].set_xlabel('rho (threshold)')
+    axes[2].set_xlabel('rho (behavioural intention)')
     axes[2].set_ylabel('alpha (self-identity weight)')
     axes[2].set_title(f"rho vs alpha\nEmpirical: r={stats.pearsonr(empirical_data['rho'], empirical_data['alpha'])[0]:.3f}\nSimulated: r={stats.pearsonr(df_sim['rho'], df_sim['alpha'])[0]:.3f}")
     axes[2].legend()
@@ -289,10 +246,7 @@ def main():
     # Step 3: Analyze correlations
     sim_corrs = analyze_simulated_correlations(simulation_results, empirical_corrs)
 
-    # Step 4: Check effective thresholds
-    eff_threshold = check_effective_thresholds(simulation_results)
-
-    # Step 5: Create plots
+    # Step 4: Create plots
     create_validation_plots(simulation_results, empirical_data)
 
     # Final validation report
@@ -302,19 +256,16 @@ def main():
 
     theta_rho_preserved = abs(sim_corrs['theta_rho'][0] - empirical_corrs['theta_rho']) < 0.05
     theta_alpha_preserved = abs(sim_corrs['theta_alpha'][0] - empirical_corrs['theta_alpha']) < 0.05
-    threshold_stable = eff_threshold > 0.20
 
     print(f"\nValidation criteria:")
     print(f"  [{'✓' if theta_rho_preserved else '✗'}] theta-rho correlation preserved (diff < 0.05)")
     print(f"  [{'✓' if theta_alpha_preserved else '✗'}] theta-alpha correlation preserved (diff < 0.05)")
-    print(f"  [{'✓' if threshold_stable else '✗'}] Effective threshold > 0.20 (stable)")
 
-    if theta_rho_preserved and theta_alpha_preserved and threshold_stable:
+    if theta_rho_preserved and theta_alpha_preserved:
         print(f"\n{'='*80}")
         print("✓✓✓ ALL VALIDATION CHECKS PASSED ✓✓✓")
         print(f"{'='*80}")
         print("\nTheta-stratified PMF sampling successfully preserves correlations!")
-        print("Model should now exhibit proper S-curve dynamics with slow initial uptake.")
     else:
         print(f"\n{'='*80}")
         print("✗✗✗ VALIDATION FAILED ✗✗✗")

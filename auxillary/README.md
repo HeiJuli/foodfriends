@@ -24,7 +24,7 @@ Generates conditional PMF tables for parameter imputation.
 
 **Purpose**: Creates demographic PMF tables for imputing missing alpha/rho values.
 - **Alpha**: demographics only (n=4944). Theta stratification removed (2026-03-25) due to selection bias -- only 54.6% of alpha respondents have theta, with biased subgroups in 70+ and low-education cells. Weak alpha-theta correlation (r=0.14) does not justify the data loss.
-- **Rho**: demographics + theta bins (n=2391, 96.3% theta overlap, r=-0.30).
+- **Rho**: demographics + theta bins (n=2391, 96.3% theta overlap, r=+0.34; sign corrected 2026-09-02, was quoted as -0.30 from inverted rho).
 
 **Input**:
 - `../data/theta_diet_demographics.xlsx`
@@ -66,7 +66,6 @@ Analyzes trade-off between finite-size effects and parameter imputation accuracy
 1. Complete vs partial case composition
 2. Finite-size coefficient of variation at different N
 3. Imputation fraction vs N
-4. Effective threshold distributions
 
 **Output**:
 - Comprehensive analysis report
@@ -98,18 +97,16 @@ Demonstrates improvement of stratified sampling over random sampling.
 ### `validate_theta_stratification.py`
 **PRIMARY VALIDATION SCRIPT**
 
-Validates that the PMF sampling approach preserves parameter correlations and produces stable model dynamics. Rho uses theta-stratified PMFs; alpha uses demographics-only PMFs.
+Validates that the PMF sampling approach preserves parameter correlations. Rho uses theta-stratified PMFs; alpha uses demographics-only PMFs.
 
 **What it tests**:
 1. Correlation preservation (theta-rho, theta-alpha, rho-alpha)
-2. Effective thresholds for meat eaters
-3. Distribution matching
+2. Distribution matching
 
 **When to run**: After creating/updating PMF tables or when changing sampling approach.
 
 **Expected output**:
 - Correlations preserved within 0.05 difference
-- Effective threshold > 0.20 for stability
 - Validation plots in `../visualisations_output/`
 
 ### `parameter_diagnostics.py`
@@ -121,7 +118,7 @@ Comprehensive diagnostic suite for troubleshooting parameter sampling issues.
 1. Hierarchical agent dataset composition
 2. PMF table statistics
 3. Parameter correlations in empirical data
-4. Conditional effective thresholds by theta bin
+4. Rho and alpha by theta bin (meat eaters)
 5. Complete cases demographic representativeness
 
 **When to run**: When investigating rapid uptake, strange model behavior, or demographic bias.
@@ -164,7 +161,7 @@ Test script for network homophily measures.
 
 ### Troubleshooting Workflow
 1. Run `parameter_diagnostics.py` for comprehensive analysis
-2. Check effective thresholds by theta bin
+2. Check rho by theta bin
 3. Examine complete cases vs imputed cases
 4. Review validation plots
 

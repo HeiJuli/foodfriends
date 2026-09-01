@@ -34,17 +34,6 @@ print(f"\nTheta: mean={complete_cases['theta'].mean():.3f}, std={complete_cases[
 print(f"Rho:   mean={complete_cases['rho'].mean():.3f}, std={complete_cases['rho'].std():.3f}")
 print(f"Alpha: mean={complete_cases['alpha'].mean():.3f}, std={complete_cases['alpha'].std():.3f}")
 
-# Calculate effective threshold for complete cases
-complete_cases['beta'] = 1 - complete_cases['alpha']
-complete_cases['dissonance'] = np.where(complete_cases['diet'] == 'meat',
-                                        complete_cases['theta'],
-                                        1 - complete_cases['theta'])
-complete_cases['eff_threshold'] = complete_cases['rho'] - complete_cases['alpha'] * complete_cases['dissonance']
-
-meat_eaters = complete_cases[complete_cases['diet'] == 'meat']
-print(f"\nEffective threshold (meat eaters): mean={meat_eaters['eff_threshold'].mean():.3f}, std={meat_eaters['eff_threshold'].std():.3f}")
-print(f"Proportion with eff_threshold < 0.20: {(meat_eaters['eff_threshold'] < 0.20).mean():.1%}")
-
 # Correlations
 print("\n" + "=" * 80)
 print("PARAMETER CORRELATIONS (complete cases)")
@@ -132,10 +121,10 @@ quantification while maintaining high empirical accuracy.
 ))
 
 # Visualization
-fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
 # Plot 1: Complete vs imputed agents
-ax = axes[0, 0]
+ax = axes[0]
 Ns = np.array(candidate_sizes)
 complete_counts = np.minimum(Ns, len(complete_cases))
 imputed_counts = np.maximum(0, Ns - len(complete_cases))
@@ -149,7 +138,7 @@ ax.grid(alpha=0.3)
 ax.set_title('Agent composition vs population size')
 
 # Plot 2: Finite-size CV
-ax = axes[0, 1]
+ax = axes[1]
 Ns_smooth = np.linspace(500, 5602, 100)
 cv = 1 / np.sqrt(Ns_smooth)
 ax.plot(Ns_smooth, cv * 100, linewidth=2)
@@ -166,7 +155,7 @@ ax.grid(alpha=0.3)
 ax.set_title('Finite-size statistical noise (CV ~ 1/√N)')
 
 # Plot 3: Imputation fraction
-ax = axes[1, 0]
+ax = axes[2]
 impute_frac = np.maximum(0, Ns - len(complete_cases)) / Ns * 100
 ax.plot(Ns, impute_frac, 'o-', linewidth=2, color='purple')
 ax.axhline(50, color='red', linestyle='--', alpha=0.5, label='50% imputed')
@@ -176,19 +165,6 @@ ax.set_ylabel('Imputed fraction (%)')
 ax.legend()
 ax.grid(alpha=0.3)
 ax.set_title('Parameter imputation fraction')
-
-# Plot 4: Effective threshold distribution
-ax = axes[1, 1]
-ax.hist(meat_eaters['eff_threshold'], bins=50, alpha=0.7, edgecolor='black')
-ax.axvline(meat_eaters['eff_threshold'].mean(), color='red', linestyle='--',
-           linewidth=2, label=f"Mean = {meat_eaters['eff_threshold'].mean():.3f}")
-ax.axvline(0.20, color='orange', linestyle='--', linewidth=2,
-           label='Stability threshold (0.20)')
-ax.set_xlabel('Effective threshold (rho - alpha*dissonance)')
-ax.set_ylabel('Count (meat eaters)')
-ax.legend()
-ax.grid(alpha=0.3)
-ax.set_title('Effective threshold distribution (complete cases)')
 
 plt.tight_layout()
 plt.savefig('../visualisations_output/optimal_sample_size_analysis.png', dpi=150, bbox_inches='tight')
