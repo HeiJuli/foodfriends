@@ -92,6 +92,7 @@ sys.path.append('../analysis')
 import model_main
 import model_runner_mp
 from attribution_ledger import replay
+from t_end_logistic import estimate_t_end
 from plot_styles import (set_publication_style, apply_axis_style, COLORS,
                          ECO_CMAP, ECO_DIV_CMAP)
 
@@ -203,6 +204,19 @@ def _observables(m):
     mult_sub = sub[sub > 0] / DIRECT_REDUCTION_KG
     cross = np.flatnonzero(traj >= 0.5)
     F_c, F_infl, t_infl = _inflection(traj)
+    # Amplification accumulates for as long as the run lasts, so the columns above
+    # -- replayed to t = steps -- are only comparable across sweep points that
+    # saturate at the same time. kappa moves t_end by 3.4x, so at a fixed 400k the
+    # kappa = 1.00 point would spend most of the run accumulating credit past its
+    # own saturation and the tornado would read that as a kappa effect. The _tend
+    # columns replay the same convention at the run's own fitted t_end instead; the
+    # event log does not leave the worker, so this cannot be recovered afterwards.
+    t_end = estimate_t_end(traj)
+    if t_end is None or t_end >= len(traj):
+        t_end = len(traj) - 1
+    reds_te = replay(m.events, m.snapshots[0]['diets'], m.params,
+                     parent="exposure", weight="none", unit="event", t_end=t_end)
+    mult_te = reds_te[reds_te > 0] / DIRECT_REDUCTION_KG
     return {
         "mult": mult.astype(np.float32),   # pooled for CCDF panels
         "F_veg_final": traj[-1],
@@ -217,6 +231,12 @@ def _observables(m):
         "amp_max_sub": mult_sub.max() if len(mult_sub) else 0.0,
         "n_credited_sub": int(len(mult_sub)),
         "steady_state_t": m.steady_state_t,
+        "t_end_fit": t_end,
+        "F_veg_tend": traj[t_end],
+        "amp_mean_tend": mult_te.mean() if len(mult_te) else 0.0,
+        "amp_p90_tend": np.percentile(mult_te, 90) if len(mult_te) else 0.0,
+        "amp_max_tend": mult_te.max() if len(mult_te) else 0.0,
+        "n_credited_tend": int(len(mult_te)),
     }
 
 
