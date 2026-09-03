@@ -51,7 +51,7 @@ from auxillary.sampling_utils import stratified_sample_agents
 DIRECT_REDUCTION_KG = 664
 N_RUNS = 10
 COMMUNITY_SIZE = 2000     # validated model scale
-UPDATES_PER_AGENT = 50    # match N=2000 baseline: 100k steps / 2000
+UPDATES_PER_AGENT = 200   # match N=2000 baseline at kappa=0.55: 400k steps / 2000
 MU = 0.20                 # inter-community mixing; Q~0.5 (Newman 2006)
 ATTR_WEIGHTS = np.array([0.20, 0.35, 0.18, 0.32, 0.05])
 
@@ -70,9 +70,16 @@ BASE_PARAMS = {
     "tau": 0.035, "theta_gate_c": 0.35, "theta_gate_k": 35,
     "alpha_min": 0.05, "alpha_max": 0.80,
     "mu": 0.2, "gamma": 0.3,
-    "tau_persistence": None,  # auto: M*2*N (scales correctly when steps=50*N)
+    "kappa": 0.55,            # intention-behaviour discount (Webb & Sheeran 2006)
+    "tau_persistence": None,  # auto: M*2*N (scales correctly when steps=UPDATES_PER_AGENT*N)
     "snapshot_dense_start": 0,
 }
+
+# This script builds its own BASE_PARAMS rather than importing the runner's, so an
+# absent key falls through to model_main's .get("kappa", 1.0) and the whole sweep
+# runs at face value while everything else runs at 0.55. Same failure class as the
+# tau = 11,700 incident; assert on it.
+assert BASE_PARAMS.get("kappa") == 0.55, "ERROR: kappa missing from BASE_PARAMS"
 
 
 # ---------------------------------------------------------------------------
@@ -446,6 +453,7 @@ if __name__ == '__main__':
     print(f"  Runs per N: {dict(runs_per)}")
     print(f"  Total sims: {total_tasks}")
     print(f"  Updates/agent: {UPDATES_PER_AGENT}")
+    print(f"  kappa: {BASE_PARAMS['kappa']}")
     print(f"  Community size: {COMMUNITY_SIZE}")
     print(f"  Inter-community mu: {MU}")
     print(f"  Total agent-steps: {sum(N * steps_for_N(N) * runs_per[N] for N in sizes):,.0f}")
