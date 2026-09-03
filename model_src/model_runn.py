@@ -266,6 +266,11 @@ def run_trajectory_analysis(params=None, runs_per_combo=5):
             'fraction_veg_trajectory': model.fraction_veg, 'system_C_trajectory': model.system_C,
             'snapshots': model.snapshots if hasattr(model, 'snapshots') else None,
             'steady_state_t': model.steady_state_t if hasattr(model, 'steady_state_t') else None,
+            'individual_reductions': model.get_attributes("reduction_out"),
+            'individual_reductions_unw': model.get_attributes("reduction_out_unw"),
+            'events': model.events,
+            'initial_diets': model.snapshots[0]['diets'],
+            'params': dict(model.params),
             'run': i, 'parameter_set': "Survey Individual Parameters"
         })
 
