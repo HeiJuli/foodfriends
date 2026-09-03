@@ -283,12 +283,23 @@ def run_veg_growth_analysis(base_params, veg_fractions):
     print(f"Saved to {filename}")
     return df
 
+def _outfile(base_params, agent_ini):
+    """Output path, refusing to overwrite: a same-day rerun used to clobber the
+    700 MB ensemble silently."""
+    tag = base_params.get("tag") or date.today().strftime("%Y%m%d")
+    path = f'../model_output/trajectory_analysis_{agent_ini}_{tag}.pkl'
+    if os.path.exists(path):
+        raise SystemExit(f"ERROR: {path} exists -- pass a distinct --tag")
+    return path
+
+
 def run_trajectory_analysis_parallel(base_params, runs_per_combo, n_cores):
     """Parallel trajectory analysis for twin or sample-max mode"""
     param_list = []
 
     # Use agent_ini from base_params
     agent_ini = base_params.get("agent_ini", "twin")
+    _outfile(base_params, agent_ini)   # fail now, not after hours of compute
     target_N = base_params["N"]
     print(f"INFO: Using N={target_N} for {agent_ini} mode")
 
@@ -317,7 +328,7 @@ def run_trajectory_analysis_parallel(base_params, runs_per_combo, n_cores):
         print(f"{agent_ini} median trajectory: run {df.loc[median_idx, 'run']} with final_veg_f = {df.loc[median_idx, 'final_veg_f']:.3f}")
 
     ensure_output_dir()
-    filename = f'../model_output/trajectory_analysis_{agent_ini}_{date.today().strftime("%Y%m%d")}.pkl'
+    filename = _outfile(base_params, agent_ini)
     df.to_pickle(filename)
     print(f"Saved {len(results)} trajectories to {filename}")
     return df
@@ -334,6 +345,11 @@ def main():
     parser.add_argument('--beta_points', type=int, default=5, help='Beta grid points')
     parser.add_argument('--veg_points', type=int, default=10, help='Veg fraction points')
     parser.add_argument('--survey_file', default='../data/hierarchical_agents.csv', help='Survey data file')
+    parser.add_argument('--steps', type=int, help='override timesteps (default %d)' % DEFAULT_PARAMS["steps"])
+    parser.add_argument('--N', type=int, help='override population size')
+    parser.add_argument('--dense-start', type=int, dest='dense_start',
+                        help='snapshot_dense_start; set it from the fitted t_end (0 disables)')
+    parser.add_argument('--tag', help='output tag, replaces the date in the filename')
 
     args = parser.parse_args()
 
@@ -346,6 +362,12 @@ def main():
     params["agent_ini"] = args.agent_ini
     if args.survey_file:
         params["survey_file"] = args.survey_file
+    for key, val in (("steps", args.steps), ("N", args.N),
+                     ("snapshot_dense_start", args.dense_start), ("tag", args.tag)):
+        if val is not None:
+            params[key] = val
+    print(f"BANNER: N={params['N']} steps={params['steps']} kappa={params['kappa']} "
+          f"dense_start={params['snapshot_dense_start']} tag={params.get('tag') or 'date'}")
 
     print(f"Running {args.analysis} analysis with {args.agent_ini} initialization...")
 
