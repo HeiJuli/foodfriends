@@ -131,6 +131,11 @@ BASE_PARAMS.update({
     "snapshot_dense_start": 0,   # observables computed in-worker; dense snaps unused
 })
 
+# The campaigns inherit kappa from the runner above. An absent key falls through to
+# model_main's .get("kappa", 1.0) and the whole campaign then sweeps at face value
+# while everything else runs discounted -- same class as the tau = 11,700 incident.
+assert "kappa" in BASE_PARAMS, "ERROR: no kappa in model_runner_mp.DEFAULT_PARAMS"
+
 
 # --- reuse from the OAT campaign -------------------------------------------
 # sensitivity_campaign.py swept beta at the baseline gate and theta_gate_c at
@@ -386,6 +391,7 @@ def main():
               f"{len(covered)} reused from {args.oat or 'nothing'} "
               f"({0 if reuse is None else len(reuse)} runs), "
               f"{len(jobs)} new runs at {args.runs}/cell, "
+              f"N={BASE_PARAMS['N']}, kappa={BASE_PARAMS['kappa']}, "
               f"steps={args.steps}, on {args.cores} cores")
         with Pool(args.cores) as pool:
             df = pd.DataFrame(pool.map(_run_cell, jobs))

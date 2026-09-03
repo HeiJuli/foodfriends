@@ -34,6 +34,7 @@ DEFAULT_PARAMS = {
     "target_veg_fraction": 0.06,   # NL demographics target
     "theta_gate_c": 0.35,  # gate threshold: p_opp needed to activate theta
     "theta_gate_k": 35,    # gate steepness (submission value; verified 2026-08-18)
+    "kappa": 0.55,         # intention-behaviour discount on rho in h_ind (Webb & Sheeran 2006; 1.0 = face value)
     "alpha_min": 0.05,     # alpha compression lower bound
     "alpha_max": 0.80,     # alpha compression upper bound
     "gamma": 0.3,  # diminishing returns exponent for repeated same-source contacts

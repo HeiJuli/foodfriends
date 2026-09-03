@@ -53,8 +53,14 @@ def get_median_row(data):
         return data[data['is_median_twin']].iloc[0]
     return data.iloc[len(data) // 2]
 
-def _resolve_snap(snapshots, t_cutoff=ANALYSIS_T):
-    """Return snapshot at t_cutoff (nearest int key), else 'final'."""
+def _resolve_snap(snapshots, t_cutoff=None):
+    """Return snapshot at t_cutoff (nearest int key), else 'final'.
+
+    t_cutoff defaults to ANALYSIS_T read at call time, not bound at def time, so
+    that setting the module constant after import actually takes effect.
+    """
+    if t_cutoff is None:
+        t_cutoff = ANALYSIS_T
     if t_cutoff is not None:
         int_ts = sorted(t for t in snapshots if isinstance(t, int) and t > 0)
         if int_ts:
@@ -277,9 +283,15 @@ def analyze_degree_scaling(df):
     for _, r in binned.iterrows():
         print(f"  {r['mean_deg']:>8.1f} {r['mean_red']:>10.1f} {r['median_red']:>10.1f} {r['n']:>5.0f}")
 
-    # Log-log regression: log(reduction) ~ log(degree) -> slope > 1 means super-linear
-    log_deg = np.log(pos['degree'])
-    log_red = np.log(pos['reduction_kg'])
+    # Log-log regression: log(reduction) ~ log(degree) -> slope > 1 means super-linear.
+    # Isolated agents can hold credit (switched on h_ind alone, keep their own direct
+    # reduction) and log(0) poisons the fit -- statsmodels then dies in the SVD.
+    fit = pos[pos['degree'] > 0]
+    n_iso = len(pos) - len(fit)
+    if n_iso:
+        print(f"\n  WARNING: {n_iso} isolated agent(s) with credit excluded from the log-log fit")
+    log_deg = np.log(fit['degree'])
+    log_red = np.log(fit['reduction_kg'])
     X = sm.add_constant(log_deg)
     model = sm.OLS(log_red, X).fit()
     slope = model.params.iloc[1]
@@ -290,7 +302,7 @@ def analyze_degree_scaling(df):
 
     # Also check contagion scaling if available
     if 'direct_conversions' in pos.columns:
-        dc_pos = pos[pos['direct_conversions'] > 0]
+        dc_pos = fit[fit['direct_conversions'] > 0]
         if len(dc_pos) > 10:
             log_dc = np.log(dc_pos['direct_conversions'])
             log_d = np.log(dc_pos['degree'])

@@ -21,7 +21,7 @@ so arms are paired on network realisation and initial condition: differences are
 the parameter, not the draw.
 
 Parameters swept (baseline starred in SWEEPS below):
-  decay (lambda), M, beta, gamma, immune_n, theta_gate_c, theta_gate_k
+  decay (lambda), M, beta, gamma, immune_n, theta_gate_c, theta_gate_k, kappa
 
 Observables:
   F_veg_final  steady-state vegetarian fraction
@@ -59,10 +59,14 @@ comparable on any amplification observable:
   visualisations_output/sensitivity_table_<tag>.tex  SI table
   visualisations_output/sensitivity_interaction_<tag>.pdf   (--interaction only)
 
-RUN THIS ON THE COMPUTE SERVER, not the laptop. The full campaign is 870 model
-runs (1370 with --interaction). Measured on this laptop at N=2000: ~14 s fixed
-setup (network build + agent init) plus 0.62 ms/step, so ~106 s per 150k-step run
--- about 26 core-hours for the OAT campaign, 40 with --interaction.
+RUN THIS ON THE COMPUTE SERVER, not the laptop. The full campaign is 990 model
+runs (1490 with --interaction) since kappa joined the sweep on 2026-09-03; the
+interaction grid is a fixed pair and did not grow. Measured on this laptop at
+N=2000: ~14 s fixed setup (network build + agent init) plus 0.62 ms/step, so
+~106 s per 150k-step run -- about 30 core-hours for the OAT campaign, 44 with
+--interaction. Scale that by the run length: kappa = 0.55 pushes saturation out
+roughly 3.4x, so a campaign at the length the adopted configuration needs costs
+proportionately more. Set --steps from the fitted t_end, not from habit.
 
     python sensitivity_campaign.py --runs 30 --interaction --cores <n>
 
@@ -96,7 +100,8 @@ DIRECT_REDUCTION_KG = 2054 - 1390   # meat_CO2 - veg_CO2
 # --- sweep design ----------------------------------------------------------
 # value lists; the baseline value must appear in each list exactly once
 BASELINE = {"decay": 0.7, "M": 9, "beta": 13, "gamma": 0.3,
-            "immune_n": 0.10, "theta_gate_c": 0.35, "theta_gate_k": 35}
+            "immune_n": 0.10, "theta_gate_c": 0.35, "theta_gate_k": 35,
+            "kappa": 0.55}
 
 SWEEPS = {
     "decay":        [0.5, 0.6, 0.7, 0.8, 0.9],
@@ -106,12 +111,17 @@ SWEEPS = {
     "immune_n":     [0.0, 0.05, 0.10, 0.15, 0.20],
     "theta_gate_c": [0.25, 0.30, 0.35, 0.40, 0.45],
     "theta_gate_k": [15, 25, 35, 45, 55],
+    # kappa = 1.00 is the pre-2026-09-03 configuration, i.e. stated intention at face
+    # value, so the sweep contains the undiscounted model as an endpoint and "what if
+    # you had not discounted?" reads straight off the tornado.
+    "kappa":        [0.40, 0.55, 0.70, 0.85, 1.00],
 }
 
 PLABEL = {"decay": r"$\lambda$ (attenuation)", "M": r"$M$ (memory)",
           "beta": r"$\beta$ (inverse temp.)", "gamma": r"$\gamma$ (dim. returns)",
           "immune_n": r"$f_{imm}$ (immune)", "theta_gate_c": r"$c$ (gate threshold)",
-          "theta_gate_k": r"$k$ (gate steepness)"}
+          "theta_gate_k": r"$k$ (gate steepness)",
+          "kappa": r"$\kappa$ (intention discount)"}
 
 OBS = ["F_veg_final", "F_c", "t_50", "amp_mean", "amp_p90", "amp_max"]
 OLABEL = {"F_veg_final": r"$F_{veg}$ (final)", "F_c": r"$F_c$ (max accel.)",
@@ -135,6 +145,11 @@ BASE_PARAMS.update({
                                  # lambda sweep's baseline arm is explicit.
     "snapshot_dense_start": 0,   # observables computed in-worker; dense snaps unused
 })
+
+# The campaigns inherit kappa from the runner above. An absent key falls through to
+# model_main's .get("kappa", 1.0) and the whole campaign then sweeps at face value
+# while everything else runs discounted -- same class as the tau = 11,700 incident.
+assert "kappa" in BASE_PARAMS, "ERROR: no kappa in model_runner_mp.DEFAULT_PARAMS"
 
 # Population the loaded results were swept at. Set from the tag in main() so that
 # --plot-only on an older pkl labels its figures with the N it actually ran at.
@@ -614,6 +629,7 @@ def main():
     else:
         jobs = build_jobs(args.runs, args.steps)
         print(f"INFO: {len(jobs)} runs ({args.runs}/point, {len(SWEEPS)} parameters, "
+              f"N={BASE_PARAMS['N']}, kappa={BASE_PARAMS['kappa']}, "
               f"steps={args.steps}) on {args.cores} cores")
         with Pool(args.cores) as pool:
             rows = pool.map(_run_one, jobs)

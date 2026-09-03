@@ -57,6 +57,7 @@ params = {
     "target_veg_fraction": 0.06,
     "theta_gate_c": 0.35,
     "theta_gate_k": 35,   # submission value (verified by pkl reproduction 2026-08-18)
+    "kappa": 0.55,  # intention-behaviour discount on rho in h_ind (Webb & Sheeran 2006; 1.0 = face value)
     "alpha_min": 0.05,
     "alpha_max": 0.80,
     "gamma": 0.3,  # diminishing returns exponent: n contacts from same source -> n^gamma effective
@@ -257,8 +258,11 @@ class Agent():
         s_stay = 1.0 if self.diet == "veg" else 0.0
         gate_c, gate_k = self.params.get("theta_gate_c", 0.3), self.params.get("theta_gate_k", 10)
         M, gamma = self.params["M"], self.params.get("gamma", 0.5)
-        H_stay   = hamiltonian(s_stay,       self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, gamma)
-        H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, self.rho, self.diet, gate_c, gate_k, gamma)
+        # kappa discounts the stated intention before it becomes a reference point on the
+        # diet axis ("eat less meat" is not "be vegetarian"); the survey rho itself is untouched
+        rho = self.params.get("kappa", 1.0) * self.rho
+        H_stay   = hamiltonian(s_stay,       self.theta, self.w_i, self.memory, M, rho, self.diet, gate_c, gate_k, gamma)
+        H_switch = hamiltonian(1.0 - s_stay, self.theta, self.w_i, self.memory, M, rho, self.diet, gate_c, gate_k, gamma)
         return boltzmann_prob(H_switch, H_stay, self.params["beta"])
 
     def _cascade_attribute(self, delta, influencer, agents_list, t,
