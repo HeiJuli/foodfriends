@@ -15,6 +15,12 @@ Corrects artifacts in prior version (2026-03-22):
   4. Agent cloning above N=5602 reduced parameter heterogeneity
   See: claude_stuff/Infrastructure/system_size_scaling_artifacts_2026-03-23.md
 
+Amplification (mean_mult, max_mult, p90_mult, gamma) uses the primary credit
+convention fixed 2026-09-02 -- exposure-proportional parents, event count, no dwell
+weight -- replayed from the event log by analysis/attribution_ledger.py. The
+in-simulation ledger (last-draw, dwell-weighted) is kept as mean_mult_sub /
+max_mult_sub / n_positive_sub for comparison.
+
 N values: 2000, 4000, 6000, 10000, 20000
   - N=2000 is the baseline (single community, matches validated model)
   - N<=20000 keeps runtime tractable (~50 updates/agent)
@@ -35,8 +41,10 @@ from scipy.stats import gaussian_kde
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../analysis'))
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 import model_main
+from attribution_ledger import replay
 from auxillary.homophily_network_v2 import generate_homophily_network_v2
 from auxillary.sampling_utils import stratified_sample_agents
 
@@ -272,7 +280,12 @@ def run_single(args):
     snap_init = model.snapshots[0]
     G = snap_final['graph']
     nodes = list(G.nodes())
-    reds = np.array(snap_final['reductions'])
+    # Primary credit convention (exposure-proportional parents, event count, no
+    # dwell weight), replayed from the event log; snap_final['reductions'] is the
+    # submitted convention and is kept only for the _sub comparison below.
+    reds = replay(model.events, model.snapshots[0]['diets'], model.params,
+                  parent="exposure", weight="none", unit="event")
+    reds_sub = np.array(snap_final['reductions'])
 
     pos = reds[reds > 0]
     mults = pos / DIRECT_REDUCTION_KG if len(pos) > 0 else np.array([0])
@@ -296,6 +309,10 @@ def run_single(args):
     mean_mult = np.mean(mults) if len(mults) > 0 else 0
     max_mult = np.max(mults) if len(mults) > 0 else 0
     p90_mult = np.percentile(mults, 90) if len(mults) > 0 else 0
+    pos_sub = reds_sub[reds_sub > 0]
+    mults_sub = pos_sub / DIRECT_REDUCTION_KG if len(pos_sub) > 0 else np.array([0])
+    mean_mult_sub = np.mean(mults_sub)
+    max_mult_sub = np.max(mults_sub)
 
     # 4. Gini
     gini = np.nan
@@ -358,6 +375,8 @@ def run_single(args):
         'f_veg': f_veg, 'avg_degree': avg_deg, 'r_assort': r_assort,
         'gamma': gamma, 'r2_gamma': r2_gamma,
         'mean_mult': mean_mult, 'max_mult': max_mult, 'p90_mult': p90_mult,
+        'mean_mult_sub': mean_mult_sub, 'max_mult_sub': max_mult_sub,
+        'n_positive_sub': len(pos_sub),
         'gini': gini, 'fc': fc, 'alpha_ccdf': alpha_ccdf,
         'dc_slope': dc_slope,
         'n_positive': len(pos), 'n_agents': len(reds),

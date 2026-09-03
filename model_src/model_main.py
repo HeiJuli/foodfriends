@@ -76,20 +76,21 @@ def hamiltonian(s_num, theta, w, memory, M, rho, current_diet,
       effective weight. gamma=1 => all contacts equal, gamma->0 => only unique
       sources matter.
 
-    Memory entries are (diet, source_id) tuples.
+    Memory entries are (diet, source_id, t_sampled) tuples; t_sampled is read only by
+    the offline ledger (analysis/attribution_ledger.py, stint test).
     """
     mem = memory[-M:]
     if not mem:
         return (1 - w) * (s_num - rho)**2
 
     # Effective counts with diminishing returns per source
-    veg_src = Counter(src for d, src in mem if d == "veg")
-    all_src = Counter(src for _, src in mem)
+    veg_src = Counter(src for d, src, _ in mem if d == "veg")
+    all_src = Counter(src for _, src, _ in mem)
     eff_veg = sum(n ** gamma for n in veg_src.values())
     eff_total = sum(n ** gamma for n in all_src.values())
 
     h_soc = eff_veg / eff_total if eff_total > 0 else 0.0
-    p_opp = sum(1 for d, _ in mem if d != current_diet) / len(mem)
+    p_opp = sum(1 for d, _, _ in mem if d != current_diet) / len(mem)
     gate = 1 / (1 + math.exp(-theta_gate_k * (p_opp - theta_gate_c)))
 
     s = s_num
@@ -221,10 +222,10 @@ class Agent():
         return np.random.choice(["veg", "meat"], p=[self.params["veg_f"], self.params["meat_f"]])
 
     def initialize_memory_from_neighbours(self, G, agents):
-        """Seed memory as (diet, source_id) tuples matching neighbor distribution."""
+        """Seed memory as (diet, source_id, 0) tuples matching neighbor distribution."""
         neigh_ids = list(G.neighbors(self.i))
         if not neigh_ids:
-            self.memory = [(self.diet, self.i)] * self.params["M"]
+            self.memory = [(self.diet, self.i, 0)] * self.params["M"]
             return
         neigh_diets = [(agents[j].diet, j) for j in neigh_ids]
         n_veg = sum(1 for d, _ in neigh_diets if d == "veg")
@@ -235,10 +236,10 @@ class Agent():
         mem = []
         for _ in range(veg_in_mem):
             src = random.choice(veg_nbrs) if veg_nbrs else self.i
-            mem.append(("veg", src))
+            mem.append(("veg", src, 0))
         for _ in range(self.params["M"] - veg_in_mem):
             src = random.choice(meat_nbrs) if meat_nbrs else self.i
-            mem.append(("meat", src))
+            mem.append(("meat", src, 0))
         random.shuffle(mem)
         self.memory = mem
 
@@ -287,7 +288,7 @@ class Agent():
         """Step agent forward one timestep via pairwise interaction.
         Returns an event tuple on a diet switch, else None:
           ("conv", t, i, partner, partner_diet, buffer)  meat->veg; buffer is the
-              last M (diet, source) entries as seen by prob_calc (partner included)
+              last M (diet, source, t_sampled) entries as seen by prob_calc (partner included)
           ("rev", t, i)                                  veg->meat
         The log is what analysis/attribution_ledger.py replays; every credit
         convention (parent rule, dwell weight, lambda, unit) is computed from it
@@ -296,7 +297,7 @@ class Agent():
         if not neighbours:
             return None
         other_agent = random.choice(neighbours)
-        self.memory.append((other_agent.diet, other_agent.i))
+        self.memory.append((other_agent.diet, other_agent.i, t))
         event = None
 
         if not self.immune and self.flip(self.prob_calc(other_agent)):

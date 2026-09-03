@@ -32,10 +32,20 @@ Observables:
   amp_p90      90th percentile of the same
   amp_max      maximum of the same (the "88x" ceiling)
 
-NOTE on M: tau_persistence is defined as M*2*N (model_main.py:336), so the M sweep
-moves the dwell-time window with the memory length. That is the model's definition
-of M, not a confound introduced here, but it must be stated wherever the M sweep is
-reported.
+The amplification observables are the PRIMARY credit convention fixed on 2026-09-02
+(exposure-proportional parents, event count, no dwell weight, lambda from params),
+replayed in-worker from the event log by analysis/attribution_ledger.py. The
+in-simulation ledger (last-draw parent, dwell-weighted) is the submitted convention
+and is carried alongside as amp_mean_sub / amp_max_sub / n_credited_sub so the two
+can be compared without a rerun. See
+claude_stuff/Review/model_changes_before_rerun_2026-09-02.md section 6.
+
+NOTE on M: tau_persistence = M*2*N (model_main.py:336) enters the dwell weight only,
+so under the primary convention the M row is a clean memory-length response; the
+_sub columns still carry the M/tau coupling and must be labelled as such if quoted.
+NOTE on gamma: exposure-proportional credit splits by the same n**gamma share that
+h_soc uses, so the gamma sweep moves the dynamics and the credit split together --
+the coupling the M row used to have, moved to gamma by the convention change.
 
 Outputs are tagged <date>_N<N>, because a campaign is only interpretable against
 the configuration it swept and sample-max (385) and twin (2000) runs are not
@@ -74,8 +84,10 @@ from scipy.signal import savgol_filter
 sys.path.append('.')
 sys.path.append('..')
 sys.path.append('../plotting')
+sys.path.append('../analysis')
 import model_main
 import model_runner_mp
+from attribution_ledger import replay
 from plot_styles import (set_publication_style, apply_axis_style, COLORS,
                          ECO_CMAP, ECO_DIV_CMAP)
 
@@ -165,9 +177,15 @@ def _inflection(traj, win=10001, burnin=5000):
 
 
 def _observables(m):
+    """Primary amplification is replayed from the event log; the in-simulation
+    ledger rides along as the _sub columns. The 'final' snapshot is taken at
+    t = steps, which is replay's default t_end, so the two cover the same window."""
     traj = np.asarray(m.fraction_veg, float)
-    reds = np.asarray(m.snapshots['final']['reductions'], float)
+    reds = replay(m.events, m.snapshots[0]['diets'], m.params,
+                  parent="exposure", weight="none", unit="event")
     mult = reds[reds > 0] / DIRECT_REDUCTION_KG
+    sub = np.asarray(m.snapshots['final']['reductions'], float)
+    mult_sub = sub[sub > 0] / DIRECT_REDUCTION_KG
     cross = np.flatnonzero(traj >= 0.5)
     F_c, F_infl, t_infl = _inflection(traj)
     return {
@@ -180,6 +198,9 @@ def _observables(m):
         "amp_max": mult.max() if len(mult) else 0.0,
         "n_credited": int(len(mult)),
         "total_credit_kg": float(reds.sum()),
+        "amp_mean_sub": mult_sub.mean() if len(mult_sub) else 0.0,
+        "amp_max_sub": mult_sub.max() if len(mult_sub) else 0.0,
+        "n_credited_sub": int(len(mult_sub)),
         "steady_state_t": m.steady_state_t,
     }
 
@@ -495,9 +516,10 @@ def write_table(summary, sens, out):
          r"expressed as a fraction of its value at the default configuration "
          r"and signed by the direction of the response. $S$ is conditional on "
          r"the ranges swept here, so it ranks parameters within those ranges "
-         r"rather than globally. Note that $\tau_{p}$ is defined as $2MN$, so "
-         r"the $M$ sweep moves the memory length and the dwell-time window "
-         r"together.}",
+         r"rather than globally. Amplification uses the primary credit "
+         r"convention (exposure-proportional parents, event count, no dwell "
+         r"weight); the $\gamma$ sweep therefore moves the social-influence "
+         r"kernel and the credit split together.}",
          r"\label{tab:sensitivity}",
          r"\begin{tabular}{llcccccc}", r"\toprule",
          r"Parameter & Value & $F_{veg}$ & $F_c$ & $t_{50}$ (k) & "
