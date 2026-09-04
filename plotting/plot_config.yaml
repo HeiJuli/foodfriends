@@ -26,14 +26,22 @@ agency_predictors:
 
 network_agency_evolution_ensemble:
   big_n:
-    file: trajectory_analysis_twin_20260402.pkl
-    analysis_t_end: 139000      # ensemble-median logistic 95% t_end (IQR [134k,145k])
+    file: trajectory_analysis_twin_20260903_kappa0p55_N2000.pkl
+    truncate_steps: 350000      # display window in STEPS; every run's t_90 <= 347.7k
+    analysis_t_end: 310000      # ensemble-median logistic 95% t_end (IQR [290.9k,325.7k])
   small_n:
-    file: trajectory_analysis_sample-max_20260413.pkl
-    analysis_t_end: null
+    # Network panels only. Both times are SMALL-N snapshots chosen so that, under the
+    # F_veg=0.5 rescaling (scale_factor 5.575), they land on the big-N times that matter:
+    #   38000 -> 211.9k, the F_veg=0.5 crossing (the rescale anchor itself)
+    #   56000 -> 312.2k, the big-N analysis window (310000)
+    file: trajectory_sample-max_20260903_kappa0p55_100k.pkl
+    mid_t: 38000
+    analysis_t_end: 56000
   rescale:
     reference_fveg: 0.5
-  savgol_window: 10001
+  savgol_window: 80001         # 20% of the 400k run: tightest per-seed F_c IQR
+                               # (0.086 vs 0.121 at 10001), median window-stable.
+                               # Matches the window the SI quotes F_c at.
 
 amplification_ensemble:
   file: trajectory_analysis_twin_20260402.pkl

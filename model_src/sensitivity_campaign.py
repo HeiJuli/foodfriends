@@ -175,21 +175,44 @@ def pmf_tables():
 # ---------------------------------------------------------------------------
 # Observables
 # ---------------------------------------------------------------------------
-def _inflection(traj, win=10001, burnin=5000):
-    """F_c (max d2F/dt2 below F=0.5) and inflection (max dF/dt). Mirrors
-    analysis/results_analysis.py:analysis_5_inflection so the campaign and the
-    main analysis report the same estimator."""
+# Savitzky-Golay window as a FRACTION of the run, not an absolute constant. 10001
+# was chosen against a 139k trajectory; at 400k it is a different fraction of the
+# transient. 20% is where F_c's per-seed IQR is tightest across the kappa=0.55
+# ensemble (0.086, against 0.121 at 10001 and 0.107-0.143 at 2-10%) and where its
+# median is window-stable (0.352 against 0.352-0.382 over 2-20%).
+FC_WIN_FRAC = 0.20
+FC_STRIDE = 100      # decimate before filtering, as results_analysis.py does
+
+
+def _inflection(traj, win=None, burnin=None, stride=FC_STRIDE):
+    """F_c (max d2F/dt2 below F=0.5) and inflection (max dF/dt).
+
+    Mirrors analysis/results_analysis.py:_smooth_derivs properly: decimate by
+    stride, scale the window with it, and mask idx < max(burnin, win). The
+    previous version filtered undecimated and masked a hardcoded 5000 against a
+    10001 kernel, i.e. less than one half-window, so the edge transient leaked
+    into the argmax. Verified against fc_viability_kappa.py's undecimated
+    F_c_20pct column on all 50 kappa runs: max per-seed difference 0.0016,
+    identical median and IQR, and ~100x faster."""
     traj = np.asarray(traj, float)
-    if len(traj) < burnin + 2 * win:
+    if win is None:
+        win = int(FC_WIN_FRAC * len(traj)) | 1
+    if burnin is None:
+        burnin = win
+    y = traj[::stride]
+    w = max(5, int(win // stride) | 1)
+    if len(y) < 2 * w:
         return np.nan, np.nan, np.nan
-    sm = savgol_filter(traj, win, 3)
-    d1 = savgol_filter(traj, win, 3, deriv=1); d1[:burnin] = 0
-    d2 = savgol_filter(traj, win, 3, deriv=2); d2[:burnin] = 0
-    i1 = np.argmax(d1)
+    idx = np.arange(len(y)) * stride
+    mask = idx < max(burnin, win)
+    sm = savgol_filter(y, w, 3)
+    d1 = savgol_filter(y, w, 3, deriv=1, delta=stride); d1[mask] = 0
+    d2 = savgol_filter(y, w, 3, deriv=2, delta=stride); d2[mask] = 0
+    i1 = int(np.argmax(d1))
     d2m = d2.copy(); d2m[sm > 0.5] = 0
-    i2 = np.argmax(d2m)
+    i2 = int(np.argmax(d2m))
     F_c = sm[i2] if d2m[i2] > 0 else np.nan
-    return F_c, sm[i1], i1 / 1000.0
+    return F_c, sm[i1], idx[i1] / 1000.0
 
 
 def _observables(m):
