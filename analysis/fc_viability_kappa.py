@@ -31,6 +31,9 @@ Usage:
     python fc_viability_kappa.py            # full run (loads pickle once,
                                             # caches arrays to npz)
     python fc_viability_kappa.py --cached   # skip pickle load, reuse npz
+    python fc_viability_kappa.py --reduced  # load the reduce_ensemble.py
+                                            # per-run artefacts instead of
+                                            # the raw pickle (fits in RAM)
 
 Outputs:
     model_output/fc_viability_20260903_kappa0p55_N2000.csv   per-run numbers
@@ -43,6 +46,7 @@ import pandas as pd
 sys.path.append('../analysis')
 
 PKL = '../model_output/trajectory_analysis_twin_20260903_kappa0p55_N2000.pkl'
+REDUCED_DIR = '../model_output/trajectory_analysis_twin_20260903_kappa0p55_N2000_reduced'
 CACHE = '../model_output/fc_viability_cache_kappa0p55_N2000.npz'
 INTEGRITY = '../model_output/fc_viability_integrity_kappa0p55_N2000.json'
 OUT_CSV = '../model_output/fc_viability_20260903_kappa0p55_N2000.csv'
@@ -230,6 +234,63 @@ def load_cached():
     return z['trajectories'].astype(np.float64), z['seeds'], rep
 
 
+def load_reduced():
+    """Load the reduce_ensemble.py per-run artefacts instead of the raw pickle.
+
+    The reduced dicts carry `fraction_veg` as float32 (lossless for what this
+    script measures -- the ledger replay validates against the in-run credit at
+    atol = 0 on all 50 runs, see handover_2026-09-03_kappa_ensemble.md s.1) and
+    fit in laptop memory, which the raw 1.77 GB pickle does not. Runs the same
+    integrity gate as load_and_check, adapted to the per-run dict layout."""
+    import glob
+    paths = sorted(glob.glob(os.path.join(REDUCED_DIR, 'run_*.pkl')))
+    print(f"INFO: loading {len(paths)} reduced runs from {REDUCED_DIR}",
+          flush=True)
+
+    rep = {"path": REDUCED_DIR, "n_rows": len(paths),
+           "required_cols_present": True,
+           "params_ok": True, "param_failures": [], "dropped_memo_hits": 0,
+           "snapshots_nonnull": True, "traj_lengths": {}}
+
+    seeds, trajs = [], []
+    for path in paths:
+        with open(path, 'rb') as f:
+            run = pickle.load(f)
+        i = run['run']
+        if not all(c in run for c in REQUIRED_COLS):
+            rep["required_cols_present"] = False
+        p = run['params']
+        for k, v in EXPECTED.items():
+            if p.get(k) != v:
+                rep["params_ok"] = False
+                rep["param_failures"].append({"row": int(i), "key": k,
+                                              "got": p.get(k), "expected": v})
+        if not run['snapshots']:
+            rep["snapshots_nonnull"] = False
+        t = np.asarray(run['fraction_veg'], dtype=np.float64)
+        trajs.append(t)
+        rep["traj_lengths"][str(i)] = int(len(t))
+        seeds.append(int(p.get('seed', i)))
+        del run
+    gc.collect()
+
+    rep["traj_length_unique"] = sorted(set(rep["traj_lengths"].values()))
+    rep["traj_consistent_with_400k"] = all(
+        abs(n - STEPS) <= 1 for n in rep["traj_length_unique"])
+    rep["passed"] = (rep["n_rows"] == 50 and rep["required_cols_present"]
+                     and rep["params_ok"] and rep["snapshots_nonnull"]
+                     and rep["traj_consistent_with_400k"]
+                     and rep["dropped_memo_hits"] == 0)
+
+    traj_arr = np.vstack(trajs)
+    np.savez_compressed(CACHE, trajectories=traj_arr,
+                        seeds=np.array(seeds, dtype=int))
+    with open(INTEGRITY, 'w') as f:
+        json.dump(rep, f, indent=2)
+    print(f"INFO: cached trajectories -> {CACHE}")
+    return traj_arr, np.array(seeds), rep
+
+
 # ---------------------------------------------------------------------------
 # Estimators
 # ---------------------------------------------------------------------------
@@ -338,6 +399,8 @@ def main():
     if '--cached' in sys.argv and os.path.exists(CACHE):
         print(f"INFO: using cached arrays {CACHE}")
         trajs, seeds, rep = load_cached()
+    elif '--reduced' in sys.argv:
+        trajs, seeds, rep = load_reduced()
     else:
         trajs, seeds, rep = load_and_check()
 
