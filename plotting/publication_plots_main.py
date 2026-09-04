@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Main publication plots"""
 import os
+import glob
+import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -50,7 +52,31 @@ def ensure_output_dir():
     os.makedirs(output_dir, exist_ok=True)
     return output_dir
 
+def _load_reduced(reduced_dir):
+    """Build a DataFrame from analysis/reduce_ensemble.py per-run artefacts.
+
+    The kappa-era ensembles do not fit in laptop memory as a single pickle; the
+    reduced artefacts hold the same fields (float32 trajectories, snapshots as
+    arrays) and are lossless for everything the figures use.
+    """
+    paths = sorted(glob.glob(os.path.join(reduced_dir, 'run_*.pkl')))
+    if not paths:
+        return None
+    rows = []
+    for path in paths:
+        with open(path, 'rb') as fh:
+            rows.append(pickle.load(fh))
+    print(f"INFO: loaded {len(rows)} reduced runs from {os.path.basename(reduced_dir)}")
+    return pd.DataFrame(rows)
+
 def load_data(file_path):
+    # Prefer the reduced artefacts when they exist -- the raw ensemble pickle is
+    # OOM-killed on a laptop at N=2000 x 50 runs x 400k steps.
+    reduced_dir = os.path.splitext(file_path)[0] + '_reduced' if file_path else None
+    if reduced_dir and os.path.isdir(reduced_dir):
+        df = _load_reduced(reduced_dir)
+        if df is not None:
+            return df
     try:
         return pd.read_pickle(file_path)
     except Exception as e:
@@ -759,7 +785,10 @@ def plot_network_agency_evolution_ensemble(
                                      edgecolors='#333', linewidths=0.3)
                 top_reducer_value = reductions[top_reducer_idx]
 
-        title = '$t_0$' if t == 0 else '$t_{end}$' if t == 'final' else f't = {t//1000}k'
+        # Title in big-N time, matching panel A's markers: these are N=385 networks
+        # placed on the N=2000 clock by the F_veg=0.5 rescaling.
+        title = ('$t_0$' if t == 0 else '$t_{end}$' if t == 'final'
+                 else f't = {int(t * scale_factor)//1000}k')
         net_ax.set_title(title, fontsize=10, pad=2)
         pad_n = 0.02
         net_ax.set_xlim(x_min - pad_n, x_max + pad_n)
@@ -801,7 +830,10 @@ def plot_network_agency_evolution_ensemble(
         traj_ax.axvline(t_k_pt, color='#888', linestyle=':', linewidth=0.7, alpha=0.6)
         traj_ax.scatter(t_k_pt, ref_traj[t_val], color=marker_color,
                        s=14, zorder=5, edgecolors='#333', linewidths=0.4)
-        label = '$t_{end}$' if t == 'final' else f'$t_{{{t_val//1000}k}}$'
+        # Label in big-N time: the axis is the big-N clock, but t_val is a small-N
+        # snapshot time, so the raw value is off by scale_factor (5.6x here).
+        label = ('$t_{end}$' if t == 'final'
+                 else f'$t_{{{int(t_val * scale_factor)//1000}k}}$')
         traj_ax.text(t_k_pt, 1.02, label, transform=traj_ax.get_xaxis_transform(),
                     fontsize=5, ha='center', va='bottom', color='#555')
 
@@ -1049,7 +1081,11 @@ def _run_from_config(cfg, plot_key):
         plot_network_agency_evolution_ensemble(
             file_path=_cfg_path(big.get('file')),
             small_file_path=_cfg_path(sm.get('file')) if sm.get('file') else None,
+            truncate_steps=big.get('truncate_steps'),
             analysis_t_end=big.get('analysis_t_end'),
+            small_truncate_steps=sm.get('truncate_steps'),
+            small_mid_t=sm.get('mid_t'),
+            small_analysis_t_end=sm.get('analysis_t_end'),
             rescale_ref=rsc.get('reference_fveg', 0.5),
             savgol_window=c.get('savgol_window', 10001))
     elif plot_key == 'amplification_ensemble':
@@ -1163,9 +1199,20 @@ def main():
             if use_small == 'y':
                 print("\n--- Small N (illustrative: network panels) ---")
                 small_file = select_file('trajectory_analysis')
-            t_end = _prompt_t_end(_cfg_t_end(cfg, 'network_agency_evolution_ensemble', 'big_n'), "Big N analysis t_end")
+            c = cfg.get('network_agency_evolution_ensemble', {})
+            cbig, csm = c.get('big_n', {}), c.get('small_n', {})
+            trunc = input(f"Big N: truncate steps [config={cbig.get('truncate_steps')}, "
+                          "Enter=use config]: ").strip()
+            truncate_steps = int(trunc) if trunc else cbig.get('truncate_steps')
+            t_end = _prompt_t_end(cbig.get('analysis_t_end'), "Big N analysis t_end")
+            small_mid_t = csm.get('mid_t') if small_file else None
+            small_analysis_t_end = csm.get('analysis_t_end') if small_file else None
             plot_network_agency_evolution_ensemble(
-                file_path=big_file, small_file_path=small_file, analysis_t_end=t_end)
+                file_path=big_file, small_file_path=small_file,
+                truncate_steps=truncate_steps, analysis_t_end=t_end,
+                small_mid_t=small_mid_t, small_analysis_t_end=small_analysis_t_end,
+                rescale_ref=c.get('rescale', {}).get('reference_fveg', 0.5),
+                savgol_window=c.get('savgol_window', 10001))
         elif choice == '5':
             file_path = select_file('trajectory_analysis')
             if file_path:
