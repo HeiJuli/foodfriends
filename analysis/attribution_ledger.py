@@ -195,6 +195,29 @@ def veg_time(events, initial_diets, t_end):
     return own
 
 
+def _concentration(x):
+    """Gini and top-1% / top-10% shares of total credit over the credited agents."""
+    x = np.asarray(x, float)
+    n, tot = len(x), x.sum()
+    if n == 0 or tot <= 0:
+        return dict(gini=np.nan, top1=np.nan, top10=np.nan)
+    a = np.sort(x)
+    gini = (2 * np.arange(1, n + 1) - n - 1).dot(a) / (n * tot)
+    d = a[::-1]
+    k1, k10 = max(1, int(round(0.01 * n))), max(1, int(round(0.10 * n)))
+    return dict(gini=gini, top1=d[:k1].sum() / tot, top10=d[:k10].sum() / tot)
+
+
+def _veg_count(events, initial_diets, t_end):
+    """Number of vegetarians in the population at t_end."""
+    veg = {j for j, d in enumerate(initial_diets) if d == "veg"}
+    for ev in events:
+        if ev[1] > t_end:
+            break
+        veg.add(ev[2]) if ev[0] == "conv" else veg.discard(ev[2])
+    return len(veg)
+
+
 def amplification(credit, unit, params, own=None):
     """Dimensionless amplification: credit / one delta (event) or credit / own veg-time
     in delta units (time). Agents with no credit are excluded, as in the paper."""
@@ -216,18 +239,34 @@ CONVENTIONS = {
 
 
 def summarise(row, t_end=None, decay=None, gamma=None):
-    """Per-convention summary for one ensemble row (event-graph walk throughout)."""
+    """Per-convention summary for one ensemble row (event-graph walk throughout).
+
+    Alongside the per-agent distribution, `sys_amp` is the system-level ratio -- total
+    credit over total direct reduction, in the convention's own direct unit (one delta per
+    conversion event; one delta-step per vegetarian step for veg-time). `sys_amp_adopter`
+    divides the event-unit credit by the reduction the population is actually holding at
+    t_end (net adopters), which is the ratio that survives churn.
+    """
     ev, d0, p = row["events"], row["initial_diets"], row["params"]
     te = p["steps"] if t_end is None else t_end
+    delta = p["meat_CO2"] - p["veg_CO2"]
     own = veg_time(ev, d0, te)
     n_conv = sum(1 for e in ev if e[0] == "conv" and e[1] <= te)
     n_conv_agents = len({e[2] for e in ev if e[0] == "conv" and e[1] <= te})
-    out = {"churn": n_conv / n_conv_agents if n_conv_agents else np.nan}
+    n_net = _veg_count(ev, d0, te) - sum(1 for d in d0 if d == "veg")
+    out = {"churn": n_conv / n_conv_agents if n_conv_agents else np.nan,
+           "n_conv": n_conv, "n_converters": n_conv_agents, "net_adopters": n_net}
     for name, cfg in CONVENTIONS.items():
         credit = replay(ev, d0, p, decay=decay, t_end=te, gamma=gamma, **cfg)
         amp = amplification(credit, cfg["unit"], p, own)
-        out[name] = dict(mean=amp.mean(), p90=np.percentile(amp, 90), max=amp.max(),
-                         n_credited=int((credit > 0).sum()))
+        direct = own.sum() if cfg["unit"] == "time" else n_conv
+        out[name] = dict(mean=amp.mean(), median=np.median(amp),
+                         p90=np.percentile(amp, 90), p99=np.percentile(amp, 99),
+                         max=amp.max(), n_credited=int((credit > 0).sum()),
+                         sys_amp=credit.sum() / (delta * direct),
+                         sys_amp_adopter=(credit.sum() / (delta * n_net)
+                                          if n_net and cfg["unit"] == "event" else np.nan),
+                         **_concentration(credit[credit > 0]))
     return out
 
 
