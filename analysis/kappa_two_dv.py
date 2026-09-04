@@ -15,10 +15,13 @@ so the numbers are comparable with the submitted analysis. The fits are
 re-run here rather than scraped because the shipped functions print.
 
 b is measured AT a stated snapshot time and rises through a run: never quote it
-without one, and never measure it past t_end (section 5a).
+without one, and never measure it past t_end (section 5a). It is also strongly
+ledger-dependent -- 0.904 under last-draw against 1.051 under exposure-proportional
+parents, on the same runs -- so quote the convention with it
+(`claude_stuff/Review/two_dv_ledger_and_sample_2026-09-04.md` s.3).
 
 Usage:
-    python kappa_two_dv.py <reduced_dir> --t-end 300000 [-o out.csv]
+    python kappa_two_dv.py <reduced_dir> --t-end 310000 [--ledger primary] [-o out.csv]
 """
 import os, sys, glob, pickle, argparse
 from multiprocessing import Pool
@@ -28,10 +31,18 @@ import networkx as nx
 import statsmodels.api as sm
 from scipy.stats import spearmanr, pointbiserialr
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'plotting'))
 import agency_predictor_analysis as apa
 from agency_predictor_analysis import TOPO_PREDS, PSYCH_PREDS, ALL_PREDS
+from attribution_ledger import replay
+
+# DV2's credit variable. The in-run `reductions` array is the SUBMITTED convention
+# (last-draw parents, dwell-weighted), which is now only an SI sensitivity row, so
+# it is not the default: everything the paper reports is the primary ledger.
+CONV = {'primary': dict(parent='exposure', weight='none', unit='event'),
+        'nodwell': dict(parent='last', weight='none', unit='event')}
 
 
 def rebuild_row(run, t_cut):
@@ -100,11 +111,16 @@ def measure(df, t, run_id):
 
 
 def _one(job):
-    path, t_end = job
+    path, t_end, ledger = job
     with open(path, 'rb') as f:
         run = pickle.load(f)
     t, row = rebuild_row(run, t_end)
     feats = apa.extract_features_fast(row)
+    if ledger != 'inrun':
+        credit = replay(run['events'], run['initial_diets'], run['params'],
+                        t_end=t, **CONV[ledger])
+        feats['reduction_kg'] = credit
+        feats['multiplier'] = credit / apa.DIRECT_REDUCTION_KG
     G = row['snapshots'][t]['graph']
     net = {'run': run['run'], 't': t,
            'assortativity': nx.degree_assortativity_coefficient(G),
@@ -121,6 +137,9 @@ def main():
     ap.add_argument('--t-end', type=int, required=True,
                     help='analysis cutoff; the nearest graph-bearing snapshot at or '
                          'below it is used')
+    ap.add_argument('--ledger', choices=('primary', 'nodwell', 'inrun'), default='primary',
+                    help="credit convention for DV2; 'inrun' reads the dwell-weighted "
+                         "array and reproduces the pre-2026-09-04 table")
     ap.add_argument('-o', '--out', default=None)
     ap.add_argument('--cores', type=int, default=max(1, int(0.75 * os.cpu_count())))
     a = ap.parse_args()
@@ -128,11 +147,11 @@ def main():
     paths = sorted(glob.glob(os.path.join(a.reduced_dir, 'run_*.pkl')))
     # exact betweenness at N=2000 is minutes a graph; the runs are independent
     with Pool(min(a.cores, len(paths))) as pool:
-        out = pool.map(_one, [(p, a.t_end) for p in paths])
+        out = pool.map(_one, [(p, a.t_end, a.ledger) for p in paths])
     rows, net = [r for r, _ in out], [n for _, n in out]
 
     df, ndf = pd.DataFrame(rows), pd.DataFrame(net)
-    out = a.out or os.path.join(a.reduced_dir, 'two_dv.csv')
+    out = a.out or os.path.join(a.reduced_dir, f'two_dv_{a.ledger}.csv')
     df.to_csv(out, index=False)
     ndf.to_csv(out.replace('.csv', '_network.csv'), index=False)
 
@@ -141,7 +160,7 @@ def main():
         return (f"{fmt.format(np.median(v))}  IQR [{fmt.format(np.percentile(v, 25))}, "
                 f"{fmt.format(np.percentile(v, 75))}]")
 
-    print(f"\n{len(df)} runs at t={df['t'].unique()}, "
+    print(f"\n{len(df)} runs at t={df['t'].unique()}, ledger={a.ledger}, "
           f"n_meat={df['n_meat'].median():.0f}, n_pos={df['n_pos'].median():.0f}")
     for k in ['adopt_pr2_full', 'adopt_pr2_topo', 'adopt_pr2_psych',
               'amp_r2_full', 'amp_r2_topo', 'amp_r2_psych',
