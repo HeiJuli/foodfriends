@@ -14,7 +14,7 @@ quote the window and the churn factor with every multiplier.
 Usage:
     python kappa_ledger.py <reduced_dir> --t-end 310000 [--validate]
 """
-import os, sys, glob, pickle, argparse
+import os, sys, glob, pickle, argparse, csv
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,10 +27,13 @@ def main():
     ap.add_argument('--t-end', type=int, default=None)
     ap.add_argument('--validate', action='store_true',
                     help='replay simulation semantics against the in-run ledger')
+    ap.add_argument('--csv', nargs='?', const='amplification_per_run.csv', default=None,
+                    help='write one row per run per convention into the reduced dir')
     a = ap.parse_args()
 
-    rows, worst = [], (0.0, 0.0)
+    rows, worst, names = [], (0.0, 0.0), []
     for path in sorted(glob.glob(os.path.join(a.reduced_dir, 'run_*.pkl'))):
+        names.append(os.path.basename(path)[:-4])
         with open(path, 'rb') as f:
             run = pickle.load(f)
         if a.validate:
@@ -58,6 +61,19 @@ def main():
         q = np.percentile([r[name]['mean'] for r in rows], [25, 75])
         print(f"{name:38s} {m['mean']:7.2f} {m['p90']:7.2f} {m['max']:8.1f} "
               f"{m['n_credited']:9.0f}   IQR(mean) [{q[0]:.2f}, {q[1]:.2f}]")
+
+    if a.csv:
+        out = a.csv if os.path.isabs(a.csv) else os.path.join(a.reduced_dir, a.csv)
+        stats = sorted(rows[0][next(iter(CONVENTIONS))])
+        shared = ('churn', 'n_conv', 'n_converters', 'net_adopters')
+        with open(out, 'w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(('run', 't_end', 'convention') + shared + tuple(stats))
+            for nm, r in zip(names, rows):
+                for conv in CONVENTIONS:
+                    w.writerow((nm, a.t_end or '', conv.split()[0]) + tuple(r[k] for k in shared)
+                               + tuple(r[conv][k] for k in stats))
+        print(f"\nINFO: wrote {out}")
 
 
 if __name__ == '__main__':
