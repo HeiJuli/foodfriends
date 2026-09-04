@@ -22,8 +22,18 @@ coefficient and the degree-scaling exponent b survive the choice:
        meatonly  drops initially-veg spreaders
        adopters  drops reverted agents too, so DV2's sample is DV1's successes
 
+It also varies the ledger DV2 is measured on. The shipped path reads the in-run
+`reductions` array, which is the SUBMITTED convention (last-draw parents,
+dwell-weighted) -- an SI sensitivity row, not the reported primary ledger. So
+two_dv.csv's ratio, degree coefficient and b all sit on a different ledger from
+the headline amplification numbers:
+
+  inrun     as shipped: last-draw, dwell-weighted (submitted convention)
+  primary   exposure-proportional parents, no dwell weight, event-count -- reported
+  nodwell   last-draw parents, no dwell weight
+
 Feature extraction, predictors and standardisation are the shipped ones, via
-kappa_two_dv, so the numbers are comparable with two_dv.csv.
+kappa_two_dv, so the `inrun`/`shipped` cell reproduces two_dv.csv.
 
 Usage:
     python two_dv_sample_robustness.py <reduced_dir> --t-end 310000 [-o out.csv]
@@ -38,10 +48,29 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'plotting'))
 from kappa_two_dv import rebuild_row, _std
+from attribution_ledger import replay
 import agency_predictor_analysis as apa
 from agency_predictor_analysis import TOPO_PREDS, PSYCH_PREDS, ALL_PREDS
 
 SPECS = [('full', ALL_PREDS), ('topo', TOPO_PREDS), ('psych', PSYCH_PREDS)]
+LEDGERS = ('inrun', 'primary', 'nodwell')
+
+
+def _ledgers(run, df, t):
+    """Per-agent credit under each ledger DV2 could be measured on.
+
+    The shipped path reads the in-run `reductions` array, which is the SUBMITTED
+    convention (last-draw parents, dwell-weighted) -- an SI sensitivity row, not
+    the reported primary ledger. So b, the degree coefficient and the ratio have
+    all been measured on a different ledger from the headline amplification
+    numbers. Replay the other two and refit.
+    """
+    ev, d0, p = run['events'], run['initial_diets'], run['params']
+    return {'inrun': df['reduction_kg'].to_numpy(),
+            'primary': replay(ev, d0, p, parent='exposure', weight='none',
+                              unit='event', t_end=t),
+            'nodwell': replay(ev, d0, p, parent='last', weight='none',
+                              unit='event', t_end=t)}
 
 
 def _b(frame):
@@ -68,8 +97,6 @@ def _one(job):
 
     o = {'run': run['run'], 't': t}
     meat = df[df['init_meat'] == 1]
-    pos = df[df['reduction_kg'] > 0].copy()
-    pos['log_mult'] = np.log(pos['multiplier'])
 
     dv1 = {'shipped': (meat, 'adopted'), 'ever': (meat, 'ever_conv'),
            'noimmune': (meat[~meat['immune'].astype(bool)], 'adopted')}
@@ -81,18 +108,23 @@ def _one(job):
         o[f'ado_{k}_alpha'], o[f'ado_{k}_degree'] = c.params['alpha'], c.params['degree']
         o[f'ado_{k}_deg_sig'] = c.pvalues['degree'] < 0.05
 
-    dv2 = {'shipped': pos, 'meatonly': pos[pos['init_meat'] == 1],
-           'adopters': pos[pos['adopted'] == 1]}
-    for k, fr in dv2.items():
-        for lab, preds in SPECS:
-            o[f'amp_{k}_{lab}'] = sm.OLS(fr['log_mult'], _std(fr, preds)).fit().rsquared
-        c = sm.OLS(fr['log_mult'], _std(fr, ALL_PREDS)).fit()
-        o[f'amp_{k}_n'] = len(fr)
-        o[f'amp_{k}_degree'] = c.params['degree']
-        o[f'amp_{k}_deg_sig'] = c.pvalues['degree'] < 0.05
-        o[f'b_{k}'], o[f'b_{k}_sub'], o[f'b_{k}_spans1'] = _b(fr)
-        o[f'ratio_{k}'] = o[f'amp_{k}_full'] / o['ado_shipped_full']
-    o['ratio_matched'] = o['amp_adopters_full'] / o['ado_ever_full']
+    for led, credit in _ledgers(run, df, t).items():
+        d = df.assign(reduction_kg=credit)
+        pos = d[d['reduction_kg'] > 0].copy()
+        pos['log_mult'] = np.log(pos['reduction_kg'] / apa.DIRECT_REDUCTION_KG)
+        dv2 = {'shipped': pos, 'meatonly': pos[pos['init_meat'] == 1],
+               'adopters': pos[pos['adopted'] == 1]}
+        for k, fr in dv2.items():
+            n = f'{led}_{k}'
+            for lab, preds in SPECS:
+                o[f'amp_{n}_{lab}'] = sm.OLS(fr['log_mult'], _std(fr, preds)).fit().rsquared
+            c = sm.OLS(fr['log_mult'], _std(fr, ALL_PREDS)).fit()
+            o[f'amp_{n}_n'] = len(fr)
+            o[f'amp_{n}_degree'] = c.params['degree']
+            o[f'amp_{n}_deg_sig'] = c.pvalues['degree'] < 0.05
+            o[f'b_{n}'], o[f'b_{n}_sub'], o[f'b_{n}_spans1'] = _b(fr)
+            o[f'ratio_{n}'] = o[f'amp_{n}_full'] / o['ado_shipped_full']
+        o[f'ratio_{led}_matched'] = o[f'amp_{led}_adopters_full'] / o['ado_ever_full']
 
     print(f"INFO: {os.path.basename(path)} at t={t} done", flush=True)
     return o
@@ -125,19 +157,21 @@ def main():
         print(f"  {k:9s} n={df[f'ado_{k}_n'].median():.0f} y=1:{df[f'ado_{k}_pos'].median():.0f}"
               f"  full {q(f'ado_{k}_full')}  topo {q(f'ado_{k}_topo')}"
               f"  alpha {q(f'ado_{k}_alpha', '{:+.3f}')}")
-    print("\n--- DV2 amplification R2 ---")
-    for k in ('shipped', 'meatonly', 'adopters'):
-        print(f"  {k:9s} n={df[f'amp_{k}_n'].median():.0f}"
-              f"  full {q(f'amp_{k}_full')}  topo {q(f'amp_{k}_topo')}"
-              f"  degree {q(f'amp_{k}_degree', '{:+.3f}')} sig {df[f'amp_{k}_deg_sig'].mean():.0%}")
-    print("\n--- b, degree-amplification exponent ---")
-    for k in ('shipped', 'meatonly', 'adopters'):
-        print(f"  {k:9s} {q(f'b_{k}', '{:.3f}')}  sub-linear {df[f'b_{k}_sub'].sum()}/{len(df)}"
-              f"  CI spans 1 {df[f'b_{k}_spans1'].sum()}/{len(df)}")
-    print("\n--- ratio (DV2 variant over DV1 shipped) ---")
-    for k in ('shipped', 'meatonly', 'adopters'):
-        print(f"  {k:9s} {q(f'ratio_{k}', '{:.2f}')}")
-    print(f"  matched   {q('ratio_matched', '{:.2f}')}   (DV1 ever / DV2 adopters)")
+    for led in LEDGERS:
+        print(f"\n--- DV2 amplification R2 [{led} ledger] ---")
+        for k in ('shipped', 'meatonly', 'adopters'):
+            n = f'{led}_{k}'
+            print(f"  {k:9s} n={df[f'amp_{n}_n'].median():.0f}"
+                  f"  full {q(f'amp_{n}_full')}  topo {q(f'amp_{n}_topo')}"
+                  f"  degree {q(f'amp_{n}_degree', '{:+.3f}')}"
+                  f" sig {df[f'amp_{n}_deg_sig'].mean():.0%}")
+        print(f"  b        " + "  ".join(
+            f"{k}: {q(f'b_{led}_{k}', '{:.3f}')} sub {df[f'b_{led}_{k}_sub'].sum()}/{len(df)}"
+            for k in ('shipped', 'meatonly', 'adopters')))
+        print(f"  ratio    " + "  ".join(
+            f"{k}: {q(f'ratio_{led}_{k}', '{:.2f}')}"
+            for k in ('shipped', 'meatonly', 'adopters'))
+            + f"  matched: {q(f'ratio_{led}_matched', '{:.2f}')}")
     print(f"INFO: wrote {out}")
 
 
