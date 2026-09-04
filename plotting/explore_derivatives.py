@@ -113,6 +113,8 @@ for col, win in enumerate(WINDOWS):
     burn = t_idx < max(BURNIN, win)
     ax = axes2[col]
     fc_runs = []
+    peaks = []
+    d2_vis = []
     # common F grid for the median: interpolate each run's d2 onto it
     fgrid = np.linspace(0.06, 0.75, 400)
     d2_on_f = []
@@ -123,12 +125,24 @@ for col, win in enumerate(WINDOWS):
         d2m = d2.copy(); d2m[sm > 0.5] = 0
         i2 = int(np.argmax(d2m))
         fc_runs.append(sm[i2] if d2m[i2] > 0 else np.nan)
+        peaks.append((sm[i2], d2[i2]))
         # monotone smoothed F -> d2 as a function of F
         order = np.argsort(sm)
         d2_on_f.append(np.interp(fgrid, sm[order], d2[order]))
-        ax.plot(sm[::20], d2[::20], color=COL_D2, alpha=0.08, lw=0.4, rasterized=True)
-    ax.plot(fgrid, np.median(d2_on_f, axis=0), color=COL_D2, lw=1.4)
+        # plot only the pre-saturation region: past F ~ 0.7 the trajectory
+        # stalls, d2 is pure plateau noise, and its scale hides the peaks
+        vis = sm <= 0.70
+        ax.plot(sm[vis][::10], d2[vis][::10], color=COL_D2, alpha=0.08, lw=0.4,
+                rasterized=True)
+        d2_vis.append(d2[vis][::10])
+    ax.plot(fgrid[fgrid <= 0.70],
+            np.median(d2_on_f, axis=0)[fgrid <= 0.70], color=COL_D2, lw=1.4)
+    peaks = np.array(peaks)
+    ax.scatter(peaks[:, 0], peaks[:, 1], s=4, color='k', alpha=0.5, zorder=5)
     fc_runs = np.asarray(fc_runs)
+    lo, hi = np.percentile(np.concatenate(d2_vis), [0.5, 99.5])
+    ax.set_ylim(lo - 0.05*(hi-lo), hi + 0.15*(hi-lo))
+    ax.set_xlim(0.05, 0.72)
     ax.plot(fc_runs, np.full_like(fc_runs, ax.get_ylim()[0]), '|', color='k',
             ms=6, alpha=0.6)
     ax.axvline(np.nanmedian(fc_runs), color='k', ls='--', lw=0.8)
