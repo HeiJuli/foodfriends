@@ -83,6 +83,25 @@ def estimate_t_end(traj, pct=0.95, smooth_window=5001):
         return None
 
 
+def t_end_with_status(traj, pct=0.95, smooth_window=5001):
+    """(t_end, status) with status in {"ok", "beyond_run", "fit_failed"}.
+
+    `estimate_t_end` returns None when curve_fit does not converge, which is NOT
+    the same thing as a run that has not saturated -- but every caller used to
+    collapse both into "t_end == len-1", so a fit failure was silently reported as
+    censoring. Measured 2026-09-07: the fit fails on 60-70% of system-size scaling
+    runs and ~20% of sensitivity rows, in both cases on runs whose F_veg says they
+    had saturated. Only "beyond_run" is evidence of a short run.
+    """
+    n = len(traj)
+    t = estimate_t_end(traj, pct=pct, smooth_window=smooth_window)
+    if t is None:
+        return n - 1, "fit_failed"
+    if t >= n:
+        return n - 1, "beyond_run"
+    return t, "ok"
+
+
 def _ic(y, yhat, n_par):
     """(AIC, BIC, R2) for a Gaussian-error fit."""
     n = len(y)
