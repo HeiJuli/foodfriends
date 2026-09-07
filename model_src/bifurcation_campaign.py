@@ -179,7 +179,9 @@ def _run_cell(job):
     with contextlib.redirect_stdout(io.StringIO()):
         m = model_main.Model(p, pmf_tables=sc.pmf_tables())
         m.run()
-    return {"beta": beta, "theta_gate_c": gate, "seed": seed, **sc._observables(m)}
+    return {"beta": beta, "theta_gate_c": gate, "seed": seed,
+            "steps": steps, "kappa": p.get("kappa", 1.0), "N": p["N"],
+            **sc._observables(m)}
 
 
 def build_jobs(runs, steps, skip=()):
@@ -206,12 +208,30 @@ def bimodality(x):
     return (g1 ** 2 + 1.0) / (g2 + 3.0 * (n - 1) ** 2 / ((n - 2) * (n - 3)))
 
 
+def _n_unsaturated(g):
+    """Runs in a cell that had not saturated by t = steps.
+
+    `_observables` clamps `t_end_fit` to the last index when the logistic fit does
+    not resolve inside the run, so a run at the clamp is still climbing and its
+    `F_veg_final` is a lower bound. Falls back to the F_veg=0.5 crossing (`t_50`,
+    in ksteps) for pickles written before `t_end_fit` existed -- the 20260903
+    campaign is one of those.
+    """
+    if "t_end_fit" in g and "steps" in g:
+        return int((g.t_end_fit >= g.steps - 1).sum())
+    if "t_50" in g:
+        # No crossing at all, or one in the last 25% of the run.
+        cutoff = 0.75 * (g.steps.iloc[0] if "steps" in g else sc.ORIG_STEPS) / 1000.0
+        return int((g.t_50.isna() | (g.t_50 >= cutoff)).sum())
+    return 0
+
+
 def cell_stats(df):
     rows = []
     for b in BETAS:
         for c in GATES:
-            f = df[(df.beta == b) & (df.theta_gate_c == c)]["F_veg_final"].values
-            f = np.sort(np.asarray(f, float))
+            g = df[(df.beta == b) & (df.theta_gate_c == c)]
+            f = np.sort(np.asarray(g["F_veg_final"].values, float))
             f = f[np.isfinite(f)]
             n = len(f)
             rows.append({
@@ -220,6 +240,7 @@ def cell_stats(df):
                 "F_sd": f.std(ddof=1) if n > 1 else np.nan,
                 "BC": bimodality(f),
                 "gap": np.max(np.diff(f)) if n > 2 else np.nan,
+                "n_unsat": _n_unsaturated(g),
             })
     return pd.DataFrame(rows)
 
@@ -333,26 +354,39 @@ def fig_bifurcation(df, stats, out):
 # ---------------------------------------------------------------------------
 def print_report(stats):
     print(f"\n{'='*78}\n PER CELL (order parameter F_veg_final)\n{'='*78}")
-    print(f"{'beta':>6}{'c':>7}{'n':>4}{'mean':>9}{'sd':>9}{'gap':>8}{'BC':>8}")
+    print(f"{'beta':>6}{'c':>7}{'n':>4}{'mean':>9}{'sd':>9}{'gap':>8}{'BC':>8}{'unsat':>7}")
     for r in stats.itertuples():
         mark = ""
         if np.isfinite(r.gap) and r.gap > GAP_FLAG:
-            mark += "  SPLIT"
+            mark += "  SPLIT" if not r.n_unsat else "  SPLIT(unsaturated)"
         if r.beta == DEFAULT["beta"] and r.theta_gate_c == DEFAULT["theta_gate_c"]:
             mark += "  *default"
         print(f"{r.beta:>6g}{r.theta_gate_c:>7g}{r.n:>4d}{r.F_mean:>9.3f}"
-              f"{r.F_sd:>9.3f}{r.gap:>8.3f}{r.BC:>8.3f}{mark}")
+              f"{r.F_sd:>9.3f}{r.gap:>8.3f}{r.BC:>8.3f}{r.n_unsat:>7d}{mark}")
     flagged = stats[stats.gap > GAP_FLAG]
+    clean = flagged[flagged.n_unsat == 0]
+    dirty = flagged[flagged.n_unsat > 0]
     print()
-    if len(flagged):
-        print(f"WARNING: {len(flagged)} of {len(stats)} cells show a split "
+    if len(dirty):
+        print(f"WARNING: {len(dirty)} cell(s) trip the gap flag but have runs that had "
+              f"not saturated by t = steps. F_veg_final is a lower bound there, not an "
+              f"asymptote, so the gap measures where each seed sits on its own sigmoid. "
+              f"This is NOT evidence of multiple stable states -- and not evidence "
+              f"against it either. Extend those cells until every run saturates.")
+        for r in dirty.itertuples():
+            print(f"  beta={r.beta:g}, c={r.theta_gate_c:g}: gap={r.gap:.3f}, "
+                  f"sd={r.F_sd:.3f}, BC={r.BC:.3f}, unsaturated={r.n_unsat}/{r.n}")
+    if len(clean):
+        print(f"WARNING: {len(clean)} of {len(stats)} saturated cells show a split "
               f"(largest gap > {GAP_FLAG:g} in F_veg):")
-        for r in flagged.itertuples():
+        for r in clean.itertuples():
             print(f"  beta={r.beta:g}, c={r.theta_gate_c:g}: "
                   f"gap={r.gap:.3f}, sd={r.F_sd:.3f}, BC={r.BC:.3f}")
-    else:
+    elif not len(dirty):
         print(f"INFO: no cell splits -- smooth crossover across the whole grid, "
               f"down to the {GAP_FLAG:g} detection limit (see module docstring).")
+    else:
+        print(f"INFO: no saturated cell splits.")
 
 
 def main():
@@ -363,9 +397,10 @@ def main():
     ap.add_argument('--N', type=int, help='override population size (smoke tests only; '
                                           'the production campaign is N=2000)')
     ap.add_argument('--tag', help='override the output tag (use for smoke tests)')
-    ap.add_argument('--oat', default=OAT_PKL,
-                    help='OAT pickle to reuse overlapping cells from; '
-                         'pass "" to rerun every cell')
+    ap.add_argument('--oat', default="",
+                    help=f'OAT pickle to reuse overlapping cells from (default: none). '
+                         f'Reuse is only valid when the pickle was run at the SAME kappa '
+                         f'and run length as this campaign -- {OAT_PKL} is kappa=1/150k.')
     ap.add_argument('--plot-only', metavar='TAG',
                     help='regenerate figures from an existing campaign pkl; '
                          'TAG is <date>_N<N>, e.g. 20260821_N2000')
@@ -384,6 +419,11 @@ def main():
     if args.plot_only:
         df = pd.read_pickle(pkl)
     else:
+        if args.oat:
+            print(f"WARNING: reusing cells from {args.oat}. Confirm it ran at "
+                  f"kappa={BASE_PARAMS['kappa']} and steps={args.steps} -- a mismatch "
+                  f"splices another configuration into the grid, including the marked "
+                  f"default cell, and the pickle does not record either.")
         reuse, covered = (load_oat_cells(args.oat) if args.oat
                           else (None, set()))
         jobs = build_jobs(args.runs, args.steps, covered)

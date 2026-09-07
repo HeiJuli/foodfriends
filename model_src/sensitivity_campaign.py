@@ -94,7 +94,7 @@ sys.path.append('../analysis')
 import model_main
 import model_runner_mp
 from attribution_ledger import replay
-from t_end_logistic import estimate_t_end
+from t_end_logistic import estimate_t_end, fc_window, FC_WIN_FRAC
 from plot_styles import (set_publication_style, apply_axis_style, COLORS,
                          ECO_CMAP, ECO_DIV_CMAP)
 
@@ -194,12 +194,18 @@ def pmf_tables():
 # ---------------------------------------------------------------------------
 # Observables
 # ---------------------------------------------------------------------------
-# Savitzky-Golay window as a FRACTION of the run, not an absolute constant. 10001
-# was chosen against a 139k trajectory; at 400k it is a different fraction of the
-# transient. 20% is where F_c's per-seed IQR is tightest across the kappa=0.55
-# ensemble (0.086, against 0.121 at 10001 and 0.107-0.143 at 2-10%) and where its
-# median is window-stable (0.352 against 0.352-0.382 over 2-20%).
-FC_WIN_FRAC = 0.20
+# The Savitzky-Golay window is a FRACTION of the run (FC_WIN_FRAC, defined once in
+# analysis/t_end_logistic.py and shared with results_analysis.py and the plotting
+# code so the campaigns cannot drift apart on it).
+#
+# TRAP -- --extend and F_c. `fc_window` sizes the kernel from len(traj), so a point
+# extended to 800k gets win=160001 against 80001 for an untouched point. F_c is
+# compared across sweep points (OBS/HEADLINE, the SI table, the response curves)
+# and its median moves 0.352 -> 0.382 over windows from 2% to 20%, so after an
+# extension the F_c column is NOT comparable across points of different length.
+# The fixed-window `amp_*` columns have the same problem (see run_extension), but
+# for F_c there is no `_tend` equivalent to fall back on. Until that is settled,
+# read F_c only from same-length points, and check `steps` before quoting it.
 FC_STRIDE = 100      # decimate before filtering, as results_analysis.py does
 
 
@@ -215,7 +221,7 @@ def _inflection(traj, win=None, burnin=None, stride=FC_STRIDE):
     identical median and IQR, and ~100x faster."""
     traj = np.asarray(traj, float)
     if win is None:
-        win = int(FC_WIN_FRAC * len(traj)) | 1
+        win = fc_window(len(traj))
     if burnin is None:
         burnin = win
     y = traj[::stride]
@@ -328,6 +334,9 @@ def run_extension(df, points, runs, steps, cores, tag):
     original rows and their own `steps` value, so the merged frame is explicitly
     mixed-length -- which is why amplification must be read from the `_tend`
     columns after an extension, never from the fixed-window `amp_*` ones.
+
+    F_c has the same exposure and no `_tend` equivalent: its window is a fraction
+    of run length, so extended points get a wider kernel. See the FC_STRIDE block.
     """
     jobs = [("baseline", np.nan, 42 + i, steps) for i in range(runs)]
     for prm, val in points:

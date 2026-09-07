@@ -4,15 +4,41 @@
 Fits F_veg(t) = K / (1 + exp(-r*(t - t0))) + b and returns the time at which
 a given fraction (default 95%) of the fitted asymptote K is reached.
 
+Also the one home for the analysis-window conventions, so the campaigns cannot
+drift apart on them (see fc_window below).
+
 Usage:
-    from t_end_logistic import estimate_t_end, estimate_t_end_ensemble
+    from t_end_logistic import estimate_t_end, estimate_t_end_ensemble, fc_window
 
     t = estimate_t_end(fraction_veg_trajectory)           # single run
     t, ci = estimate_t_end_ensemble(dataframe, pct=0.95)  # ensemble median + IQR
+    w = fc_window(len(traj))                              # savgol window for F_c
 """
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import savgol_filter
+
+
+# Savitzky-Golay window for derivative-based quantities (F_c, inflection), as a
+# FRACTION of run length rather than an absolute constant. 10001 was chosen
+# against a 139k trajectory; at 400k it is a different fraction of the transient,
+# and kappa=0.55 moves t_end by 3.4x, so an absolute window is not comparable
+# across configurations. 20% is where F_c's per-seed IQR is tightest on the
+# kappa=0.55 ensemble (0.086 against 0.121 at 10001, 0.107-0.143 at 2-10%) and
+# where its median is window-stable (0.352 against 0.352-0.382 over 2-20%).
+# It also makes N=385 (100k steps) and N=2000 (400k) comparable by construction,
+# which the old absolute window could not do: at win=10001 a third of the short
+# run was masked and at 15001 the estimator failed outright.
+FC_WIN_FRAC = 0.20
+
+
+def fc_window(n, frac=FC_WIN_FRAC):
+    """Odd Savitzky-Golay window for an n-step run, as a fraction of the run.
+
+    The caller must also mask the first `max(burnin, win)` samples: a kernel of
+    width w straddles the initial equilibration jump for its first w/2 steps.
+    """
+    return max(5, int(frac * n) | 1)
 
 
 def _logistic(t, L, k, t0, b):

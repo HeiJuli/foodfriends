@@ -45,6 +45,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../analysis'))
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 import model_main
 from attribution_ledger import replay
+from t_end_logistic import estimate_t_end, fc_window
 from auxillary.homophily_network_v2 import generate_homophily_network_v2
 from auxillary.sampling_utils import stratified_sample_agents
 
@@ -290,8 +291,17 @@ def run_single(args):
     # Primary credit convention (exposure-proportional parents, event count, no
     # dwell weight), replayed from the event log; snap_final['reductions'] is the
     # submitted convention and is kept only for the _sub comparison below.
+    # Amplification is credited at each run's OWN fitted t_end, matching
+    # sensitivity_campaign and the headline ensemble. Credit accrues for as long
+    # as the run lasts and churn continues at the plateau, so replaying to
+    # t = steps compares sizes at whatever post-saturation tail each happens to
+    # have -- the fixed-window problem removed from the OAT sweep in cf5a50b.
+    traj_full = np.asarray(model.fraction_veg, dtype=float)
+    t_end_fit = estimate_t_end(traj_full)
+    if t_end_fit is None or t_end_fit >= len(traj_full):
+        t_end_fit = len(traj_full) - 1      # clamped: run has not saturated
     reds = replay(model.events, model.snapshots[0]['diets'], model.params,
-                  parent="exposure", weight="none", unit="event")
+                  parent="exposure", weight="none", unit="event", t_end=t_end_fit)
     reds_sub = np.array(snap_final['reductions'])
 
     pos = reds[reds > 0]
@@ -329,15 +339,13 @@ def run_single(args):
         gini = (2 * np.sum(np.arange(1, n+1) * sorted_r) / (n * np.sum(sorted_r))) - (n + 1) / n
 
     # 5. Critical fraction (max d2F/dt2, F<0.5)
-    traj = np.array(model.fraction_veg, dtype=float)
+    traj = traj_full
     fc = np.nan
-    win = min(10001, len(traj) // 3)
-    if win % 2 == 0: win -= 1
+    win = fc_window(len(traj))          # 20% of the run, the shared convention
     if win >= 5 and len(traj) > win * 2:
         smoothed = savgol_filter(traj, window_length=win, polyorder=3)
         d2 = savgol_filter(traj, window_length=win, polyorder=3, deriv=2)
-        burnin = min(5000, len(traj) // 10)
-        d2[:burnin] = 0
+        d2[:win] = 0                    # mask a whole kernel, not a fixed 5000
         d2_masked = d2.copy()
         d2_masked[smoothed > 0.5] = 0
         idx = np.argmax(d2_masked)
@@ -378,6 +386,8 @@ def run_single(args):
 
     return {
         'N': N, 'run': run_id, 'steps': steps,
+        'kappa': params.get('kappa', 1.0),
+        't_end_fit': t_end_fit, 'fc_win': win,
         'n_communities': n_communities,
         'f_veg': f_veg, 'avg_degree': avg_deg, 'r_assort': r_assort,
         'gamma': gamma, 'r2_gamma': r2_gamma,

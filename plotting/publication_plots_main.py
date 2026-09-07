@@ -14,7 +14,7 @@ from matplotlib.ticker import LogLocator, NullFormatter
 from matplotlib.patches import Patch
 from scipy.signal import savgol_filter
 import sys; sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'analysis'))
-from t_end_logistic import estimate_t_end
+from t_end_logistic import estimate_t_end, fc_window
 from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMAP, ECO_DIV_CMAP
 
 COL_TOP10, COL_TOP1 = '#6a994e', '#d4a029'
@@ -150,7 +150,7 @@ def plot_network_agency_evolution(data=None, file_path=None,
                                   truncate_steps=None, analysis_t_end=None,
                                   small_truncate_steps=None, small_mid_t=None,
                                   small_analysis_t_end=None,
-                                  rescale_ref=0.5, savgol_window=10001):
+                                  rescale_ref=0.5, savgol_window=None):
     """7-panel: 3 network snapshots (top) + trajectory + CCDF + Lorenz (bottom).
 
     Dual-mode: big N provides primary trajectory, CCDF, Lorenz.
@@ -168,6 +168,8 @@ def plot_network_agency_evolution(data=None, file_path=None,
         rescale_ref:                 F_veg crossing to align small N onto big N time axis
                                      (None to disable rescaling)
         savgol_window:               Savitzky-Golay window for tipping point detection
+                                     (None = 20% of the run, the reporting convention;
+                                     plot_config.yaml sets it explicitly for the paper)
     """
     set_publication_style()
 
@@ -336,9 +338,11 @@ def plot_network_agency_evolution(data=None, file_path=None,
                        s=14, zorder=5, edgecolors='#333', linewidths=0.4)
 
     # Tipping point from big N
-    _sw = savgol_window
     traj_arr = np.array(big_traj)
-    _burnin = 5000
+    _sw = savgol_window or fc_window(len(traj_arr))
+    # Mask a whole kernel: a width-w filter straddles the equilibration jump for
+    # its first w/2 steps, and at w=80001 a fixed 5000 leaves it in the argmax.
+    _burnin = max(5000, _sw)
     if len(traj_arr) > _burnin + _sw * 2:
         _d2 = savgol_filter(traj_arr, window_length=_sw, polyorder=3, deriv=2)
         _sm = savgol_filter(traj_arr, window_length=_sw, polyorder=3)
@@ -608,7 +612,7 @@ def plot_network_agency_evolution_ensemble(
         file_path=None, small_file_path=None, data=None, small_data=None,
         truncate_steps=None, analysis_t_end=None,
         small_truncate_steps=None, small_mid_t=None, small_analysis_t_end=None,
-        rescale_ref=0.5, savgol_window=10001, save=True):
+        rescale_ref=0.5, savgol_window=None, save=True):
     """Ensemble version of 6-panel figure: median + IQR shading for panels A/B/C.
     Network snapshots (top row) still use small-N median run."""
     set_publication_style()
@@ -839,12 +843,13 @@ def plot_network_agency_evolution_ensemble(
 
     # F_c: reported to stdout only (max-acceleration estimator, not drawn --
     #      the paper no longer presents it as a threshold)
-    _sw = savgol_window
-    if min_len > 5000 + _sw * 2:
+    _sw = savgol_window or fc_window(min_len)
+    _burnin = max(5000, _sw)   # mask a whole kernel, see the single-run figure
+    if min_len > _burnin + _sw * 2:
         # Single median run
         _d2 = savgol_filter(big_traj_arr, window_length=_sw, polyorder=3, deriv=2)
         _sm = savgol_filter(big_traj_arr, window_length=_sw, polyorder=3)
-        _d2[:5000] = 0
+        _d2[:_burnin] = 0
         _d2[_sm > 0.5] = 0
         _t_tip = int(np.argmax(_d2))
         _fc_run = _sm[_t_tip] if _d2[_t_tip] > 0 else None
@@ -854,7 +859,7 @@ def plot_network_agency_evolution_ensemble(
             _t = np.array(_traj[:min_len], dtype=float)
             _d2e = savgol_filter(_t, window_length=_sw, polyorder=3, deriv=2)
             _sme = savgol_filter(_t, window_length=_sw, polyorder=3)
-            _d2e[:5000] = 0
+            _d2e[:_burnin] = 0
             _d2e[_sme > 0.5] = 0
             _idx = int(np.argmax(_d2e))
             if _d2e[_idx] > 0:
@@ -1064,7 +1069,7 @@ def _run_from_config(cfg, plot_key):
             small_mid_t=sm.get('mid_t'),
             small_analysis_t_end=sm.get('analysis_t_end'),
             rescale_ref=rsc.get('reference_fveg', 0.5),
-            savgol_window=c.get('savgol_window', 10001))
+            savgol_window=c.get('savgol_window'))
     elif plot_key == 'amplification':
         c = cfg[plot_key]
         plot_amplification(file_path=_cfg_path(c.get('file')),
@@ -1087,7 +1092,7 @@ def _run_from_config(cfg, plot_key):
             small_mid_t=sm.get('mid_t'),
             small_analysis_t_end=sm.get('analysis_t_end'),
             rescale_ref=rsc.get('reference_fveg', 0.5),
-            savgol_window=c.get('savgol_window', 10001))
+            savgol_window=c.get('savgol_window'))
     elif plot_key == 'amplification_ensemble':
         c = cfg[plot_key]
         plot_amplification_ensemble(file_path=_cfg_path(c.get('file')),
@@ -1212,7 +1217,7 @@ def main():
                 truncate_steps=truncate_steps, analysis_t_end=t_end,
                 small_mid_t=small_mid_t, small_analysis_t_end=small_analysis_t_end,
                 rescale_ref=c.get('rescale', {}).get('reference_fveg', 0.5),
-                savgol_window=c.get('savgol_window', 10001))
+                savgol_window=c.get('savgol_window'))
         elif choice == '5':
             file_path = select_file('trajectory_analysis')
             if file_path:
