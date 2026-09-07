@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../analysis'))
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 import model_main
 from attribution_ledger import replay
-from t_end_logistic import estimate_t_end, fc_window
+from t_end_logistic import estimate_t_end, t_end_with_status, fc_window
 from auxillary.homophily_network_v2 import generate_homophily_network_v2
 from auxillary.sampling_utils import stratified_sample_agents
 
@@ -297,9 +297,7 @@ def run_single(args):
     # t = steps compares sizes at whatever post-saturation tail each happens to
     # have -- the fixed-window problem removed from the OAT sweep in cf5a50b.
     traj_full = np.asarray(model.fraction_veg, dtype=float)
-    t_end_fit = estimate_t_end(traj_full)
-    if t_end_fit is None or t_end_fit >= len(traj_full):
-        t_end_fit = len(traj_full) - 1      # clamped: run has not saturated
+    t_end_fit, t_end_status = t_end_with_status(traj_full)
     reds = replay(model.events, model.snapshots[0]['diets'], model.params,
                   parent="exposure", weight="none", unit="event", t_end=t_end_fit)
     reds_sub = np.array(snap_final['reductions'])
@@ -387,7 +385,7 @@ def run_single(args):
     return {
         'N': N, 'run': run_id, 'steps': steps,
         'kappa': params.get('kappa', 1.0),
-        't_end_fit': t_end_fit, 'fc_win': win,
+        't_end_fit': t_end_fit, 't_end_status': t_end_status, 'fc_win': win,
         'n_communities': n_communities,
         'f_veg': f_veg, 'avg_degree': avg_deg, 'r_assort': r_assort,
         'gamma': gamma, 'r2_gamma': r2_gamma,

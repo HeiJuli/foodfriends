@@ -217,7 +217,11 @@ def _n_unsaturated(g):
     in ksteps) for pickles written before `t_end_fit` existed -- the 20260903
     campaign is one of those.
     """
+    if "t_end_status" in g:
+        return int((g.t_end_status == "beyond_run").sum())
     if "t_end_fit" in g and "steps" in g:
+        # No status column: this over-counts, because a failed logistic fit clamps
+        # to the same value as a genuinely short run (t_end_logistic docstring).
         return int((g.t_end_fit >= g.steps - 1).sum())
     if "t_50" in g:
         # No crossing at all, or one in the last 25% of the run.

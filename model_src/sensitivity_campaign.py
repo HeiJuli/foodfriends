@@ -95,7 +95,7 @@ sys.path.append('../analysis')
 import model_main
 import model_runner_mp
 from attribution_ledger import replay
-from t_end_logistic import estimate_t_end, fc_window, FC_WIN_FRAC
+from t_end_logistic import estimate_t_end, t_end_with_status, fc_window, FC_WIN_FRAC
 from plot_styles import (set_publication_style, apply_axis_style, COLORS,
                          ECO_CMAP, ECO_DIV_CMAP)
 
@@ -264,9 +264,7 @@ def _observables(m):
     # own saturation and the tornado would read that as a kappa effect. The _tend
     # columns replay the same convention at the run's own fitted t_end instead; the
     # event log does not leave the worker, so this cannot be recovered afterwards.
-    t_end = estimate_t_end(traj)
-    if t_end is None or t_end >= len(traj):
-        t_end = len(traj) - 1
+    t_end, t_end_status = t_end_with_status(traj)
     reds_te = replay(m.events, m.snapshots[0]['diets'], m.params,
                      parent="exposure", weight="none", unit="event", t_end=t_end)
     mult_te = reds_te[reds_te > 0] / DIRECT_REDUCTION_KG
@@ -284,7 +282,7 @@ def _observables(m):
         "amp_max_sub": mult_sub.max() if len(mult_sub) else 0.0,
         "n_credited_sub": int(len(mult_sub)),
         "steady_state_t": m.steady_state_t,
-        "t_end_fit": t_end,
+        "t_end_fit": t_end, "t_end_status": t_end_status,
         "F_veg_tend": traj[t_end],
         "amp_mean_tend": mult_te.mean() if len(mult_te) else 0.0,
         "amp_p90_tend": np.percentile(mult_te, 90) if len(mult_te) else 0.0,
@@ -324,7 +322,12 @@ def censored_points(df, frac):
     """
     out = []
     for (prm, val), g in df.groupby(["param", "value"]):
-        n = int((g.t_end_fit >= g.steps - 1).sum())
+        # Only a fitted-but-beyond-the-run t_end is censoring. A failed fit clamps
+        # to the same value and is NOT evidence of a short run (see
+        # t_end_logistic.t_end_with_status). Older pickles have no status column;
+        # they over-report censoring and must be re-read, not extended blind.
+        n = (int((g.t_end_status == "beyond_run").sum()) if "t_end_status" in g
+             else int((g.t_end_fit >= g.steps - 1).sum()))
         if n / len(g) >= frac:
             out.append((prm, val, n, len(g)))
     return sorted(out, key=lambda r: -r[2] / r[3])
