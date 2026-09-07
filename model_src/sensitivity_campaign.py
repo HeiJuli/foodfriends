@@ -276,7 +276,60 @@ def _run_one(job):
     with contextlib.redirect_stdout(io.StringIO()):
         m = model_main.Model(p, pmf_tables=pmf_tables())
         m.run()
-    return {"param": param, "value": value, "seed": seed, **_observables(m)}
+    return {"param": param, "value": value, "seed": seed, "steps": steps,
+            **_observables(m)}
+
+
+ORIG_STEPS = 400000    # run length of the 20260904 campaign, which predates the
+                       # per-row `steps` column; used to backfill it on load.
+
+
+def censored_points(df, frac):
+    """Sweep points whose runs mostly ended before the logistic fit converged.
+
+    `t_end_fit` is clamped to the last index when `estimate_t_end` does not
+    resolve inside the run (`_observables`), so a run at the clamp has not
+    saturated and its F_veg is a lower bound at t = steps, not an asymptote.
+    Returns [(param, value, n_censored, n_runs)] sorted worst first.
+    """
+    out = []
+    for (prm, val), g in df.groupby(["param", "value"]):
+        n = int((g.t_end_fit >= g.steps - 1).sum())
+        if n / len(g) >= frac:
+            out.append((prm, val, n, len(g)))
+    return sorted(out, key=lambda r: -r[2] / r[3])
+
+
+def run_extension(df, points, runs, steps, cores, tag):
+    """Rerun the given sweep points at a longer run length and merge them in.
+
+    The baseline block is always rerun too: a point extended to `steps` has to be
+    read against a baseline of the same length or the comparison reintroduces the
+    fixed-window problem it was meant to remove. Points left alone keep their
+    original rows and their own `steps` value, so the merged frame is explicitly
+    mixed-length -- which is why amplification must be read from the `_tend`
+    columns after an extension, never from the fixed-window `amp_*` ones.
+    """
+    jobs = [("baseline", np.nan, 42 + i, steps) for i in range(runs)]
+    for prm, val in points:
+        jobs += [(prm, val, 42 + i, steps) for i in range(runs)]
+    print(f"INFO: extending {len(points)} point(s) + baseline to {steps} steps: "
+          f"{len(jobs)} runs on {cores} cores")
+    for prm, val in points:
+        print(f"INFO:   {prm} = {val:g}")
+    with Pool(cores) as pool:
+        rows = pool.map(_run_one, jobs)
+    new = expand_baseline(pd.DataFrame(rows))
+
+    # Drop what we have rerun: the named points, and every parameter's baseline
+    # point (expand_baseline relabels one shared block, so all eight go together).
+    drop = {(p, v) for p, v in points} | {(p, BASELINE[p]) for p in SWEEPS}
+    keep = df[[(p, v) not in drop for p, v in zip(df.param, df.value)]]
+    out = pd.concat([keep, new], ignore_index=True)
+    pkl = f"../model_output/sensitivity_campaign_{tag}.pkl"
+    out.to_pickle(pkl)
+    print(f"INFO: Saved -> {pkl}")
+    return out
 
 
 def build_jobs(runs, steps):
@@ -649,6 +702,17 @@ def main():
     ap.add_argument('--plot-only', metavar='TAG',
                     help='regenerate figures/table from an existing campaign pkl; '
                          'TAG is <date>_N<N>, e.g. 20260820_N2000')
+    ap.add_argument('--extend', metavar='TAG',
+                    help='rerun the unsaturated sweep points of an existing campaign '
+                         'at a longer run length and merge them in; TAG is <date>_N<N>')
+    ap.add_argument('--extend-steps', type=int, default=800000,
+                    help='run length for --extend (default 800000, 2x the 20260904 run)')
+    ap.add_argument('--extend-frac', type=float, default=0.20,
+                    help='extend a point when this fraction of its runs is censored')
+    ap.add_argument('--points', metavar='LIST',
+                    help='override the automatic selection, e.g. "M=15,theta_gate_c=0.45"')
+    ap.add_argument('--dry-run', action='store_true',
+                    help='with --extend, list the points that would be rerun and stop')
     ap.add_argument('--interaction', action='store_true',
                     help='also run the M x theta_gate_k 2D grid')
     ap.add_argument('--interaction-runs', type=int, default=20)
@@ -662,13 +726,39 @@ def main():
     # N goes in the filename: a campaign is only interpretable against the
     # configuration it swept, and sample-max (385) and twin (2000) runs are not
     # comparable on any amplification observable.
-    tag = args.plot_only or f"{date.today().strftime('%Y%m%d')}_N{BASE_PARAMS['N']}"
+    tag = args.plot_only or args.extend or f"{date.today().strftime('%Y%m%d')}_N{BASE_PARAMS['N']}"
     global CFG_N
     if "_N" in tag:
         CFG_N = int(tag.split("_N")[1].split("_")[0])
     pkl = f"../model_output/sensitivity_campaign_{tag}.pkl"
 
-    if args.plot_only:
+    if args.extend:
+        df = pd.read_pickle(pkl)
+        if "steps" not in df.columns:
+            df["steps"] = ORIG_STEPS      # campaigns before the column existed
+        if args.points:
+            points = []
+            for tok in args.points.split(","):
+                k, _, v = tok.partition("=")
+                k = k.strip()
+                if k not in SWEEPS:
+                    sys.exit(f"ERROR: unknown parameter {k!r}")
+                points.append((k, float(v)))
+        else:
+            sel = censored_points(df, args.extend_frac)
+            print(f"INFO: censored points at frac >= {args.extend_frac:g} "
+                  f"(t_end_fit at the end of the run):")
+            for prm, val, n, tot in sel:
+                print(f"INFO:   {prm:14s} = {val:<6g} {n:2d}/{tot} censored")
+            points = [(p, v) for p, v, _, _ in sel]
+        if not points:
+            print("INFO: nothing to extend."); return
+        if args.dry_run:
+            print("INFO: dry run, nothing executed."); return
+        tag = f"{tag}_ext{args.extend_steps // 1000}k"
+        df = run_extension(df, points, args.runs, args.extend_steps,
+                           args.cores, tag)
+    elif args.plot_only:
         df = pd.read_pickle(pkl)
     else:
         jobs = build_jobs(args.runs, args.steps)
