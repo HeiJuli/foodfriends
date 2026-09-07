@@ -245,6 +245,15 @@ def _inflection(traj, win=None, burnin=None, stride=FC_STRIDE):
     return F_c, sm[i1], idx[i1] / 1000.0
 
 
+# Keep a decimated trajectory per run so a changed window or estimator can be
+# re-scored offline instead of forcing a rerun. Three separate re-scorings have
+# been blocked by its absence (the 2026-09-07 window reconciliation, the fit
+# triage, and SI S4). At stride 100 the refitted t_end differs from the
+# undecimated fit by at most 35 steps in 300k, i.e. 0.01%, and 1200 runs cost
+# ~19 MB as float32.
+TRAJ_STRIDE = 100
+
+
 def _observables(m):
     """Primary amplification is replayed from the event log; the in-simulation
     ledger rides along as the _sub columns. The 'final' snapshot is taken at
@@ -264,12 +273,13 @@ def _observables(m):
     # own saturation and the tornado would read that as a kappa effect. The _tend
     # columns replay the same convention at the run's own fitted t_end instead; the
     # event log does not leave the worker, so this cannot be recovered afterwards.
-    t_end, t_end_status = t_end_with_status(traj)
+    t_end, t_end_status, t_end_r2 = t_end_with_status(traj)
     reds_te = replay(m.events, m.snapshots[0]['diets'], m.params,
                      parent="exposure", weight="none", unit="event", t_end=t_end)
     mult_te = reds_te[reds_te > 0] / DIRECT_REDUCTION_KG
     return {
         "mult": mult.astype(np.float32),   # pooled for CCDF panels
+        "traj_ds": traj[::TRAJ_STRIDE].astype(np.float32),   # offline re-scoring
         "F_veg_final": traj[-1],
         "F_c": F_c, "F_infl": F_infl, "t_infl": t_infl,
         "t_50": cross[0] / 1000.0 if len(cross) else np.nan,
@@ -282,7 +292,7 @@ def _observables(m):
         "amp_max_sub": mult_sub.max() if len(mult_sub) else 0.0,
         "n_credited_sub": int(len(mult_sub)),
         "steady_state_t": m.steady_state_t,
-        "t_end_fit": t_end, "t_end_status": t_end_status,
+        "t_end_fit": t_end, "t_end_status": t_end_status, "t_end_r2": t_end_r2,
         "F_veg_tend": traj[t_end],
         "amp_mean_tend": mult_te.mean() if len(mult_te) else 0.0,
         "amp_p90_tend": np.percentile(mult_te, 90) if len(mult_te) else 0.0,
@@ -310,6 +320,7 @@ def _run_one(job):
 
 ORIG_STEPS = 400000    # run length of the 20260904 campaign, which predates the
                        # per-row `steps` column; used to backfill it on load.
+
 
 
 def censored_points(df, frac):

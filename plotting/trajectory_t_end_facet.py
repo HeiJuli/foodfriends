@@ -9,27 +9,26 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'analysis'))
-from t_end_logistic import estimate_t_end, _logistic
-from scipy.optimize import curve_fit
+from t_end_logistic import estimate_t_end, fit_params, _logistic
 from scipy.signal import savgol_filter
 
 MODEL_OUTPUT = os.path.join(os.path.dirname(__file__), '..', 'model_output')
 
 
 def _fit_params(traj, smooth_window=5001):
-    """Return (popt, smooth_traj) or (None, None)."""
+    """Return (popt, smooth_traj); popt is None when the fit does not resolve.
+
+    The fit itself lives in t_end_logistic so this plot cannot drift from the
+    estimator it is meant to QA -- it used to carry its own copy, seeded from
+    the constants that put 8 of 50 headline runs on a spurious optimum.
+    """
     traj = np.asarray(traj, dtype=float)
-    n = len(traj)
-    win = min(smooth_window, n // 2 * 2 - 1)
+    win = min(smooth_window, len(traj) // 2 * 2 - 1)
     smooth = savgol_filter(traj, win, 3)
-    tt = np.arange(n)
-    p0 = [traj[-1] - traj[0], 1e-4, n * 0.1, traj[0]]
-    bounds = ([0, 0, 0, 0], [1, 1e-2, n * 2, 0.5])
-    try:
-        popt, _ = curve_fit(_logistic, tt, smooth, p0=p0, bounds=bounds, maxfev=50000)
-        return popt, smooth
-    except Exception:
+    fp = fit_params(traj, smooth_window=smooth_window)
+    if fp is None:
         return None, smooth
+    return np.array([fp['L'], fp['k'], fp['t0'], fp['b']]), smooth
 
 
 def facet_plot(pkl_file, pct=0.95, out='../visualisations_output/t_end_facet.png'):

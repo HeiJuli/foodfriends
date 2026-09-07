@@ -18,7 +18,7 @@ Measurements:
      idx < max(burnin, win)).
   3. t_50 / t_90 / t_end (fitted 50/90/95% of asymptotic change) and fitted
      asymptote F_end per run, same logistic fit as
-     analysis/t_end_logistic.py:estimate_t_end, extended to return popt.
+     analysis/t_end_logistic.py:fit_params.
   4. Burn-in jump F_veg(1000) - F_veg(0) per run (the kappa=1 equilibration
      artefact was 0.120).
   5. Second-derivative peak height and FWHM at the 5% reference window.
@@ -67,7 +67,7 @@ WINDOWS = {
 REF_WIN = WINDOWS['5pct']   # reference window for the d2 peak/FWHM
 
 from scipy.signal import savgol_filter
-from scipy.optimize import curve_fit
+from t_end_logistic import fit_params
 
 
 # ---------------------------------------------------------------------------
@@ -339,30 +339,19 @@ def _d2_peak(traj, win, burnin):
     return peak, float(r - l), i
 
 
-def _logistic(t, L, k, t0, b):
-    return L / (1 + np.exp(-k * (t - t0))) + b
-
-
 def fit_logistic(traj, smooth_window=5001):
-    """estimate_t_end from analysis/t_end_logistic.py, extended to return the
-    fitted parameters so t_50/t_90/F_end come from the same fit."""
-    traj = np.asarray(traj, dtype=float)
-    n = len(traj)
-    win = min(smooth_window, n // 2 * 2 - 1)
-    smooth = savgol_filter(traj, win, 3)
-    tt = np.arange(n)
-    p0 = [traj[-1] - traj[0], 1e-4, n * 0.1, traj[0]]
-    bounds = ([0, 0, 0, 0], [1, 1e-2, n * 2, 0.5])
-    try:
-        popt, _ = curve_fit(_logistic, tt, smooth, p0=p0, bounds=bounds,
-                            maxfev=50000)
-    except (RuntimeError, ValueError):
+    """t_end_logistic.fit_params under this module's key names.
+
+    The fit was a local copy until 2026-09-07, seeded from the constants that
+    put 8 of the 50 headline runs on a spurious optimum. F_c does not come from
+    the logistic, so the headline F_c 0.35 [0.30, 0.39] is untouched; t_50, t_90
+    and F_end here do move on those runs.
+    """
+    fp = fit_params(traj, smooth_window=smooth_window)
+    if fp is None:
         return None
-    L, k, t0, b = popt
-    t_at = lambda pct: t0 - np.log((1 - pct) / pct) / k
-    return {"t_50": float(t_at(0.50)), "t_90": float(t_at(0.90)),
-            "t_end": float(t_at(0.95)), "F_end": float(b + L),
-            "L": float(L), "b": float(b), "r": float(k)}
+    return {"t_50": fp["t_50"], "t_90": fp["t_90"], "t_end": fp["t_end"],
+            "F_end": fp["asymptote"], "L": fp["L"], "b": fp["b"], "r": fp["k"]}
 
 
 # ---------------------------------------------------------------------------

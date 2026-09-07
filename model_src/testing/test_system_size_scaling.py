@@ -297,7 +297,7 @@ def run_single(args):
     # t = steps compares sizes at whatever post-saturation tail each happens to
     # have -- the fixed-window problem removed from the OAT sweep in cf5a50b.
     traj_full = np.asarray(model.fraction_veg, dtype=float)
-    t_end_fit, t_end_status = t_end_with_status(traj_full)
+    t_end_fit, t_end_status, t_end_r2 = t_end_with_status(traj_full)
     reds = replay(model.events, model.snapshots[0]['diets'], model.params,
                   parent="exposure", weight="none", unit="event", t_end=t_end_fit)
     reds_sub = np.array(snap_final['reductions'])
@@ -385,7 +385,12 @@ def run_single(args):
     return {
         'N': N, 'run': run_id, 'steps': steps,
         'kappa': params.get('kappa', 1.0),
-        't_end_fit': t_end_fit, 't_end_status': t_end_status, 'fc_win': win,
+        't_end_fit': t_end_fit, 't_end_status': t_end_status,
+        't_end_r2': t_end_r2, 'fc_win': win,
+        # decimated trajectory, so a changed window or estimator can be
+        # re-scored offline rather than forcing another 92 core-hour sweep
+        # (stride 100 costs <= 35 steps in 300k on the t_end refit)
+        'traj_ds': traj_full[::100].astype(np.float32),
         'n_communities': n_communities,
         'f_veg': f_veg, 'avg_degree': avg_deg, 'r_assort': r_assort,
         'gamma': gamma, 'r2_gamma': r2_gamma,

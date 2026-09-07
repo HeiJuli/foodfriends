@@ -45,6 +45,90 @@ def _logistic(t, L, k, t0, b):
     return L / (1 + np.exp(-k * (t - t0))) + b
 
 
+def _p0(smooth, tt):
+    """Initial guess read off the smoothed trajectory instead of from constants.
+
+    The least-squares surface is multi-modal and curve_fit returns whichever
+    optimum lies nearest the start, so the guess decides the answer. The old
+    constants (t0 = 0.1n, k = 1e-4) were never right -- measured t0/n is 0.39
+    pre-kappa and 0.47 at kappa = 0.55 -- but what breaks the fit is the
+    absolute distance in steps, not the ratio. At 30k steps the guess is 8.8k
+    short and every run still converges (checked: identical t_end on the
+    20260820 sample-max ensemble, so this change is backwards-compatible).
+    At 400k it is 147k short, and 8 of the 50 headline runs converge instead on
+    a spurious low-k mode (R2 0.87-0.93 against 0.995, t_end 10-40k short) --
+    silently, because the fit does converge. Longer runs stop converging at all;
+    that is what this module reports as "fit_failed". Reading L, b, t0 and k off
+    the data removes both, and scales with run length by construction.
+
+    k comes from the 25-75% crossing span, which a logistic covers in 2 ln 3 / k.
+    """
+    b = smooth[0]
+    L = smooth[-1] - b
+    if L <= 0:
+        return None
+
+    def cross(f):
+        i = np.where(smooth >= b + f * L)[0]
+        return tt[i[0]] if len(i) else tt[-1]
+
+    span = max(cross(0.75) - cross(0.25), tt[-1] * 1e-3)
+    return [L, 2 * np.log(3) / span, cross(0.5), max(b, 0.0)]
+
+
+def _fit(traj, smooth_window):
+    """(popt, R2) for the logistic fit; (None, nan) if there is no usable fit.
+
+    R2 comes back because a converged fit is not necessarily a good one -- see
+    _p0 -- and every caller used to have no way of telling the two apart.
+    """
+    traj = np.asarray(traj, dtype=float)
+    n = len(traj)
+    win = min(smooth_window, n // 2 * 2 - 1)
+    if n < 1000 or win < 5:
+        return None, np.nan
+    smooth = savgol_filter(traj, win, 3)
+    tt = np.arange(n, dtype=float)
+    p0 = _p0(smooth, tt)
+    if p0 is None:
+        return None, np.nan
+    lo, hi = [0, 0, 0, 0], [1, 1e-2, n * 2, 0.5]
+    p0 = [min(max(v, a), b) for v, a, b in zip(p0, lo, hi)]
+    try:
+        popt, _ = curve_fit(_logistic, tt, smooth, p0=p0, bounds=(lo, hi),
+                            maxfev=50000)
+    except (RuntimeError, ValueError):
+        return None, np.nan
+    resid = smooth - _logistic(tt, *popt)
+    ss_tot = np.sum((smooth - smooth.mean()) ** 2)
+    r2 = 1 - np.sum(resid ** 2) / ss_tot if ss_tot > 0 else np.nan
+    # A sigmoid that fits worse than the trajectory's own mean is not a fit. This
+    # is the degenerate case, not a quality threshold: a trajectory that never
+    # moves leaves L at the savgol noise floor and curve_fit converges happily on
+    # it (R2 ~ -5000 on a constant). No number is tuned here.
+    if not np.isfinite(r2) or r2 <= 0:
+        return None, np.nan
+    return popt, r2
+
+
+def fit_params(traj, smooth_window=5001):
+    """Fitted logistic parameters, percentile times and R2, or None.
+
+    The scripts that need L, k, t0 and b rather than just t_end each had their
+    own copy of this fit -- kappa_ensemble_measures, fc_viability_kappa,
+    trajectory_t_end_facet -- all three seeded from the constants _p0 replaces.
+    One home, one guess.
+    """
+    popt, r2 = _fit(traj, smooth_window)
+    if popt is None:
+        return None
+    L, k, t0, b = popt
+    t_at = lambda pct: max(0.0, t0 - np.log((1 - pct) / pct) / k)
+    return dict(L=float(L), k=float(k), t0=float(t0), b=float(b),
+                asymptote=float(b + L), r2=float(r2), t_50=t_at(0.50),
+                t_90=t_at(0.90), t_end=t_at(0.95))
+
+
 def estimate_t_end(traj, pct=0.95, smooth_window=5001):
     """Fit logistic to trajectory, return t at pct of asymptote.
 
@@ -60,31 +144,19 @@ def estimate_t_end(traj, pct=0.95, smooth_window=5001):
     Returns
     -------
     int or None
-        Estimated t_end (None if fit fails).
+        Estimated t_end (None if fit fails). May exceed len(traj); use
+        t_end_with_status when that distinction matters.
     """
-    traj = np.asarray(traj, dtype=float)
-    n = len(traj)
-    if n < 1000:
+    popt, _ = _fit(traj, smooth_window)
+    if popt is None:
         return None
-    win = min(smooth_window, n // 2 * 2 - 1)
-    if win < 5:
-        return None
-    smooth = savgol_filter(traj, win, 3)
-    tt = np.arange(n)
-    p0 = [traj[-1] - traj[0], 1e-4, n * 0.1, traj[0]]
-    bounds = ([0, 0, 0, 0], [1, 1e-2, n * 2, 0.5])
-    try:
-        popt, _ = curve_fit(_logistic, tt, smooth, p0=p0, bounds=bounds, maxfev=50000)
-        L, k, t0, b = popt
-        # t at pct of asymptotic change: F(t) = b + pct*L
-        t_end = t0 - np.log((1 - pct) / pct) / k
-        return max(0, int(round(t_end)))
-    except (RuntimeError, ValueError):
-        return None
+    L, k, t0, b = popt
+    # t at pct of asymptotic change: F(t) = b + pct*L
+    return max(0, int(round(t0 - np.log((1 - pct) / pct) / k)))
 
 
 def t_end_with_status(traj, pct=0.95, smooth_window=5001):
-    """(t_end, status) with status in {"ok", "beyond_run", "fit_failed"}.
+    """(t_end, status, r2) with status in {"ok", "beyond_run", "fit_failed"}.
 
     `estimate_t_end` returns None when curve_fit does not converge, which is NOT
     the same thing as a run that has not saturated -- but every caller used to
@@ -92,14 +164,21 @@ def t_end_with_status(traj, pct=0.95, smooth_window=5001):
     censoring. Measured 2026-09-07: the fit fails on 60-70% of system-size scaling
     runs and ~20% of sensitivity rows, in both cases on runs whose F_veg says they
     had saturated. Only "beyond_run" is evidence of a short run.
+
+    R2 rides along because "ok" is not the same as "good": before the 2026-09-07
+    p0 fix, 8 of the 50 headline runs converged on a spurious optimum at R2 0.87
+    and reported it as ok. Record it; a healthy kappa = 0.55 run sits above 0.99.
+    No threshold is imposed here -- that is a reporting decision, not a fit one.
     """
     n = len(traj)
-    t = estimate_t_end(traj, pct=pct, smooth_window=smooth_window)
-    if t is None:
-        return n - 1, "fit_failed"
+    popt, r2 = _fit(traj, smooth_window)
+    if popt is None:
+        return n - 1, "fit_failed", np.nan
+    L, k, t0, b = popt
+    t = max(0, int(round(t0 - np.log((1 - pct) / pct) / k)))
     if t >= n:
-        return n - 1, "beyond_run"
-    return t, "ok"
+        return n - 1, "beyond_run", r2
+    return t, "ok", r2
 
 
 def _ic(y, yhat, n_par):

@@ -25,27 +25,18 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from t_end_logistic import estimate_t_end, _logistic
-from scipy.signal import savgol_filter
-from scipy.optimize import curve_fit
+from t_end_logistic import estimate_t_end, fit_params
 
 BURN_IN_T = 1000
 
 
-def _fit(traj, smooth_window=5001):
-    """Logistic fit returning the parameters as well as the percentile times."""
-    traj = np.asarray(traj, dtype=float)
-    n = len(traj)
-    win = min(smooth_window, n // 2 * 2 - 1)
-    smooth = savgol_filter(traj, win, 3)
-    p0 = [traj[-1] - traj[0], 1e-4, n * 0.1, traj[0]]
-    bounds = ([0, 0, 0, 0], [1, 1e-2, n * 2, 0.5])
-    popt, _ = curve_fit(_logistic, np.arange(n), smooth, p0=p0,
-                        bounds=bounds, maxfev=50000)
-    L, k, t0, b = popt
-    t_at = lambda pct: max(0.0, t0 - np.log((1 - pct) / pct) / k)
-    return dict(L=L, k=k, t0=t0, b=b, asymptote=b + L,
-                t_50=t_at(0.50), t_90=t_at(0.90), t_end=t_at(0.95))
+# The fit used to be a local copy, seeded from constants that put 8 of the 50
+# runs in this very ensemble on a spurious optimum (R2 0.87-0.93, t_end 10-40k
+# short). It is t_end_logistic.fit_params now: same asymptote, same percentile
+# times, one guess. Numbers in ensemble_measures.csv predate that and need a
+# rerun of this script -- the ensemble median t_end moves 310,454 -> 310,667 and
+# the IQR upper bound 325.7k -> 339.6k.
+_fit = fit_params
 
 
 def mediation(events, t_cut=None):
@@ -70,6 +61,8 @@ def measure(run):
     p = run['params']
 
     fit = _fit(traj)
+    if fit is None:
+        raise RuntimeError(f"run {run['run']}: logistic fit did not resolve")
     conv = [e for e in ev if e[0] == 'conv']
     rev = [e for e in ev if e[0] == 'rev']
     converters = {e[2] for e in conv}
@@ -84,7 +77,8 @@ def measure(run):
         'run': run['run'], 'seed': p.get('seed'), 'kappa': p['kappa'],
         'N': p['N'], 'steps': p['steps'], 'tau_persistence': p['tau_persistence'],
         't_50': fit['t_50'], 't_90': fit['t_90'], 't_end': fit['t_end'],
-        'asymptote': fit['asymptote'], 'F_end': float(traj[-1]),
+        'asymptote': fit['asymptote'], 'fit_r2': fit['r2'],
+        'F_end': float(traj[-1]),
         'F_0': float(traj[0]), 'burnin_jump': float(traj[BURN_IN_T] - traj[0]),
         'n_conv': len(conv), 'n_rev': len(rev), 'n_converters': len(converters),
         'net_adopters': net,
