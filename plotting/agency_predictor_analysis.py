@@ -616,6 +616,85 @@ def make_degree_scaling_figure(df, output_dir='../visualisations_output'):
     return fig
 
 
+# --- Primary-ledger path: summaries straight from kappa_two_dv.py output ---
+
+# The in-run `reductions` array is the submitted (last-draw, dwell-weighted) ledger.
+# Everything reports the primary convention since 2026-09-04, and that ledger only
+# exists as an offline replay, so DV2 has to come from the replay's per-run CSV
+# rather than from the snapshot.
+CSV_STATS = {
+    'adoption':     ('ado_rpb_{p}',  'ado_rpb_sig_{p}',  'r_pb'),
+    'amplification': ('amp_rho_{p}', 'amp_rho_sig_{p}',  'rho_s'),
+    'amp_ols':      ('amp_coef_{p}', 'amp_sig_{p}',      'coef'),
+}
+
+
+def summarise_csv(csv_path, which):
+    """Median/IQR/frac-sig over runs for one statistic, in run_ensemble's format."""
+    df = pd.read_csv(csv_path)
+    vcol, scol, stat = CSV_STATS[which]
+    rows = []
+    for p in ALL_PREDS:
+        vals, sigs = df[vcol.format(p=p)], df[scol.format(p=p)].astype(bool)
+        q25, q75 = np.percentile(vals, [25, 75])
+        frac = sigs.mean()
+        rows.append({'predictor': p, stat: np.median(vals), 'q25': q25, 'q75': q75,
+                     'frac_sig': frac, 'p': 0.001 if frac > 0.5 else 0.1})
+    return pd.DataFrame(rows)
+
+
+TEX_LABELS = {'rho': r'$\rho$', 'alpha': r'$\alpha$', 'theta': r'$\theta$',
+              'complex_cent': r'complex\_cent'}
+
+
+def latex_table(summary, stat, caption, label, n_runs):
+    head = (r'\begin{table}[H]' '\n' r'\centering' '\n'
+            f'\\caption{{{caption}}}\n'
+            r'\begin{tabular}{@{}lccc@{}}' '\n' r'\toprule' '\n'
+            f'\\textbf{{Predictor}} & \\textbf{{{stat}}} & \\textbf{{IQR}} & '
+            f'\\textbf{{Sig. ({n_runs} runs)}} \\\\\n' r'\midrule')
+    body = []
+    for _, r in summary.iterrows():
+        name = TEX_LABELS.get(r['predictor'], r['predictor'])
+        med, lo, hi = r[summary.columns[1]], r['q25'], r['q75']
+        body.append(f"{name:<14} & ${med:+.3f}$ & $[{lo:+.3f},\\;{hi:+.3f}]$ & "
+                    f"{r['frac_sig']:.0%}".replace('%', r'\%') + r' \\')
+    tail = (r'\bottomrule' '\n' r'\end{tabular}' '\n'
+            f'\\label{{{label}}}\n' r'\end{table}')
+    return '\n'.join([head, *body, tail])
+
+
+def run_from_csv(csv_path, output_dir='../visualisations_output'):
+    n_runs = len(pd.read_csv(csv_path))
+    adopt = summarise_csv(csv_path, 'adoption')
+    amp = summarise_csv(csv_path, 'amplification')
+    ols = summarise_csv(csv_path, 'amp_ols')
+
+    with open(CACHE_FILE, 'wb') as fh:
+        pickle.dump({'adoption': adopt, 'amplification': amp, 'n_runs': n_runs}, fh)
+    print(f"Cache saved: {CACHE_FILE}")
+    make_two_panel_figure(adopt, amp, output_dir=output_dir, ensemble=True, n_runs=n_runs)
+
+    tex = '\n\n'.join([
+        latex_table(adopt, r'$r_{pb}$',
+                    'Point-biserial correlations for adoption (binary outcome). '
+                    f'Median and interquartile range over {n_runs} runs.',
+                    'tab:adoption_rpb', n_runs),
+        latex_table(amp, r'$r_s$',
+                    'Spearman correlations for amplification (cascade credit, primary '
+                    f'ledger). Median and interquartile range over {n_runs} runs.',
+                    'tab:amplification_spearman', n_runs),
+        latex_table(ols, 'Coef.',
+                    'Standardised OLS coefficients for amplification (primary ledger). '
+                    f'Median and interquartile range over {n_runs} runs.',
+                    'tab:amplification_ols', n_runs),
+    ])
+    out = os.path.join(output_dir, 'si_tables_s1_s3.tex')
+    open(out, 'w').write(tex + '\n')
+    print(f"Saved: {out}")
+    return adopt, amp, ols
+
+
 # --- Main ---
 
 if __name__ == '__main__':
@@ -624,7 +703,14 @@ if __name__ == '__main__':
     parser.add_argument('pkl', nargs='?', help='path to trajectory pkl')
     parser.add_argument('--plot-only', action='store_true',
                         help='skip analysis; load cached results and regenerate figure')
+    parser.add_argument('--from-csv', metavar='CSV',
+                        help='build Fig. 3 and SI S1-S3 from a kappa_two_dv.py per-run '
+                             'CSV (the primary-ledger path; no pkl needed)')
     args = parser.parse_args()
+
+    if args.from_csv:
+        run_from_csv(args.from_csv)
+        sys.exit(0)
 
     if args.plot_only:
         if not os.path.exists(CACHE_FILE):

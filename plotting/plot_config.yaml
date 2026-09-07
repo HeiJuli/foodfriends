@@ -2,6 +2,8 @@
 # Avoids re-entering parameters interactively each run.
 # File paths are relative to model_output/
 
+# STALE, and not a paper figure any more: the manuscript uses the _ensemble variants
+# below. Kept for ad-hoc single-run inspection only; the pkls are pre-rho-fix, pre-kappa.
 network_agency_evolution:
   big_n:
     file: trajectory_analysis_twin_20260402.pkl
@@ -16,10 +18,18 @@ network_agency_evolution:
     reference_fveg: 0.5         # F_veg crossing to align trajectories at (null = no rescaling)
   savgol_window: 10001          # Savitzky-Golay window for tipping point detection
 
+# STALE, single-run, not a paper figure. See the note above.
 amplification:
   file: trajectory_analysis_twin_20260317.pkl
   analysis_t_end: 139000        # ensemble-median logistic 95% t_end
 
+# SUPERSEDED 2026-09-07. Fig. 3 (agency_two_dvs.pdf) is now built on the primary ledger,
+# which only exists as an offline replay, so it comes from the per-run CSV rather than a
+# pkl snapshot:
+#   python agency_predictor_analysis.py --from-csv \
+#     ../model_output/trajectory_analysis_twin_20260903_kappa0p55_N2000_reduced/two_dv_primary.csv
+# That also writes the SI S1-S3 table bodies. This block drives the old in-run-ledger
+# figure only; do not use it for the paper.
 agency_predictors:
   file: trajectory_analysis_twin_20260317.pkl
   analysis_t_end: 139000        # ensemble-median logistic 95% t_end
@@ -44,5 +54,9 @@ network_agency_evolution_ensemble:
                                # Matches the window the SI quotes F_c at.
 
 amplification_ensemble:
-  file: trajectory_analysis_twin_20260402.pkl
-  analysis_t_end: 139000        # ensemble-median logistic 95% t_end
+  file: trajectory_analysis_twin_20260903_kappa0p55_N2000.pkl
+  analysis_t_end: 310000        # ensemble-median logistic 95% t_end (IQR [290.9k,325.7k])
+  # NOTE: plot_amplification_ensemble reads the in-run (dwell-weighted) `reductions`
+  # array, not the primary ledger. The multiplier distribution it draws is therefore the
+  # submitted convention -- regenerating it here fixes the rho/kappa staleness, not the
+  # ledger. Fig. 2's numbers must come from analysis/attribution_ledger.py.
