@@ -15,7 +15,7 @@ Answers three reviewer comments in one pass:
   R4.16 -- why is memory fixed at M=9?
   R4.21 -- a sensitivity analysis of the attenuation factor lambda is necessary.
 
-Seven parameters are swept one at a time around the default configuration, each
+Eight parameters are swept one at a time around the default configuration, each
 against six observables. Every sweep point uses the SAME seed set (42..42+runs-1),
 so arms are paired on network realisation and initial condition: differences are
 the parameter, not the draw.
@@ -28,9 +28,11 @@ Observables:
   F_c          F_veg at max acceleration, F<0.5   (same estimator as
                analysis/results_analysis.py:analysis_5_inflection)
   t_50         first crossing of F_veg = 0.5, in ksteps
-  amp_mean     mean amplification multiplier over credited agents
-  amp_p90      90th percentile of the same
-  amp_max      maximum of the same (the "88x" ceiling)
+  amp_mean_tend  mean amplification multiplier over credited agents, measured at
+                 each run's OWN fitted t_end -- see the OBS block below for why the
+                 fixed-window amp_* columns are not the reported ones
+  amp_p90_tend   90th percentile of the same
+  amp_max_tend   maximum of the same (the "88x" ceiling)
 
 The amplification observables are the PRIMARY credit convention fixed on 2026-09-02
 (exposure-proportional parents, event count, no dwell weight, lambda from params),
@@ -124,11 +126,28 @@ PLABEL = {"decay": r"$\lambda$ (attenuation)", "M": r"$M$ (memory)",
           "theta_gate_k": r"$k$ (gate steepness)",
           "kappa": r"$\kappa$ (intention discount)"}
 
-OBS = ["F_veg_final", "F_c", "t_50", "amp_mean", "amp_p90", "amp_max"]
+# Amplification is reported at each run's OWN fitted t_end, not at t = steps.
+# Credit accrues for as long as the run lasts, so a fixed window rewards a sweep
+# point for saturating early and then sitting there collecting more: at M = 3
+# (t_end 131k) the fixed 400k window gives amp_mean 24.7, the highest in the M
+# sweep, against 7.2 at its own t_end, the lowest. Every parameter except decay
+# and gamma flips the sign of its sensitivity index between the two windows, so
+# this is not a second-order choice. It also keeps the reported columns coherent
+# with --extend, which deliberately produces a mixed-length frame.
+OBS = ["F_veg_final", "F_c", "t_50",
+       "amp_mean_tend", "amp_p90_tend", "amp_max_tend"]
 OLABEL = {"F_veg_final": r"$F_{veg}$ (final)", "F_c": r"$F_c$ (max accel.)",
-          "t_50": r"$t_{50}$ (ksteps)", "amp_mean": "mean amplification",
-          "amp_p90": "p90 amplification", "amp_max": "max amplification"}
-HEADLINE = ["F_veg_final", "F_c", "amp_mean", "amp_max"]
+          "t_50": r"$t_{50}$ (ksteps)", "amp_mean_tend": "mean amplification",
+          "amp_p90_tend": "p90 amplification", "amp_max_tend": "max amplification"}
+HEADLINE = ["F_veg_final", "F_c", "amp_mean_tend", "amp_max_tend"]
+
+# Aggregated but not reported. fig_lambda's CCDF pools the per-run `mult` array,
+# which only exists at the fixed window (the event log does not leave the worker,
+# so a t_end-replayed pool cannot be recovered afterwards). That figure therefore
+# stays on the fixed-window columns throughout, which costs nothing here: all five
+# decay points share one run length and bit-identical dynamics, and decay's
+# sensitivity index is +0.253 fixed against +0.254 at t_end.
+EXTRA_AGG = ["amp_mean", "amp_p90", "amp_max"]
 
 # Inherit from the runner that produced the reported ensemble, NOT from
 # model_main.params -- the latter is for ad-hoc single runs and differs. Starting
@@ -355,7 +374,7 @@ def expand_baseline(df):
 
 def summarise(df):
     g = df.groupby(["param", "value"])
-    s = g[OBS + ["n_credited", "total_credit_kg"]].agg(["mean", "std"])
+    s = g[OBS + EXTRA_AGG + ["n_credited", "total_credit_kg"]].agg(["mean", "std"])
     s.columns = [f"{a}_{b}" for a, b in s.columns]
     s["n_runs"] = g.size()
     s["F_c_n"] = g["F_c"].apply(lambda x: int(np.isfinite(x).sum()))
@@ -486,9 +505,18 @@ def fig_response_curves(summary, out, observables=HEADLINE):
 
 
 def fig_lambda(df, summary, out):
-    """R4.21: the attenuation sweep in one panel. The pooled distribution carries
-    the argument -- the body sits on top of itself while the tail slides -- so the
-    summary statistics go in an inset rather than a second panel of equal weight."""
+    """R4.21: the attenuation sweep in one panel, on the fixed-window columns.
+
+    The pooled `mult` arrays only exist at t = steps, and all five decay points
+    share one run length and bit-identical dynamics, so the comparison across
+    lambda is unaffected by the window (S = +0.253 fixed, +0.254 at t_end). The
+    figure is therefore internally consistent but its absolute level is not
+    comparable with the tornado and the table, which report at t_end.
+
+    Measured 2026-09-07: lambda rescales the whole distribution near-uniformly
+    (0.9/0.5 ratios: mean x1.29, p90 x1.31, max x1.31), so the older reading --
+    the body sits on top of itself while the tail slides -- is NOT supported. The
+    summary statistics still go in an inset rather than a second panel."""
     d = summary[summary.param == "decay"].sort_values("value")
     lo, hi = min(SWEEPS["decay"]), max(SWEEPS["decay"])
     cmap = plt.get_cmap('viridis')
