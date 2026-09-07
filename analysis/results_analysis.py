@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 from scipy.signal import savgol_filter
 import networkx as nx
-from t_end_logistic import estimate_t_end
+from t_end_logistic import estimate_t_end, fc_window
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -276,14 +276,24 @@ def _smooth_derivs(traj, win, burnin, stride=DERIV_STRIDE, poly=3):
     return idx, sm, d1, d2
 
 
-def _filter_sensitivity(all_data, burnin, windows=(2001, 5001, 10001, 15001)):
-    """A2: how much of F_c is the Savitzky-Golay window (reviewer R4.3(2), R1.4)."""
+def _filter_sensitivity(all_data, fracs=(0.02, 0.05, 0.10, 0.20)):
+    """A2: how much of F_c is the Savitzky-Golay window (reviewer R4.3(2), R1.4).
+
+    Windows are fractions of the run, matching the reporting convention, and each
+    is masked by its own width. The previous version swept absolute windows against
+    a fixed burnin=5000, so the 2001 row was masked at 2.5 half-windows and the
+    15001 row at one -- the rows were not comparable with each other.
+    """
     print(f"\n  Filter sensitivity of F_c (max d2F/dt2 below F=0.5):")
     meds = []
-    for win in windows:
+    for frac in fracs:
         vals = []
+        win_seen = set()
         for _, row in all_data.iterrows():
-            r = _smooth_derivs(row['fraction_veg_trajectory'], win, burnin)
+            traj = row['fraction_veg_trajectory']
+            win = fc_window(len(traj), frac)
+            win_seen.add(win)
+            r = _smooth_derivs(traj, win, win)
             if r is None:
                 continue
             _, sm, _, d2 = r
@@ -294,7 +304,8 @@ def _filter_sensitivity(all_data, burnin, windows=(2001, 5001, 10001, 15001)):
         if not vals:
             continue
         v = np.array(vals); meds.append(np.median(v))
-        print(f"    win={win:>6}: median = {np.median(v):.3f}  "
+        wtag = f"{min(win_seen)}" if len(win_seen) == 1 else f"{min(win_seen)}-{max(win_seen)}"
+        print(f"    {frac:>5.0%} (win={wtag:>13}): median = {np.median(v):.3f}  "
               f"IQR = [{np.percentile(v,25):.3f}, {np.percentile(v,75):.3f}]  "
               f"range = [{v.min():.3f}, {v.max():.3f}]  (n={len(v)})")
     if meds:
@@ -310,12 +321,15 @@ def analysis_5_inflection(all_data, label='twin'):
 
     accel_fveg, accel_times = [], []  # max d2F/dt2 (acceleration onset)
     veloc_fveg, veloc_times = [], []  # max dF/dt (inflection proper)
-    win = 10001
-    burnin = 5000
     n_boundary = 0   # runs whose masked argmax sits against the F<0.5 search cap (A2)
 
+    # Window is a fraction of each run's length, not an absolute constant, so a
+    # 400k kappa=0.55 run and a 139k kappa=1 run are compared like for like.
+    # burnin = win: the mask must be at least one kernel (see _smooth_derivs).
     for _, row in all_data.iterrows():
         traj = np.asarray(row['fraction_veg_trajectory'], dtype=float)
+        win = fc_window(len(traj))
+        burnin = win
         r = _smooth_derivs(traj, win, burnin)
         if r is None:
             continue
@@ -352,7 +366,7 @@ def analysis_5_inflection(all_data, label='twin'):
 
     print(f"\n  Runs with max d2F/dt2 against the F<0.5 search cap: "
           f"{n_boundary}/{len(all_data)}  (censoring check, A2)")
-    _filter_sensitivity(all_data, burnin)
+    _filter_sensitivity(all_data)
 
     # Also report "tipping thresholds" at 25% and 50%
     for threshold in [0.25, 0.50]:
