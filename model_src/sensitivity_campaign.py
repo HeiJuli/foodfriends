@@ -25,7 +25,8 @@ Parameters swept (baseline starred in SWEEPS below):
 
 Observables:
   F_veg_final  steady-state vegetarian fraction
-  F_c          F_veg at max acceleration, F<0.5   (same estimator as
+  F_c          F_veg at max acceleration, F<0.5   -- kept in the pickle but NOT
+               reported (dropped 2026-09-07, see OBS)  (same estimator as
                analysis/results_analysis.py:analysis_5_inflection)
   t_50         first crossing of F_veg = 0.5, in ksteps
   amp_mean_tend  mean amplification multiplier over credited agents, measured at
@@ -134,12 +135,17 @@ PLABEL = {"decay": r"$\lambda$ (attenuation)", "M": r"$M$ (memory)",
 # and gamma flips the sign of its sensitivity index between the two windows, so
 # this is not a second-order choice. It also keeps the reported columns coherent
 # with --extend, which deliberately produces a mixed-length frame.
-OBS = ["F_veg_final", "F_c", "t_50",
+# F_c is deliberately absent: dropped from the reported sweep outputs 2026-09-07.
+# It is a threshold estimator, the sweep does not make a threshold claim, and its
+# window is a fraction of run length -- so after --extend it is not comparable
+# across points of different `steps` and has no `_tend` fallback to correct it.
+# Still computed by _observables and kept in the pickle as raw data.
+OBS = ["F_veg_final", "t_50",
        "amp_mean_tend", "amp_p90_tend", "amp_max_tend"]
 OLABEL = {"F_veg_final": r"$F_{veg}$ (final)", "F_c": r"$F_c$ (max accel.)",
           "t_50": r"$t_{50}$ (ksteps)", "amp_mean_tend": "mean amplification",
           "amp_p90_tend": "p90 amplification", "amp_max_tend": "max amplification"}
-HEADLINE = ["F_veg_final", "F_c", "amp_mean_tend", "amp_max_tend"]
+HEADLINE = ["F_veg_final", "amp_mean_tend", "amp_max_tend"]
 
 # Aggregated but not reported. fig_lambda's CCDF pools the per-run `mult` array,
 # which only exists at the fixed window (the event log does not leave the worker,
@@ -199,13 +205,12 @@ def pmf_tables():
 # code so the campaigns cannot drift apart on it).
 #
 # TRAP -- --extend and F_c. `fc_window` sizes the kernel from len(traj), so a point
-# extended to 800k gets win=160001 against 80001 for an untouched point. F_c is
-# compared across sweep points (OBS/HEADLINE, the SI table, the response curves)
-# and its median moves 0.352 -> 0.382 over windows from 2% to 20%, so after an
-# extension the F_c column is NOT comparable across points of different length.
-# The fixed-window `amp_*` columns have the same problem (see run_extension), but
-# for F_c there is no `_tend` equivalent to fall back on. Until that is settled,
-# read F_c only from same-length points, and check `steps` before quoting it.
+# extended to 800k gets win=160001 against 80001 for an untouched point, and F_c's
+# median moves 0.352 -> 0.382 over windows from 2% to 20%. The fixed-window `amp_*`
+# columns have the same exposure and fall back to `_tend`; F_c has no equivalent.
+# This is why F_c was dropped from the reported outputs (see OBS). The column
+# survives in the pickle: if you ever quote it, quote it only from points that
+# share a `steps` value.
 FC_STRIDE = 100      # decimate before filtering, as results_analysis.py does
 
 
@@ -335,8 +340,8 @@ def run_extension(df, points, runs, steps, cores, tag):
     mixed-length -- which is why amplification must be read from the `_tend`
     columns after an extension, never from the fixed-window `amp_*` ones.
 
-    F_c has the same exposure and no `_tend` equivalent: its window is a fraction
-    of run length, so extended points get a wider kernel. See the FC_STRIDE block.
+    F_c had the same exposure and no `_tend` equivalent, which is why it is no
+    longer a reported column at all. See the FC_STRIDE block.
     """
     jobs = [("baseline", np.nan, 42 + i, steps) for i in range(runs)]
     for prm, val in points:
@@ -670,10 +675,9 @@ def write_table(summary, sens, out):
          r"weight); the $\gamma$ sweep therefore moves the social-influence "
          r"kernel and the credit split together.}",
          r"\label{tab:sensitivity}",
-         r"\begin{tabular}{llcccccc}", r"\toprule",
-         r"Parameter & Value & $F_{veg}$ & $F_c$ & $t_{50}$ (k) & "
+         r"\begin{tabular}{llccccc}", r"\toprule",
+         r"Parameter & Value & $F_{veg}$ & $t_{50}$ (k) & "
          r"$\bar{A}$ & $A_{90}$ & $A_{max}$ \\", r"\midrule"]
-    partial = []   # sweep points where the F_c estimator was undefined in some runs
     for prm in SWEEPS:
         sub = summary[summary.param == prm].sort_values("value")
         for i, r in enumerate(sub.itertuples()):
@@ -683,9 +687,6 @@ def write_table(summary, sens, out):
                 cells.append("--" if not np.isfinite(mu) else
                              fmt[ob].format(mu) + ("" if not np.isfinite(sd)
                                                    else f" ({fmt[ob].format(sd)})"))
-            if r.F_c_n < r.n_runs:
-                partial.append(f"{pname[prm][:-1]}={r.value:g}$ "
-                               f"({r.F_c_n}/{r.n_runs})")
             cells = [pname[prm] if i == 0 else "", f"{r.value:g}"] + cells
             if r.is_baseline:
                 cells = [c if not c else r"\textbf{" + c + "}" for c in cells]
@@ -697,13 +698,6 @@ def write_table(summary, sens, out):
         L.append(r"\midrule")
     L[-1] = r"\bottomrule"
     L += [r"\end{tabular}"]
-    if partial:
-        L += [r"\begin{minipage}{\textwidth}\vspace{2pt}\footnotesize",
-              r"$F_c$ is defined only where the smoothed trajectory has positive "
-              r"acceleration below $F_{veg}=0.5$; it was undefined in some runs at "
-              + ", ".join(partial) + r" (runs with a defined $F_c$ shown in "
-              r"parentheses), and the entry is the mean over those runs.",
-              r"\end{minipage}"]
     L += [r"\end{table}"]
     with open(out, "w") as f:
         f.write("\n".join(L) + "\n")
