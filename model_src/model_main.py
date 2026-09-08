@@ -358,6 +358,13 @@ class Model():
         self.fraction_veg = []
         self.steady_state_t = None
         self.events = []   # conversion/reversion log, see Agent.step
+        # Optional degree sampling. Amplification is credited to t_end, but rewiring
+        # keeps moving degrees afterwards, so regressing credit on the FINAL network
+        # attenuates the log-log slope (measured 0.785 over 600k steps at N=2000,
+        # 2026-09-08). Callers that need gamma record degrees on their own grid and
+        # read the sample nearest t_end. 0 disables; consumes no RNG.
+        self._degree_every = params.get("degree_sample_every", 0)
+        self.degree_history = []
 
     def _generate_network(self):
         topo, N = self.params['topology'], self.params["N"]
@@ -734,6 +741,9 @@ class Model():
 
             if t in self.snapshot_times:
                 self.record_snapshot(t)
+            if self._degree_every and t % self._degree_every == 0:
+                self.degree_history.append(
+                    (t, np.array([d for _, d in self.G1.degree()], dtype=np.int32)))
             if t % 1000 == 0:
                 self._check_steady_state(t)
 
