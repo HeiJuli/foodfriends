@@ -25,7 +25,7 @@ the topology, L4 - L3 is empirical psychology *plus* its homophilic alignment
 with the network. They are not separable without a node-permutation arm.
 
 Usage:
-    python amplification_decomposition.py [--runs 3] [--steps 150000] [--jobs 6]
+    python amplification_decomposition.py [--runs 3] [--steps 400000] [--jobs 6]
     python amplification_decomposition.py --arms L0,L1,L4      # subset
 """
 import os, sys, argparse, pickle
@@ -167,7 +167,8 @@ def report(res):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=3)
-    ap.add_argument('--steps', type=int, default=150000)
+    # 150000 was pre-kappa; the default configuration needs ~350k at N=2000.
+    ap.add_argument('--steps', type=int, default=400000)
     ap.add_argument('--jobs', type=int, default=6)
     ap.add_argument('--arms', default=','.join(ARMS))
     ap.add_argument('--out', default='amplification_decomposition.pkl')

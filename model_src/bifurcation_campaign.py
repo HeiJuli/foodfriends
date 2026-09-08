@@ -396,7 +396,12 @@ def print_report(stats):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=12, help='runs (seeds) per grid cell')
-    ap.add_argument('--steps', type=int, default=150000)
+    # kappa = 0.55 floor, not a target: the default configuration's own t_end is
+    # 346.9k at N=2000 (OAT baseline, 4/30 still beyond_run there), and 12 of 40
+    # sweep points censor at 400k. Was 150000, a pre-kappa number left behind when
+    # kappa pushed saturation out ~3.4x on 2026-09-03. Set --steps from the fitted
+    # t_end for the configuration you are running, never from this default.
+    ap.add_argument('--steps', type=int, default=400000)
     ap.add_argument('--cores', type=int, default=max(1, int(0.75 * os.cpu_count())))
     ap.add_argument('--N', type=int, help='override population size (smoke tests only; '
                                           'the production campaign is N=2000)')
