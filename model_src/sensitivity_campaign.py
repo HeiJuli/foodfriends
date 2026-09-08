@@ -668,7 +668,8 @@ def fig_interaction(df, out):
 # ---------------------------------------------------------------------------
 def write_table(summary, sens, out):
     fmt = {"F_veg_final": "{:.3f}", "F_c": "{:.3f}", "t_50": "{:.1f}",
-           "amp_mean": "{:.2f}", "amp_p90": "{:.2f}", "amp_max": "{:.1f}"}
+           "amp_mean_tend": "{:.2f}", "amp_p90_tend": "{:.2f}",
+           "amp_max_tend": "{:.1f}"}
     pname = {"decay": r"$\lambda$", "M": r"$M$", "beta": r"$\beta$",
              "gamma": r"$\gamma$", "immune_n": r"$f_{imm}$",
              "theta_gate_c": r"$c$", "theta_gate_k": r"$k$",

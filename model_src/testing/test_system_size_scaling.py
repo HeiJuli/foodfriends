@@ -52,7 +52,15 @@ from auxillary.sampling_utils import stratified_sample_agents
 DIRECT_REDUCTION_KG = 664
 N_RUNS = 10
 COMMUNITY_SIZE = 2000     # validated model scale
-UPDATES_PER_AGENT = 200   # match N=2000 baseline at kappa=0.55: 400k steps / 2000
+UPDATES_PER_AGENT = 200   # NOT SETTLED -- do not launch the sweep on this value. 200 was
+                          # taken from the N=2000 headline's 400k/2000, but this script builds
+                          # its own agents and network and equilibrates ~25% slower than the
+                          # headline configuration does at the same N. The 2026-09-07 pilot
+                          # clamped t_end in 9/10 runs at N=2000 and 8/10 at N=4000. Refitting
+                          # those trajectories without the clamp puts the requirement at a
+                          # median of 218 (N=2000) and 228 (N=4000) updates/agent, worst seed
+                          # 295 and 306 -- and rising with N, so no constant measured at these
+                          # two sizes is safe at N=20000. See server_runbook_kappa s.2.3.
 MU = 0.20                 # inter-community mixing; Q~0.5 (Newman 2006)
 ATTR_WEIGHTS = np.array([0.20, 0.35, 0.18, 0.32, 0.05])
 
@@ -413,11 +421,19 @@ def summarize(df):
     print(f"\n{'='*90}")
     print(f"  SYSTEM-SIZE SCALING SUMMARY (corrected)")
     print(f"{'='*90}")
-    print(f"{'N':>7s} {'n':>3s} {'K':>3s} {'F_veg':>6s} {'gamma':>7s} {'mean_A':>7s} "
-          f"{'max_A':>7s} {'Gini':>6s} {'F_c':>6s} {'CCDF_a':>7s} {'dc_slope':>8s}")
+    print(f"{'N':>7s} {'n':>3s} {'cens':>4s} {'K':>3s} {'F_veg':>6s} {'gamma':>7s} "
+          f"{'mean_A':>7s} {'max_A':>7s} {'Gini':>6s} {'F_c':>6s} {'CCDF_a':>7s} "
+          f"{'dc_slope':>8s}")
     print(f"{'-'*90}")
     for N, grp in df.groupby('N'):
-        print(f"{N:>7d} {len(grp):>3d} "
+        # A clamped t_end means the logistic could not place t_95 inside the run, so
+        # amplification was credited over the whole run rather than to t_end. That is
+        # not the same as "did not saturate" -- the fit inflates the asymptote on a
+        # slow tail -- but it does mean the credit window differs across runs, so the
+        # count has to be visible next to the medians it distorts.
+        n_cens = (int((grp['t_end_status'] == 'beyond_run').sum())
+                  if 't_end_status' in grp else -1)   # -1: pre-2026-09-07 pkl, no status
+        print(f"{N:>7d} {len(grp):>3d} {n_cens:>4d} "
               f"{int(grp['n_communities'].median()):>3d} "
               f"{grp['f_veg'].median():>6.3f} "
               f"{grp['gamma'].median():>7.2f} ({grp['gamma'].std():>4.2f}) "
@@ -450,13 +466,21 @@ def summarize(df):
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        sizes = [int(x) for x in sys.argv[1:]]
-    else:
-        sizes = ALL_SIZES
+    # --updates/--runs override the constants for a calibration run without
+    # editing them; positional args are the sizes, as before.
+    args = sys.argv[1:]
+    opts = {}
+    for flag in ("--updates", "--runs"):
+        if flag in args:
+            i = args.index(flag)
+            opts[flag] = int(args[i + 1])
+            del args[i:i + 2]
+    updates = opts.get("--updates", UPDATES_PER_AGENT)
+    N_RUNS = opts.get("--runs", N_RUNS)
+    sizes = [int(x) for x in args] if args else ALL_SIZES
 
     def steps_for_N(N):
-        return UPDATES_PER_AGENT * N
+        return updates * N
 
     n_cores = max(1, int(0.75 * os.cpu_count()))
     runs_per = {N: (3 if N >= 100000 else N_RUNS) for N in sizes}
@@ -465,7 +489,7 @@ if __name__ == '__main__':
     print(f"  N values: {sizes}")
     print(f"  Runs per N: {dict(runs_per)}")
     print(f"  Total sims: {total_tasks}")
-    print(f"  Updates/agent: {UPDATES_PER_AGENT}")
+    print(f"  Updates/agent: {updates}")
     print(f"  kappa: {BASE_PARAMS['kappa']}")
     print(f"  Community size: {COMMUNITY_SIZE}")
     print(f"  Inter-community mu: {MU}")
