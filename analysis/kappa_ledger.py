@@ -196,13 +196,15 @@ def run_null(a):
     # ---- figure
     fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.6, 3.2))
     for lab, col in zip(labels, ('C0', 'C3', 'C2')):
+        ls = '--' if lab == 'null-nb' else '-'      # it sits on top of the model
         v = np.sort(np.concatenate([x[x > 0] for x in pooled[lab]]))[::-1]
-        ax.plot(np.arange(1, len(v) + 1) / len(v) * 100, v, lw=1.2, color=col, label=lab)
+        ax.plot(np.arange(1, len(v) + 1) / len(v) * 100, v, lw=1.2, ls=ls, color=col,
+                label=lab)
         kk = np.array([np.mean([x[b][1] for x in bands[lab]]) for b in BANDS])
         mu = np.array([np.mean([x[b][2] for x in bands[lab]]) for b in BANDS])
         m = np.isfinite(kk) & (mu > 0)
-        if lab != 'null-mf':
-            bx.plot(kk[m], mu[m], 'o-', ms=3, lw=1.0, color=col, label=f'{lab}, $E[A|k]$')
+        bx.plot(kk[m], mu[m], 'o-', ms=3, lw=1.0, ls=ls, color=col,
+                label=f'{lab}, $E[A|k]$')
     ax.set(xlabel='Credited agents [%]', ylabel='Amplification factor $A$',
            xlim=(0, 100), yscale='log')
     ax.set_title('a  credit distribution vs permutation nulls', fontsize=8, loc='left')

@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Is the model's flatter credit distribution psychology, or just churn?
 
+SUPERSEDED 2026-09-08. Test A has no meaning without a single-parent forest, which
+the primary ledger is not; Test B's homogeneous reversion rate cannot reproduce the
+kappa churn, which is agent-heterogeneous and four times larger, and its hard-coded
+2.31 units per event is a pre-kappa number. Replaced by the event-log permutation
+null (attribution_ledger.permute_buffers, `kappa_ledger.py --null mf nb`), which
+holds churn, F_veg(t) and arrival order fixed exactly instead of fitting them. See
+null_models_reassessment_2026-09-08.md s.1 and permutation_null_results_2026-09-08.md.
+
 The model spreads credit over ~66% of adopters at Gini ~0.70; a naive contagion
 null on the same network reaches only ~36% at Gini ~0.86. Two candidate causes:
 
