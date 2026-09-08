@@ -38,7 +38,10 @@ from auxillary import network_stats
 params = {
     "veg_CO2": 1390, "meat_CO2": 2054,
     "N": 650,
-    "steps": 35000,
+    # 400000: kappa = 0.55 floor. 30000/35000 were pre-kappa and leave the run
+    # unsaturated -- the 30k sample-max arm is on record as not quotable at its
+    # endpoint for exactly this reason. Set from the fitted t_end, not from here.
+    "steps": 400000,
     "k": 8,
     "immune_n": 0.10,
     "M": 9,
