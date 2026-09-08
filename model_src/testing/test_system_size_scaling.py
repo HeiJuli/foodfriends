@@ -72,11 +72,17 @@ STOP_CHECK_UPDATES = 10   # check cadence, in updates/agent -- NOT a fixed step 
                           # steps would be 25 updates/agent of resolution at N=2000 and 2.5
                           # at N=20000, i.e. a size-dependent stopping bias inside a
                           # scaling measurement.
-STOP_MARGIN = 1.10        # stop at t >= 1.10 * t_end(prefix). At margin 1.0 the run ends
-                          # exactly where the estimate crosses the prefix, and the estimate
-                          # is still falling at ~1.3 units per unit prefix there, so one grid
-                          # step either way moves the recorded t_end by tens of updates/agent
-                          # and that variance leaks into the credit window.
+STOP_MARGIN = 1.30        # stop at t >= 1.30 * t_end(prefix). 1.10 was adopted on the
+                          # argument that at margin 1.0 the estimate is still falling where it
+                          # crosses the prefix; the margin test (measurement 5, 2026-09-08,
+                          # one N=2000 seed replayed at each margin) then measured what the
+                          # choice is worth and 1.10 did not survive it. Against the same run
+                          # left to 500 updates/agent, mean amplification comes out +18.9% at
+                          # margin 1.0, +14.9% at 1.1 and +7.6% at 1.3, and gamma is 0.997 /
+                          # 0.985 / 0.969 against a converged 0.969 -- monotone, so a later
+                          # stop is not merely different but closer. 1.0 -> 1.3 moves mean_A by
+                          # 1.78 seed-sd, which is the pre-committed threshold for paying the
+                          # 12.5% extra compute (270 vs 240 updates/agent).
 STOP_R2_MIN = 0.99        # guard, not a test: satisfied from ~60 updates/agent onward.
 STOP_ASYMPTOTE_MAX = 1.0  # this one does the work. F_veg <= 1 is a hard bound, and the
                           # fitted asymptote sits above 1.0 across the whole 100-190 band,
