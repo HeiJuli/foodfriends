@@ -722,7 +722,15 @@ class Model():
     def current_veg_fraction(self):
         return sum(1 for a in self.agents if a.diet == "veg") / len(self.agents)
 
-    def run(self):
+    def run(self, stop_check=None, stop_every=0):
+        """Run for params["steps"], or until stop_check says the run is done.
+
+        stop_check(model, t) is consulted every stop_every steps and ends the run
+        when it returns True. The model holds no stopping policy of its own: the
+        saturation criterion lives with the caller that has to defend it (see
+        testing/test_system_size_scaling.py). Consumes no RNG, so a stopped run is
+        a prefix of the same run left to the ceiling.
+        """
         self.agent_ini()
         self.harmonise_netIn()
         self.record_fraction()
@@ -748,6 +756,9 @@ class Model():
                 self._check_steady_state(t)
 
             self.harmonise_netIn()
+
+            if stop_every and t % stop_every == 0 and stop_check(self, t):
+                break
 
         self.record_snapshot('final')
 

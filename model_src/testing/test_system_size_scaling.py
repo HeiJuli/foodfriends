@@ -29,6 +29,11 @@ N values: 2000, 4000, 6000, 10000, 20000
 Usage:
   python test_system_size_scaling.py              # all sizes
   python test_system_size_scaling.py 2000 4000    # specific sizes only
+  python test_system_size_scaling.py --updates 500 --runs 5 --no-stop 2000
+                                                  # calibration: fixed length, no stop
+
+Run length is adaptive (see the stop constants below): each run ends when its own
+logistic t_end has settled, with UPDATES_PER_AGENT as the ceiling.
 """
 import os, sys, time, pickle, random
 import numpy as np
@@ -45,22 +50,37 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../analysis'))
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 import model_main
 from attribution_ledger import replay
-from t_end_logistic import estimate_t_end, t_end_with_status, fc_window
+from t_end_logistic import estimate_t_end, t_end_with_status, fc_window, fit_params
 from auxillary.homophily_network_v2 import generate_homophily_network_v2
 from auxillary.sampling_utils import stratified_sample_agents
 
 DIRECT_REDUCTION_KG = 664
 N_RUNS = 10
 COMMUNITY_SIZE = 2000     # validated model scale
-UPDATES_PER_AGENT = 200   # NOT SETTLED -- do not launch the sweep on this value. 200 was
-                          # taken from the N=2000 headline's 400k/2000, but this script builds
-                          # its own agents and network and equilibrates ~25% slower than the
-                          # headline configuration does at the same N. The 2026-09-07 pilot
-                          # clamped t_end in 9/10 runs at N=2000 and 8/10 at N=4000. Refitting
-                          # those trajectories without the clamp puts the requirement at a
-                          # median of 218 (N=2000) and 228 (N=4000) updates/agent, worst seed
-                          # 295 and 306 -- and rising with N, so no constant measured at these
-                          # two sizes is safe at N=20000. See server_runbook_kappa s.2.3.
+# Run length is adaptive, not a constant: no fixed number of updates/agent serves
+# both ends of a sweep that spans a factor of ten in N (the 2026-09-07 pilot's
+# unclamped requirement was a median of 218 at N=2000 and 228 at N=4000, worst seed
+# 295 and 306, and rising with N). Each run stops when its own logistic t_end has
+# settled, and the constant below is only the ceiling. Criterion and its validation
+# against the 2026-09-08 calibration: server_runbook_kappa s.2.3.
+UPDATES_PER_AGENT = 350   # CEILING, not a length. Job 1 of the calibration ran to 500
+                          # and found t_end(prefix) converged to within ~1% by 350 at
+                          # both sizes, so 350 gives up nothing and saves 30% of the
+                          # sweep. A run that hits it is recorded stop_reason="ceiling".
+STOP_FLOOR_UPDATES = 100  # no run stops before this; the fit is still moving fast below it
+STOP_CHECK_UPDATES = 10   # check cadence, in updates/agent -- NOT a fixed step count. 50k
+                          # steps would be 25 updates/agent of resolution at N=2000 and 2.5
+                          # at N=20000, i.e. a size-dependent stopping bias inside a
+                          # scaling measurement.
+STOP_MARGIN = 1.10        # stop at t >= 1.10 * t_end(prefix). At margin 1.0 the run ends
+                          # exactly where the estimate crosses the prefix, and the estimate
+                          # is still falling at ~1.3 units per unit prefix there, so one grid
+                          # step either way moves the recorded t_end by tens of updates/agent
+                          # and that variance leaks into the credit window.
+STOP_R2_MIN = 0.99        # guard, not a test: satisfied from ~60 updates/agent onward.
+STOP_ASYMPTOTE_MAX = 1.0  # this one does the work. F_veg <= 1 is a hard bound, and the
+                          # fitted asymptote sits above 1.0 across the whole 100-190 band,
+                          # dropping below it only at ~250 updates/agent.
 MU = 0.20                 # inter-community mixing; Q~0.5 (Newman 2006)
 ATTR_WEIGHTS = np.array([0.20, 0.35, 0.18, 0.32, 0.05])
 
@@ -247,12 +267,45 @@ def load_pmf_tables():
 
 
 # ---------------------------------------------------------------------------
+#  Adaptive stop
+# ---------------------------------------------------------------------------
+
+def make_stop_check(N):
+    """Stop once the fitted t_end has settled: t >= STOP_MARGIN * t_end(prefix).
+
+    The estimator being watched is the one that later sets the credit window, so
+    the stop and the recorded t_end are the same number measured twice; using a
+    cheaper proxy here would put the two out of step. Validated offline against the
+    20 pilot trajectories and the 10 calibration runs: it never fires early (below
+    ~250 updates/agent the fit clamps to the prefix, and 1.10 x prefix > prefix
+    declines to stop), and the asymptote guard is what holds it back, not the margin.
+
+    Cost is a savgol pass plus a curve_fit over the prefix on each check: measured
+    49 s of fitting for a full 100-350 grid at N=2000, i.e. 13% of a run that goes
+    all the way to the ceiling and ~8% of one that stops at 230. It falls as 1/N --
+    the fit is linear in run length, the run itself is N^2.
+    """
+    floor = STOP_FLOOR_UPDATES * N
+
+    def stop_check(model, t):
+        if t < floor:
+            return False
+        fit = fit_params(model.fraction_veg)
+        return (fit is not None
+                and fit['r2'] >= STOP_R2_MIN
+                and fit['asymptote'] <= STOP_ASYMPTOTE_MAX
+                and t >= STOP_MARGIN * fit['t_end'])
+
+    return stop_check
+
+
+# ---------------------------------------------------------------------------
 #  Single run worker
 # ---------------------------------------------------------------------------
 
 def run_single(args):
     """Worker: run one model, return summary stats."""
-    N, run_id, steps = args
+    N, run_id, steps, adaptive = args
     seed = 42 + run_id * 1000 + N  # unique per (N, run), no collisions
     np.random.seed(seed)
     random.seed(seed)
@@ -288,8 +341,16 @@ def run_single(args):
     model.G1 = G_mod
 
     t0 = time.time()
-    model.run()
+    model.run(stop_check=make_stop_check(N) if adaptive else None,
+              stop_every=STOP_CHECK_UPDATES * N if adaptive else 0)
     elapsed = time.time() - t0
+
+    # The run may have stopped short of the ceiling, and params["steps"] is what
+    # replay() takes as its default t_end and what a later re-analysis reads as the
+    # run length -- leaving the ceiling there credits to a length never reached.
+    steps_run = len(model.fraction_veg) - 1
+    model.params['steps'] = steps_run
+    stop_reason = 'converged' if steps_run < steps else 'ceiling'
 
     # Clean up temp file
     os.unlink(tmp.name)
@@ -324,7 +385,7 @@ def run_single(args):
     if model.degree_history:
         t_deg, degrees = min(model.degree_history, key=lambda th: abs(th[0] - t_end_fit))
     else:
-        t_deg, degrees = steps, np.array([G.degree(n) for n in nodes])
+        t_deg, degrees = steps_run, np.array([G.degree(n) for n in nodes])
 
     # 1. Degree-amplification log-log slope (gamma)
     mask = reds > 0
@@ -356,7 +417,12 @@ def run_single(args):
         sorted_r = np.sort(pos)
         gini = (2 * np.sum(np.arange(1, n+1) * sorted_r) / (n * np.sum(sorted_r))) - (n + 1) / n
 
-    # 5. Critical fraction (max d2F/dt2, F<0.5)
+    # 5. Critical fraction (max d2F/dt2, F<0.5). Kept in the pickle, NOT reported:
+    # fc_window is 20% of the run, so F_c is incomparable across the variable-length
+    # runs an adaptive stop produces, and at these lengths it is degenerate besides
+    # -- 20% of a 350-update run is a 100-update kernel searching a ~50-update band,
+    # which returned 8.5e-21 at N=4000 in the calibration. Headline F_c comes from
+    # the kappa ensemble, not from here.
     traj = traj_full
     fc = np.nan
     win = fc_window(len(traj))          # 20% of the run, the shared convention
@@ -400,10 +466,13 @@ def run_single(args):
 
     print(f"  N={N:>6d} run={run_id:>2d}  F_veg={f_veg:.3f}  gamma={gamma:.2f}  "
           f"mean_A={mean_mult:.1f}x  max_A={max_mult:.0f}x  Gini={gini:.3f}  "
-          f"F_c={fc:.3f}  comms={n_communities}  elapsed={elapsed:.0f}s")
+          f"upd={steps_run/N:.0f}/agent ({stop_reason})  comms={n_communities}  "
+          f"elapsed={elapsed:.0f}s")
 
     return {
-        'N': N, 'run': run_id, 'steps': steps,
+        'N': N, 'run': run_id, 'steps': steps_run,
+        'steps_ceiling': steps, 'stop_reason': stop_reason,
+        'upd_per_agent': steps_run / N,
         'kappa': params.get('kappa', 1.0),
         't_end_fit': t_end_fit, 't_end_status': t_end_status,
         't_end_r2': t_end_r2, 'fc_win': win, 't_deg': t_deg,
@@ -433,9 +502,9 @@ def summarize(df):
     print(f"\n{'='*90}")
     print(f"  SYSTEM-SIZE SCALING SUMMARY (corrected)")
     print(f"{'='*90}")
-    print(f"{'N':>7s} {'n':>3s} {'cens':>4s} {'K':>3s} {'F_veg':>6s} {'gamma':>7s} "
-          f"{'mean_A':>7s} {'max_A':>7s} {'Gini':>6s} {'F_c':>6s} {'CCDF_a':>7s} "
-          f"{'dc_slope':>8s}")
+    print(f"{'N':>7s} {'n':>3s} {'cens':>4s} {'ceil':>4s} {'upd':>4s} {'K':>3s} "
+          f"{'F_veg':>6s} {'gamma':>7s} {'mean_A':>7s} {'max_A':>7s} {'Gini':>6s} "
+          f"{'CCDF_a':>7s} {'dc_slope':>8s}")
     print(f"{'-'*90}")
     for N, grp in df.groupby('N'):
         # A clamped t_end means the logistic could not place t_95 inside the run, so
@@ -445,14 +514,19 @@ def summarize(df):
         # count has to be visible next to the medians it distorts.
         n_cens = (int((grp['t_end_status'] == 'beyond_run').sum())
                   if 't_end_status' in grp else -1)   # -1: pre-2026-09-07 pkl, no status
-        print(f"{N:>7d} {len(grp):>3d} {n_cens:>4d} "
+        # Under the adaptive stop cens should be 0 by construction; a ceiling hit is
+        # the thing to watch, since that run is the one whose length was imposed
+        # rather than measured.
+        n_ceil = (int((grp['stop_reason'] == 'ceiling').sum())
+                  if 'stop_reason' in grp else -1)
+        upd = grp['upd_per_agent'].median() if 'upd_per_agent' in grp else np.nan
+        print(f"{N:>7d} {len(grp):>3d} {n_cens:>4d} {n_ceil:>4d} {upd:>4.0f} "
               f"{int(grp['n_communities'].median()):>3d} "
               f"{grp['f_veg'].median():>6.3f} "
               f"{grp['gamma'].median():>7.2f} ({grp['gamma'].std():>4.2f}) "
               f"{grp['mean_mult'].median():>5.1f}x "
               f"{grp['max_mult'].median():>5.0f}x "
               f"{grp['gini'].median():>6.3f} "
-              f"{grp['fc'].median():>6.3f} "
               f"{grp['alpha_ccdf'].median():>7.2f} "
               f"{grp['dc_slope'].median():>8.2f}")
 
@@ -481,6 +555,12 @@ if __name__ == '__main__':
     # --updates/--runs override the constants for a calibration run without
     # editing them; positional args are the sizes, as before.
     args = sys.argv[1:]
+    # --no-stop reproduces a calibration run: plain fixed-length runs, no stop logic,
+    # which is what the criterion above was settled from and what re-settling it would
+    # need again. With it, --updates is a length; without it, --updates is the ceiling.
+    adaptive = "--no-stop" not in args
+    if not adaptive:
+        args.remove("--no-stop")
     opts = {}
     for flag in ("--updates", "--runs"):
         if flag in args:
@@ -501,11 +581,16 @@ if __name__ == '__main__':
     print(f"  N values: {sizes}")
     print(f"  Runs per N: {dict(runs_per)}")
     print(f"  Total sims: {total_tasks}")
-    print(f"  Updates/agent: {updates}")
+    print(f"  Updates/agent: {updates} ({'ceiling, adaptive stop' if adaptive else 'fixed, no stop'})")
+    if adaptive:
+        print(f"  Stop: t >= {STOP_MARGIN} * t_end(prefix), r2 >= {STOP_R2_MIN}, "
+              f"asymptote <= {STOP_ASYMPTOTE_MAX}; "
+              f"floor {STOP_FLOOR_UPDATES}, check every {STOP_CHECK_UPDATES} upd/agent")
     print(f"  kappa: {BASE_PARAMS['kappa']}")
     print(f"  Community size: {COMMUNITY_SIZE}")
     print(f"  Inter-community mu: {MU}")
-    print(f"  Total agent-steps: {sum(N * steps_for_N(N) * runs_per[N] for N in sizes):,.0f}")
+    print(f"  Total agent-steps: {sum(N * steps_for_N(N) * runs_per[N] for N in sizes):,.0f}"
+          f"{' (upper bound)' if adaptive else ''}")
     print(f"  Cores: {n_cores}")
     print()
 
@@ -513,11 +598,11 @@ if __name__ == '__main__':
     results = []
     for N in sizes:
         n_runs = 3 if N >= 100000 else N_RUNS
-        tasks = [(N, run, steps_for_N(N)) for run in range(n_runs)]
+        tasks = [(N, run, steps_for_N(N), adaptive) for run in range(n_runs)]
         # Cap concurrency for large N to prevent OOM
         n_workers = max(1, min(n_cores, 1 if N >= 100000 else 2 if N >= 20000 else 4 if N >= 10000 else n_cores))
         print(f"  Running N={N} ({n_runs} runs, {n_workers} workers, "
-              f"{steps_for_N(N):,} steps)...")
+              f"{steps_for_N(N):,} steps {'max' if adaptive else ''})...")
         with Pool(n_workers) as pool:
             results.extend(pool.map(run_single, tasks))
 
