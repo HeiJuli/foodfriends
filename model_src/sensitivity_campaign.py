@@ -751,7 +751,12 @@ def print_report(summary, sens):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--runs', type=int, default=30, help='runs per sweep point')
-    ap.add_argument('--steps', type=int, default=150000)
+    # kappa = 0.55 floor, not a target: the default configuration's own t_end is
+    # 346.9k at N=2000 (OAT baseline, 4/30 still beyond_run there), and 12 of 40
+    # sweep points censor at 400k. Was 150000, a pre-kappa number left behind when
+    # kappa pushed saturation out ~3.4x on 2026-09-03. Set --steps from the fitted
+    # t_end for the configuration you are running, never from this default.
+    ap.add_argument('--steps', type=int, default=400000)
     ap.add_argument('--cores', type=int, default=max(1, int(0.75 * os.cpu_count())))
     ap.add_argument('--quick', action='store_true', help='4 runs per sweep point, smoke test')
     ap.add_argument('--plot-only', metavar='TAG',

@@ -14,7 +14,11 @@ import model_main
 DEFAULT_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 2000,             # population size
-    "steps": 150000,        # simulation timesteps
+    # 150000 was set pre-kappa. At kappa = 0.55 the default configuration
+    # does not saturate until ~350k at N=2000, so the old default produced
+    # a fully censored sweep. Same failure class as kappa being absent from
+    # this dict until 2026-09-08. Override it from the fitted t_end.
+    "steps": 400000,        # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
     "immune_n": 0.10,      # fraction of immune agents
     "M": 9,                # memory buffer length
