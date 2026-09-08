@@ -39,6 +39,13 @@ machinery. Every REPORTED convention, the two last-draw rows included, uses the 
 walk. Buffers logged before D7 as (diet, source) pairs are accepted: t_sampled then
 defaults to the child's conversion time, a slightly looser stint test.
 
+Permutation null (2026-09-08). `permute_buffers` rewrites a copy of the event log with
+every conversion's vegetarian sources redrawn -- from the vegetarians at that step
+(mean-field) or from the converting agent's vegetarian neighbours (topology-only) --
+leaving the replay itself untouched. It holds F_veg(t), churn, arrival order and chain
+termination exactly and randomises only who is credited; it replaces the retired
+CF1-CF3 counterfactuals. Driven from kappa_ledger.py --null.
+
 Usage:
   python attribution_ledger.py ../model_output/<ensemble>.pkl [--t-end T] [--decay L] [--gamma G] [--validate]
 Prints per-convention amplification summaries averaged over the runs in the pickle.
@@ -159,6 +166,64 @@ def replay(events, initial_diets, params, parent="last", weight="none", unit="ev
     return credit
 
 
+def permute_buffers(events, initial_diets, mode, rng, adjacency=None, t_end=None):
+    """Permutation null: redraw who the vegetarian buffer entries came from.
+
+    Returns (events copy, diagnostics). Every conversion keeps its time, its agent, its
+    number of vegetarian sources and the multiplicity of each -- so the exposure shares
+    n**gamma / sum keep their shape -- but each distinct vegetarian source is replaced by
+    a uniform draw from
+
+      mode "mf"  every agent vegetarian at that step (mean-field);
+      mode "nb"  the converting agent's neighbours that are vegetarian at that step.
+
+    Draws are without replacement while the pool allows it, so distinct sources stay
+    distinct; a pool smaller than the number of sources falls back to replacement (which
+    merges two groups' multiplicities) and an empty pool leaves the buffer alone. Both
+    are counted. Vegetarian-at-t is `initial_diets` advanced by the events themselves, so
+    F_veg(t), churn and arrival order are held exactly; only the identities move.
+
+    `adjacency` (mode "nb") is a callable t -> sequence of neighbour arrays by agent.
+    Meat entries, the sampled partner and the reversion events are untouched.
+    """
+    veg = np.array([d == "veg" for d in initial_diets], dtype=bool)
+    out, diag = [], Counter()
+    for ev in events:
+        if ev[0] != "conv":
+            out.append(ev)
+            veg[ev[2]] = False
+            continue
+        _, t, i, partner, pdiet, buf = ev
+        if t_end is None or t <= t_end:
+            groups = {}
+            for k, e in enumerate(buf):
+                if e[0] == "veg" and e[1] != i:
+                    groups.setdefault(e[1], []).append(k)
+            if groups:
+                pool = np.flatnonzero(veg) if mode == "mf" else _veg_nbrs(adjacency(t), i, veg)
+                pool = pool[pool != i]
+                if len(pool) == 0:
+                    diag["empty_pool"] += 1
+                else:
+                    rep = len(pool) < len(groups)
+                    diag["small_pool"] += rep
+                    draw = rng.choice(pool, size=len(groups), replace=rep)
+                    new = list(buf)
+                    for (_, pos), q in zip(groups.items(), draw):
+                        for k in pos:
+                            new[k] = (buf[k][0], int(q)) + tuple(buf[k][2:])
+                    buf = tuple(new)
+                    diag["permuted"] += 1
+        out.append(("conv", t, i, partner, pdiet, buf))
+        veg[i] = True
+    return out, diag
+
+
+def _veg_nbrs(nbrs, i, veg):
+    n = nbrs[i]
+    return n[veg[n]] if len(n) else n
+
+
 def _stints(events, t_end):
     """Stint length (steps) for each conversion event index, truncated at t_end."""
     stint, open_conv = {}, {}
@@ -173,6 +238,17 @@ def _stints(events, t_end):
     for j, k0 in open_conv.items():
         stint[k0] = t_end - events[k0][1]
     return stint
+
+
+def conv_counts(events, initial_diets, t_end):
+    """Conversions per agent up to t_end (the denominator of open decision 11's (b1))."""
+    n = np.zeros(len(initial_diets), dtype=int)
+    for ev in events:
+        if ev[1] > t_end:
+            break
+        if ev[0] == "conv":
+            n[ev[2]] += 1
+    return n
 
 
 def veg_time(events, initial_diets, t_end):
@@ -238,8 +314,10 @@ CONVENTIONS = {
 }
 
 
-def summarise(row, t_end=None, decay=None, gamma=None):
+def summarise(row, t_end=None, decay=None, gamma=None, credits=None):
     """Per-convention summary for one ensemble row (event-graph walk throughout).
+
+    `credits`, if a dict is passed, receives each convention's per-agent credit vector.
 
     Alongside the per-agent distribution, `sys_amp` is the system-level ratio -- total
     credit over total direct reduction, in the convention's own direct unit (one delta per
@@ -258,6 +336,8 @@ def summarise(row, t_end=None, decay=None, gamma=None):
            "n_conv": n_conv, "n_converters": n_conv_agents, "net_adopters": n_net}
     for name, cfg in CONVENTIONS.items():
         credit = replay(ev, d0, p, decay=decay, t_end=te, gamma=gamma, **cfg)
+        if credits is not None:
+            credits[name] = credit
         amp = amplification(credit, cfg["unit"], p, own)
         direct = own.sum() if cfg["unit"] == "time" else n_conv
         out[name] = dict(mean=amp.mean(), median=np.median(amp),
