@@ -15,7 +15,10 @@ import model_main
 DEFAULT_PARAMS = {
     "veg_CO2": 1390, "vegan_CO2": 1054, "meat_CO2": 2054,  # kg CO2/year by diet
     "N": 650,              # population size
-    "steps": 30000,        # simulation timesteps
+    # 400000: kappa = 0.55 floor. 30000/35000 were pre-kappa and leave the run
+    # unsaturated -- the 30k sample-max arm is on record as not quotable at its
+    # endpoint for exactly this reason. Set from the fitted t_end, not from here.
+    "steps": 400000,       # simulation timesteps
     "k": 8,                # avg degree (PATCH/WS)
     "immune_n": 0.10,         # fraction of immune agents
     "M": 9,                # memory buffer length

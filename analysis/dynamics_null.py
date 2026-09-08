@@ -54,6 +54,18 @@ def _neighbours(edges, n):
     return [np.array(x, np.int32) for x in nb]
 
 
+_COMPLETE = {}
+
+
+def _complete_neighbours(n):
+    """K_n as neighbour arrays. Degree CV is exactly zero, so this arm carries no degree
+    scaling and is left out of panel b; it is here for the concentration comparison."""
+    if n not in _COMPLETE:
+        _COMPLETE[n] = [np.concatenate([np.arange(i), np.arange(i + 1, n)]).astype(np.int32)
+                        for i in range(n)]
+    return _COMPLETE[n]
+
+
 def _er_neighbours(n, m, rng):
     """G(n, m) as neighbour arrays: distinct undirected pairs, no self-loops."""
     seen = set()
@@ -130,7 +142,9 @@ def _bands(credit, delta, deg):
     return out
 
 
-LABELS = ("model", "CF3' emp. net, naive", "CF2' ER, naive")
+LABELS = ("model", "CF3' emp. net, naive", "CF2' ER, naive", "CF1' complete, naive")
+COLOURS = ("C0", "C2", "C3", "C4")
+NO_DEGREE = ("CF1' complete, naive",)     # every degree is n-1, outside BANDS
 DISPLAY = {"model": "model ($\\kappa = 0.55$)"}   # figure only; CSV keeps LABELS
 
 
@@ -140,7 +154,7 @@ def main():
     ap.add_argument('--t-end', type=int, required=True)
     ap.add_argument('--runs', type=int, default=None, help='cap the number of runs')
     ap.add_argument('--seed', type=int, default=0)
-    ap.add_argument('--ceiling', type=int, default=4_000_000,
+    ap.add_argument('--ceiling', type=int, default=12_000_000,
                     help='step ceiling for a null run that never reaches the target')
     a = ap.parse_args()
 
@@ -174,7 +188,8 @@ def main():
         pooled[LABELS[0]].append(credit / delta)
 
         for label, nbr in ((LABELS[1], _neighbours(edges, n)),
-                           (LABELS[2], _er_neighbours(n, len(edges), rng))):
+                           (LABELS[2], _er_neighbours(n, len(edges), rng)),
+                           (LABELS[3], _complete_neighbours(n))):
             events, t_stop, f_end = simulate(nbr, d0, immune, M, target, rng, a.ceiling)
             if f_end < target - 1e-9:
                 print(f"WARNING: {nm} {label} stopped at F_veg={f_end:.3f} < {target:.3f} "
@@ -229,7 +244,7 @@ def main():
     # ---- figure
     import matplotlib.pyplot as plt
     fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.6, 3.2))
-    for L, col in zip(LABELS, ('C0', 'C2', 'C3')):
+    for L, col in zip(LABELS, COLOURS):
         v = np.sort(np.concatenate(pooled[L]))[::-1]
         ax.plot(np.arange(1, len(v) + 1) / len(v) * 100, v, lw=1.2, color=col,
                 label=DISPLAY.get(L, L))
@@ -246,11 +261,16 @@ def main():
     ax.legend(fontsize=6, frameon=False)
 
     kk_m = mu_m = None
-    for L, col in zip(LABELS, ('C0', 'C2', 'C3')):
+    for L, col in zip(LABELS, COLOURS):
+        if L in NO_DEGREE:
+            continue
         kk = np.array([np.mean([x[b][1] for x in bands[L]]) for b in BANDS])
         mu = np.array([np.mean([x[b][2] for x in bands[L]]) for b in BANDS])
         m = np.isfinite(kk) & np.isfinite(mu) & (mu > 0)
         kk, mu = kk[m], mu[m]
+        if len(kk) < 2:
+            print(f"WARNING: {L} has {len(kk)} usable degree bands, left out of panel b")
+            continue
         b0 = np.polyfit(np.log10(kk), np.log10(mu), 1)
         bx.plot(kk, mu, 'o-', ms=3, lw=1.0, color=col,
                 label=f'{DISPLAY.get(L, L)}, $b = {b0[0]:.2f}$')
