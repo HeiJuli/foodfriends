@@ -260,6 +260,10 @@ def run_single(args):
     params = BASE_PARAMS.copy()
     params['N'] = N
     params['steps'] = steps
+    # 200 degree samples per run, so the grid follows run length instead of a
+    # constant: 0.5% of the run is far finer than the drift gamma is sensitive to,
+    # and the memory stays bounded at the large N (16 MB/run at N=20000).
+    params['degree_sample_every'] = max(1, steps // 200)
     params['run'] = run_id
 
     # Load empirical data + generate synthetic agents if needed
@@ -312,7 +316,15 @@ def run_single(args):
 
     pos = reds[reds > 0]
     mults = pos / DIRECT_REDUCTION_KG if len(pos) > 0 else np.array([0])
-    degrees = np.array([G.degree(n) for n in nodes])
+    # Degrees must be read where the credit window closes. Rewiring runs at
+    # 0.005/step throughout, so the final network's degrees are partly decorrelated
+    # from the ones that earned the credit, and the log-log slope is attenuated by
+    # that correlation (0.785 at 500 upd/agent, verified 2026-09-08). t_deg is
+    # recorded so a later reader can see how far the two times were apart.
+    if model.degree_history:
+        t_deg, degrees = min(model.degree_history, key=lambda th: abs(th[0] - t_end_fit))
+    else:
+        t_deg, degrees = steps, np.array([G.degree(n) for n in nodes])
 
     # 1. Degree-amplification log-log slope (gamma)
     mask = reds > 0
@@ -394,7 +406,7 @@ def run_single(args):
         'N': N, 'run': run_id, 'steps': steps,
         'kappa': params.get('kappa', 1.0),
         't_end_fit': t_end_fit, 't_end_status': t_end_status,
-        't_end_r2': t_end_r2, 'fc_win': win,
+        't_end_r2': t_end_r2, 'fc_win': win, 't_deg': t_deg,
         # decimated trajectory, so a changed window or estimator can be
         # re-scored offline rather than forcing another 92 core-hour sweep
         # (stride 100 costs <= 35 steps in 300k on the t_end refit)
