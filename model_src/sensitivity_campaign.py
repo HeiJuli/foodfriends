@@ -600,12 +600,20 @@ def fig_lambda(df, summary, out):
 # ---------------------------------------------------------------------------
 # OAT cannot see interactions. This grid crosses the memory length against the
 # gate steepness, which is the pair the mean-field argument turns on: binomial
-# memory noise (sd ~ 1/sqrt(M)) against the gate transition width (~1/k). If a
-# sharp collective threshold is reachable anywhere in the model, it is here.
+# memory noise (sd ~ 1/sqrt(M)) against the gate transition width (~1/k).
+# F_c dropped here too (Jordan, 2026-09-08), so this grid now reports outcome and
+# amplification only. It was kept longest here because the grid is single-length,
+# which removes the across-length incomparability that took F_c out of the OAT
+# outputs -- but not the estimator's other failure: the 20%-of-run kernel
+# degenerates whenever the run is long relative to the transition, measured as
+# fc = 8.5e-21 at N=4000 and 0.000 at N=6000 in the scaling calibration. A number
+# that is invalid at some lengths and merely uninterpretable at others does not
+# become sound by being measured consistently. The threshold question the grid was
+# built to ask is answered by the bifurcation campaign and the F_c geometry null,
+# not here; still computed by _observables and kept in the pickle as raw data.
 GRID = {"M": [3, 6, 9, 12, 15], "theta_gate_k": [15, 25, 35, 45, 55]}
 GOBS = [("F_veg_final", "mean", r"$F_{veg}$ (final)"),
-        ("F_c", "mean", r"$F_c$ (max accel.)"),
-        ("F_c", "iqr", r"$F_c$ interquartile range"),
+        ("t_50", "mean", r"$t_{50}$ (ksteps)"),
         ("amp_mean", "mean", "mean amplification")]
 
 
