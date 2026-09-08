@@ -605,8 +605,14 @@ if __name__ == '__main__':
     for N in sizes:
         n_runs = 3 if N >= 100000 else N_RUNS
         tasks = [(N, run, steps_for_N(N), adaptive) for run in range(n_runs)]
-        # Cap concurrency for large N to prevent OOM
-        n_workers = max(1, min(n_cores, 1 if N >= 100000 else 2 if N >= 20000 else 4 if N >= 10000 else n_cores))
+        # Memory is not the constraint these caps assumed. A live N=10000 worker at
+        # 350 updates/agent measures 0.41 GB RSS (wegc203106, 2026-09-08) against
+        # 453 GB free, and the terms that grow -- trajectory, degree grid, graph --
+        # put N=20000 near 1 GB. The old caps (4 workers at N >= 10000, 2 at
+        # N >= 20000) split the largest sizes into five sequential batches for no
+        # measured reason: at N=20000 that is ~38 h of wall clock against ~8 h for
+        # identical core-hours. N=100000 keeps a guard because nothing has measured it.
+        n_workers = max(1, min(n_cores, 2 if N >= 100000 else n_runs))
         print(f"  Running N={N} ({n_runs} runs, {n_workers} workers, "
               f"{steps_for_N(N):,} steps {'max' if adaptive else ''})...")
         with Pool(n_workers) as pool:
