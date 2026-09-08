@@ -110,10 +110,14 @@ def simulate(nbr, initial_diets, immune, M, target_f, rng, ceiling):
 
 # --------------------------------------------------------------------- scoring
 def _stats(credit, delta, label, extra):
+    """Per-agent distribution over credited agents, plus the system ratio -- total credit
+    per conversion event, which is what the level of the distribution rests on once the
+    model's repeat conversions are divided out."""
     a = credit[credit > 0] / delta
     return dict(model=label, mean=a.mean(), median=np.median(a),
                 p90=np.percentile(a, 90), p99=np.percentile(a, 99), max=a.max(),
-                n_credited=len(a), **_concentration(a), **extra)
+                n_credited=len(a), sys_amp=credit.sum() / (delta * extra['n_conv']),
+                **_concentration(a), **extra)
 
 
 def _bands(credit, delta, deg):
@@ -127,6 +131,7 @@ def _bands(credit, delta, deg):
 
 
 LABELS = ("model", "CF3' emp. net, naive", "CF2' ER, naive")
+DISPLAY = {"model": "model ($\\kappa = 0.55$)"}   # figure only; CSV keeps LABELS
 
 
 def main():
@@ -141,7 +146,7 @@ def main():
 
     te = a.t_end
     rows, bands = [], {L: [] for L in LABELS}
-    pooled, adopters = {L: [] for L in LABELS}, []
+    pooled, adopters = {L: [] for L in LABELS}, []   # adopters: the nulls' cascade size
     paths = sorted(glob.glob(os.path.join(a.reduced_dir, 'run_*.pkl')))[:a.runs]
     if not paths:
         sys.exit(f"ERROR: no run_*.pkl in {a.reduced_dir}")
@@ -181,7 +186,8 @@ def main():
                                     churn=1.0, n_adopters=len(events))))
             bands[label].append(_bands(c, delta, nd))
             pooled[label].append(c / delta)
-        adopters.append(n_cvt)
+            if label == LABELS[1]:
+                adopters.append(len(events))
         print(f"INFO: {nm} done (model degrees from snapshot {kdeg}, target "
               f"F_veg={target:.3f})", flush=True)
 
@@ -210,26 +216,30 @@ def main():
     print(f"\n{len(paths)} runs, model scored at t_end={te}, nulls at their own F_veg "
           f"stop, primary convention (exposure parents, no dwell, event unit, lambda 0.7)")
     print(f"{'':22}{'mean':>8}{'median':>8}{'p90':>8}{'p99':>8}{'max':>8}{'gini':>8}"
-          f"{'top1':>8}{'top10':>8}{'credited':>9}{'churn':>7}")
+          f"{'top1':>8}{'top10':>8}{'credited':>9}{'churn':>7}{'per conv':>9}")
     for L in LABELS:
         r = [x for x in rows if x['model'] == L]
         m = {k: np.median([x[k] for x in r]) for k in
              ('mean', 'median', 'p90', 'p99', 'max', 'gini', 'top1', 'top10',
-              'n_credited', 'churn')}
+              'n_credited', 'churn', 'sys_amp')}
         print(f"{L:22}{m['mean']:8.2f}{m['median']:8.2f}{m['p90']:8.2f}{m['p99']:8.1f}"
               f"{m['max']:8.1f}{m['gini']:8.3f}{m['top1']:8.3f}{m['top10']:8.3f}"
-              f"{m['n_credited']:9.0f}{m['churn']:7.2f}")
+              f"{m['n_credited']:9.0f}{m['churn']:7.2f}{m['sys_amp']:9.2f}")
 
     # ---- figure
     import matplotlib.pyplot as plt
     fig, (ax, bx) = plt.subplots(1, 2, figsize=(7.6, 3.2))
     for L, col in zip(LABELS, ('C0', 'C2', 'C3')):
         v = np.sort(np.concatenate(pooled[L]))[::-1]
-        ax.plot(np.arange(1, len(v) + 1) / len(v) * 100, v, lw=1.2, color=col, label=L)
-    Ma = int(round(np.mean(adopters)))
+        ax.plot(np.arange(1, len(v) + 1) / len(v) * 100, v, lw=1.2, color=col,
+                label=DISPLAY.get(L, L))
+    Ma = int(round(np.mean(adopters)))          # reversion-free cascade size, as CF1's
     ana = rrt_rank_law(Ma)
     ax.plot(np.arange(1, Ma + 1) / Ma * 100, ana, 'k--', lw=1.0,
             label='CF1 analytic $E[A|k]$')
+    ch = np.median([x['churn'] for x in rows if x['model'] == LABELS[0]])
+    ax.text(0.97, 0.72, f'model: {ch:.1f} conversions/converter\nnulls: 1 (no reversion)',
+            transform=ax.transAxes, fontsize=5.5, ha='right', va='top', color='#777')
     ax.set(xlabel='Agent rank [%]', ylabel='Amplification factor $A$',
            xlim=(0, 100), ylim=(1e-2, None), yscale='log')
     ax.set_title('a  distribution vs naive-dynamics nulls', fontsize=8, loc='left')
@@ -241,8 +251,9 @@ def main():
         mu = np.array([np.mean([x[b][2] for x in bands[L]]) for b in BANDS])
         m = np.isfinite(kk) & np.isfinite(mu) & (mu > 0)
         kk, mu = kk[m], mu[m]
-        bx.plot(kk, mu, 'o-', ms=3, lw=1.0, color=col, label=f'{L}, $E[A|k]$')
         b0 = np.polyfit(np.log10(kk), np.log10(mu), 1)
+        bx.plot(kk, mu, 'o-', ms=3, lw=1.0, color=col,
+                label=f'{DISPLAY.get(L, L)}, $b = {b0[0]:.2f}$')
         bx.plot(kk, 10 ** np.polyval(b0, np.log10(kk)), '-', lw=0.6, color=col, alpha=0.5)
         print(f"  {L:22} band-mean slope b = {b0[0]:.3f}")
         if kk_m is None:

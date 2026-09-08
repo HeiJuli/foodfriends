@@ -12,6 +12,12 @@ driven by `kappa_ledger.py --null mf nb`. See null_models_reassessment_2026-09-0
 s.1, s.3 and permutation_null_results_2026-09-08.md. It also runs only on an
 unreduced pickle picked by `is_median_twin`, which the kappa ensemble has not got.
 
+The FIGURE is rebuilt from dynamics nulls by dynamics_null.py (naive contagion on ER and
+on the empirical network with an M=9 buffer, scored through the primary ledger); this
+script's main() writes naive_counterfactuals_superseded.pdf instead, so a stray run
+cannot clobber the live figure. BANDS and rrt_rank_law are imported from here by both
+replacements.
+
 With the dwell weight stripped (w=1) the ledger in model_main._cascade_attribute
 reduces to a pure property of the influence tree: each conversion pays lam^(d-1)
 to its ancestor at tree-distance d, so
@@ -347,9 +353,9 @@ def main(pkl=DEFAULT_PKL, t_cutoff=143600):
         a_.tick_params(labelsize=7)
     fig.tight_layout()
     os.makedirs(OUT, exist_ok=True)
-    fig.savefig(f'{OUT}/naive_counterfactuals.pdf', dpi=300, bbox_inches='tight')
-    fig.savefig(f'{OUT}/naive_counterfactuals.png', dpi=200, bbox_inches='tight')
-    print(f"\nSaved {OUT}/naive_counterfactuals.pdf")
+    fig.savefig(f'{OUT}/naive_counterfactuals_superseded.pdf', dpi=300, bbox_inches='tight')
+    fig.savefig(f'{OUT}/naive_counterfactuals_superseded.png', dpi=200, bbox_inches='tight')
+    print(f"\nSaved {OUT}/naive_counterfactuals_superseded.pdf")
 
 
 if __name__ == '__main__':
