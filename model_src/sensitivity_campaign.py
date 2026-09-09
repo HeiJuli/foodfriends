@@ -310,7 +310,10 @@ def _run_one(job):
     p = BASE_PARAMS.copy()
     p.update({"seed": seed, "steps": steps, "tau_persistence": None})
     if param != "baseline":
-        p[param] = value
+        # Extension points come back off the frame as float64 (and --points parses
+        # float), but M, beta and theta_gate_k are integer-valued and M reaches a
+        # range() in initialize_memory_from_neighbours. Restore the sweep's own type.
+        p[param] = type(BASELINE[param])(value)
     with contextlib.redirect_stdout(io.StringIO()):
         m = model_main.Model(p, pmf_tables=pmf_tables())
         m.run()
