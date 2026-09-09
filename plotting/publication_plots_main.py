@@ -467,7 +467,7 @@ def plot_amplification(data=None, file_path=None, save=True, analysis_t_end=None
     print(f"INFO: Amplification factor — median={median_mult:.2f}x, mean={mean_mult:.2f}x "
           f"(n={len(multipliers)} switchers)")
     ax.axhline(mean_mult, color='#555', linestyle='--', linewidth=1.0, alpha=0.7)
-    ax.text(97, mean_mult * 0.88, f'Mean: {mean_mult:.0f}x', fontsize=6, color='#555',
+    ax.text(97, mean_mult * 0.88, f'Mean: {mean_mult:.1f}x', fontsize=6, color='#555',
             va='top', ha='right')
 
     # Early-adopter mean line
@@ -927,13 +927,17 @@ def plot_network_agency_evolution_ensemble(
     return fig
 
 
-def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t_end=None):
-    """Ensemble version of amplification plot: median + IQR shading."""
-    set_publication_style()
+def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t_end=None,
+                                multipliers_dir=None):
+    """Ensemble version of amplification plot: median + IQR shading.
 
-    if data is None:
-        data = load_data(file_path)
-        if data is None: return None
+    multipliers_dir: directory of per-run npz files holding a full-length `A` array
+    (analysis/vegtime_accounting.py writes vegtime_A_run_XX.npz). When given, the
+    multipliers come from there -- the reported veg-time ledger -- and the pkl, whose
+    `reductions` array is the submitted in-run ledger, is not loaded. No early-adopter
+    line on that route: the dichotomy was retired 2026-09-01.
+    """
+    set_publication_style()
 
     fig, ax = plt.subplots(figsize=(8.9*cm, 7*cm))
     DIRECT_REDUCTION_KG = 664
@@ -942,6 +946,16 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
     rank_pct = np.linspace(0, 100, 500)
     mult_runs = []
     early_mults, early_medians, mean_mults = [], [], []
+    if multipliers_dir is not None:
+        for f in sorted(glob.glob(os.path.join(multipliers_dir, '*_A_run_*.npz'))):
+            A = np.load(f)['A']
+            mults = np.sort(A[A > 0])[::-1]
+            mult_runs.append(np.interp(rank_pct, np.linspace(0, 100, len(mults)), mults))
+            mean_mults.append(np.mean(mults))
+        data = pd.DataFrame()
+    elif data is None:
+        data = load_data(file_path)
+        if data is None: return None
     for _, row in data.iterrows():
         snaps = row['snapshots']
         snap, _ = _resolve_analysis(snaps, row, analysis_t_end)
@@ -988,7 +1002,7 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
     # Mean line (ensemble median of means)
     mean_mult = np.median(mean_mults)
     ax.axhline(mean_mult, color='#555', linestyle='--', linewidth=1.0, alpha=0.7)
-    ax.text(97, mean_mult * 0.88, f'Mean: {mean_mult:.0f}x', fontsize=6, color='#555',
+    ax.text(97, mean_mult * 0.88, f'Mean: {mean_mult:.1f}x', fontsize=6, color='#555',
             va='top', ha='right')
 
     # Early-adopter line
@@ -1096,7 +1110,8 @@ def _run_from_config(cfg, plot_key):
     elif plot_key == 'amplification_ensemble':
         c = cfg[plot_key]
         plot_amplification_ensemble(file_path=_cfg_path(c.get('file')),
-                                   analysis_t_end=c.get('analysis_t_end'))
+                                   analysis_t_end=c.get('analysis_t_end'),
+                                   multipliers_dir=_cfg_path(c.get('multipliers_dir')))
 
 def _cfg_t_end(cfg, *keys):
     """Drill into cfg dict by keys and return analysis_t_end, or None."""

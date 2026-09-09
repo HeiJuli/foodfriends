@@ -21,7 +21,7 @@ parents, on the same runs -- so quote the convention with it
 (`claude_stuff/Review/two_dv_ledger_and_sample_2026-09-04.md` s.3).
 
 Usage:
-    python kappa_two_dv.py <reduced_dir> --t-end 310000 [--ledger primary] [-o out.csv]
+    python kappa_two_dv.py <reduced_dir> --t-end 310000 [--ledger primary|vegtime] [-o out.csv]
 """
 import os, sys, glob, pickle, argparse
 from multiprocessing import Pool
@@ -36,12 +36,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 '..', 'plotting'))
 import agency_predictor_analysis as apa
 from agency_predictor_analysis import TOPO_PREDS, PSYCH_PREDS, ALL_PREDS
-from attribution_ledger import replay
+from attribution_ledger import replay, veg_time
 
 # DV2's credit variable. The in-run `reductions` array is the SUBMITTED convention
 # (last-draw parents, dwell-weighted), which is now only an SI sensitivity row, so
 # it is not the default: everything the paper reports is the primary ledger.
+# 'vegtime' (2026-09-09, the reported headline): credit and the agent's own
+# contribution are both vegetarian-time, so multiplier = credit / (delta x own steps)
+# and reduction_kg is that ratio in delta units, which keeps the log-log degree fit
+# and the pos mask unchanged.
 CONV = {'primary': dict(parent='exposure', weight='none', unit='event'),
+        'vegtime': dict(parent='exposure', weight='none', unit='time'),
         'nodwell': dict(parent='last', weight='none', unit='event')}
 
 
@@ -119,6 +124,10 @@ def _one(job):
     if ledger != 'inrun':
         credit = replay(run['events'], run['initial_diets'], run['params'],
                         t_end=t, **CONV[ledger])
+        if ledger == 'vegtime':
+            own = veg_time(run['events'], run['initial_diets'], t)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                credit = np.where(own > 0, credit / own, 0.0)
         feats['reduction_kg'] = credit
         feats['multiplier'] = credit / apa.DIRECT_REDUCTION_KG
     G = row['snapshots'][t]['graph']
@@ -137,7 +146,7 @@ def main():
     ap.add_argument('--t-end', type=int, required=True,
                     help='analysis cutoff; the nearest graph-bearing snapshot at or '
                          'below it is used')
-    ap.add_argument('--ledger', choices=('primary', 'nodwell', 'inrun'), default='primary',
+    ap.add_argument('--ledger', choices=('primary', 'vegtime', 'nodwell', 'inrun'), default='primary',
                     help="credit convention for DV2; 'inrun' reads the dwell-weighted "
                          "array and reproduces the pre-2026-09-04 table")
     ap.add_argument('-o', '--out', default=None)

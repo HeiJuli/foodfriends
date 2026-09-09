@@ -21,7 +21,8 @@ so arms are paired on network realisation and initial condition: differences are
 the parameter, not the draw.
 
 Parameters swept (baseline starred in SWEEPS below):
-  decay (lambda), M, beta, gamma, immune_n, theta_gate_c, theta_gate_k, kappa
+  decay (lambda), M, beta, gamma, immune_n, theta_gate_c, theta_gate_k, kappa,
+  p_rewire
 
 Observables:
   F_veg_final  steady-state vegetarian fraction
@@ -105,7 +106,7 @@ DIRECT_REDUCTION_KG = 2054 - 1390   # meat_CO2 - veg_CO2
 # value lists; the baseline value must appear in each list exactly once
 BASELINE = {"decay": 0.7, "M": 9, "beta": 13, "gamma": 0.3,
             "immune_n": 0.10, "theta_gate_c": 0.35, "theta_gate_k": 35,
-            "kappa": 0.55}
+            "kappa": 0.55, "p_rewire": 0.01}
 
 SWEEPS = {
     "decay":        [0.5, 0.6, 0.7, 0.8, 0.9],
@@ -119,13 +120,20 @@ SWEEPS = {
     # value, so the sweep contains the undiscounted model as an endpoint and "what if
     # you had not discounted?" reads straight off the tornado.
     "kappa":        [0.40, 0.55, 0.70, 0.85, 1.00],
+    # p_rewire was never calibrated, and its realised rate is halved by the activation
+    # coin (0.005/step), which at the calendar pin turns over 19-39% of an ego network
+    # over the whole transition (calendar_anchor_results_2026-09-09.md s.5). 0.0 is the
+    # frozen-network check; 1.0 rewires on every activation. R1.5 asks whether the
+    # dynamics care.
+    "p_rewire":     [0.0, 0.01, 0.1, 1.0],
 }
 
 PLABEL = {"decay": r"$\lambda$ (attenuation)", "M": r"$M$ (memory)",
           "beta": r"$\beta$ (inverse temp.)", "gamma": r"$\gamma$ (dim. returns)",
           "immune_n": r"$f_{imm}$ (immune)", "theta_gate_c": r"$c$ (gate threshold)",
           "theta_gate_k": r"$k$ (gate steepness)",
-          "kappa": r"$\kappa$ (intention discount)"}
+          "kappa": r"$\kappa$ (intention discount)",
+          "p_rewire": r"$p_{rewire}$ (tie turnover)"}
 
 # Amplification is reported at each run's OWN fitted t_end, not at t = steps.
 # Credit accrues for as long as the run lasts, so a fixed window rewards a sweep
