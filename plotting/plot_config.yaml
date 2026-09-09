@@ -56,7 +56,9 @@ network_agency_evolution_ensemble:
 amplification_ensemble:
   file: trajectory_analysis_twin_20260903_kappa0p55_N2000.pkl
   analysis_t_end: 310000        # ensemble-median logistic 95% t_end (IQR [290.9k,339.6k])
-  # NOTE: plot_amplification_ensemble reads the in-run (dwell-weighted) `reductions`
-  # array, not the primary ledger. The multiplier distribution it draws is therefore the
-  # submitted convention -- regenerating it here fixes the rho/kappa staleness, not the
-  # ledger. Fig. 2's numbers must come from analysis/attribution_ledger.py.
+  # Reported ledger since 2026-09-09: veg-time (exposure parents, no dwell, lambda 0.7),
+  # A_i = credited vegetarian-time / own vegetarian-time at t = 310000. The per-run A
+  # vectors come from analysis/vegtime_accounting.py (vegtime_A_run_XX.npz); with
+  # multipliers_dir set the pkl (whose `reductions` is the submitted in-run ledger) is
+  # not read. Record: claude_stuff/Review/amplification_accounting_final_2026-09-09.md.
+  multipliers_dir: trajectory_analysis_twin_20260903_kappa0p55_N2000_reduced

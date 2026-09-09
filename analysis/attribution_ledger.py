@@ -11,8 +11,12 @@ change one:
                       n**gamma share of h_soc (the PRIMARY rule, fixed 2026-09-02)
   weight  "none"      tenure-neutral
           "dwell"     omega = 1 - exp(-dur / tau_persistence) on each ancestor
-  unit    "event"     one delta per conversion event (the submitted unit)
-          "time"      delta per step for as long as the stint lasts (veg-time)
+  unit    "event"     one delta per conversion event (the submitted unit; the
+                      CONVENTIONS row still labelled PRIMARY for CSV continuity)
+          "time"      delta per step for as long as the stint lasts (veg-time) --
+                      THE REPORTED UNIT since 2026-09-09: A_i = credited vegetarian-
+                      time / own vegetarian-time (analysis/vegtime_accounting.py;
+                      claude_stuff/Review/amplification_accounting_final_2026-09-09.md)
   decay   lambda, geometric attenuation per cascade depth
   gamma   exponent of the exposure shares; defaults to the run's own. Set it to
           something else to see the ledger's gamma-sensitivity at fixed dynamics.
@@ -77,7 +81,7 @@ def _exposure_parents(buffer, j, gamma, t_conv):
 
 
 def replay(events, initial_diets, params, parent="last", weight="none", unit="event",
-           decay=None, t_end=None, gamma=None, cycle="stint"):
+           decay=None, t_end=None, gamma=None, cycle="stint", flow=None):
     """Return credit per agent in kg CO2 (same units as reduction_out).
 
     events        list of ("conv", t, i, partner, partner_diet, buffer) / ("rev", t, i)
@@ -86,6 +90,9 @@ def replay(events, initial_diets, params, parent="last", weight="none", unit="ev
     t_end         ignore events after this step; stints are truncated here
     cycle         "stint" (event graph, reported) or "visited" (the simulation's own
                   chain walk, parent="last" only, for --validate)
+    flow          if a dict, receives (source, child) -> [depth-1 credit, credit paid
+                  through that hop at every depth]. Every hop is a network edge, so it
+                  decomposes the credit by the link it last travelled (walk_events only).
     """
     if cycle == "visited" and parent != "last":
         raise ValueError("cycle='visited' reproduces the simulation and exists for parent='last' only")
@@ -119,6 +126,10 @@ def replay(events, initial_diets, params, parent="last", weight="none", unit="ev
             f[0] += share
             if parents[q] and ltime[q] <= ts:
                 f[1] += share
+            if flow is not None:                          # hop q<-j, depth 1: no decay
+                g = flow.setdefault((q, j), [0.0, 0.0])
+                g[0] += amount * share
+                g[1] += amount * share
         depth = 1
         while frontier:
             nxt = {}
@@ -129,6 +140,9 @@ def replay(events, initial_diets, params, parent="last", weight="none", unit="ev
                     f[0] += live * share
                     if parents[r] and ltime[r] <= ts:
                         f[1] += live * share
+                    if flow is not None:                  # hop r<-q, what pay() gives r
+                        flow.setdefault((r, q), [0.0, 0.0])[1] += \
+                            amount * live * share * decay ** depth
             frontier, depth = nxt, depth + 1
 
     def walk_sim(links, amount, t):
