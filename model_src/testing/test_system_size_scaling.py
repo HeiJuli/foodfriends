@@ -49,7 +49,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../analysis'))
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 import model_main
-from attribution_ledger import replay
+from attribution_ledger import replay, veg_time
 from t_end_logistic import estimate_t_end, t_end_with_status, fc_window, fit_params
 from auxillary.homophily_network_v2 import generate_homophily_network_v2
 from auxillary.sampling_utils import stratified_sample_agents
@@ -381,6 +381,18 @@ def run_single(args):
                   parent="exposure", weight="none", unit="event", t_end=t_end_fit)
     reds_sub = np.array(snap_final['reductions'])
 
+    # Veg-time is the reported unit since 2026-09-09: A_i = credited vegetarian-time
+    # / own vegetarian-time. It is NOT a rescaling of the event-count ledger -- the
+    # denominator is per agent -- and gamma does not survive the switch (+0.126 at
+    # N=2000, same sign in 50/50 runs, analysis/gamma_ledger_check.py). Both units are
+    # therefore scored here; the event-count columns stay for continuity with the
+    # sensitivity and null scripts, which are still on that unit.
+    own = veg_time(model.events, model.snapshots[0]['diets'], t_end_fit)
+    reds_t = replay(model.events, model.snapshots[0]['diets'], model.params,
+                    parent="exposure", weight="none", unit="time", t_end=t_end_fit)
+    A_time = np.divide(reds_t, DIRECT_REDUCTION_KG * own,
+                       out=np.zeros_like(reds_t, dtype=float), where=own > 0)
+
     pos = reds[reds > 0]
     mults = pos / DIRECT_REDUCTION_KG if len(pos) > 0 else np.array([0])
     # Degrees must be read where the credit window closes. Rewiring runs at
@@ -398,14 +410,19 @@ def run_single(args):
     k_pos = degrees[mask].astype(float)
     A_pos = reds[mask] / DIRECT_REDUCTION_KG
     valid = k_pos > 0
-    gamma, r2_gamma = np.nan, np.nan
-    if valid.sum() > 10:
-        lk, lA = np.log10(k_pos[valid]), np.log10(A_pos[valid])
-        coeffs = np.polyfit(lk, lA, 1)
-        gamma = coeffs[0]
-        ss_res = np.sum((lA - (gamma * lk + coeffs[1]))**2)
+
+    def _loglog(k, A):
+        v = (k > 0) & (A > 0)
+        if v.sum() <= 10:
+            return np.nan, np.nan
+        lk, lA = np.log10(k[v]), np.log10(A[v])
+        g, c = np.polyfit(lk, lA, 1)
+        ss_res = np.sum((lA - (g * lk + c))**2)
         ss_tot = np.sum((lA - np.mean(lA))**2)
-        r2_gamma = 1 - ss_res / ss_tot if ss_tot > 0 else 0
+        return g, (1 - ss_res / ss_tot if ss_tot > 0 else 0)
+
+    gamma, r2_gamma = _loglog(k_pos, A_pos)
+    gamma_time, r2_gamma_time = _loglog(degrees.astype(float), A_time)
 
     # 2-3. Amplification stats
     mean_mult = np.mean(mults) if len(mults) > 0 else 0
@@ -415,13 +432,22 @@ def run_single(args):
     mults_sub = pos_sub / DIRECT_REDUCTION_KG if len(pos_sub) > 0 else np.array([0])
     mean_mult_sub = np.mean(mults_sub)
     max_mult_sub = np.max(mults_sub)
+    pos_t = A_time[A_time > 0]
+    mean_A_time = np.mean(pos_t) if len(pos_t) else 0
+    max_A_time = np.max(pos_t) if len(pos_t) else 0
+    p90_A_time = np.percentile(pos_t, 90) if len(pos_t) else 0
+    sys_A_time = (reds_t.sum() / (DIRECT_REDUCTION_KG * own.sum())
+                  if own.sum() > 0 else np.nan)
 
     # 4. Gini
-    gini = np.nan
-    if len(pos) > 1:
-        n = len(pos)
-        sorted_r = np.sort(pos)
-        gini = (2 * np.sum(np.arange(1, n+1) * sorted_r) / (n * np.sum(sorted_r))) - (n + 1) / n
+    def _gini(x):
+        if len(x) <= 1 or np.sum(x) <= 0:
+            return np.nan
+        n = len(x); sx = np.sort(x)
+        return (2 * np.sum(np.arange(1, n+1) * sx) / (n * np.sum(sx))) - (n + 1) / n
+
+    gini = _gini(pos)
+    gini_time = _gini(pos_t)
 
     # 5. Critical fraction (max d2F/dt2, F<0.5). Kept in the pickle, NOT reported:
     # fc_window is 20% of the run, so F_c is incomparable across the variable-length
@@ -472,6 +498,7 @@ def run_single(args):
 
     print(f"  N={N:>6d} run={run_id:>2d}  F_veg={f_veg:.3f}  gamma={gamma:.2f}  "
           f"mean_A={mean_mult:.1f}x  max_A={max_mult:.0f}x  Gini={gini:.3f}  "
+          f"g_t={gamma_time:.2f}  meanA_t={mean_A_time:.2f}  "
           f"upd={steps_run/N:.0f}/agent ({stop_reason})  comms={n_communities}  "
           f"elapsed={elapsed:.0f}s")
 
@@ -489,6 +516,10 @@ def run_single(args):
         'n_communities': n_communities,
         'f_veg': f_veg, 'avg_degree': avg_deg, 'r_assort': r_assort,
         'gamma': gamma, 'r2_gamma': r2_gamma,
+        'gamma_time': gamma_time, 'r2_gamma_time': r2_gamma_time,
+        'mean_A_time': mean_A_time, 'max_A_time': max_A_time,
+        'p90_A_time': p90_A_time, 'sys_A_time': sys_A_time,
+        'gini_time': gini_time, 'n_positive_time': int((A_time > 0).sum()),
         'mean_mult': mean_mult, 'max_mult': max_mult, 'p90_mult': p90_mult,
         'mean_mult_sub': mean_mult_sub, 'max_mult_sub': max_mult_sub,
         'n_positive_sub': len(pos_sub),
@@ -510,7 +541,7 @@ def summarize(df):
     print(f"{'='*90}")
     print(f"{'N':>7s} {'n':>3s} {'cens':>4s} {'ceil':>4s} {'upd':>4s} {'K':>3s} "
           f"{'F_veg':>6s} {'gamma':>7s} {'mean_A':>7s} {'max_A':>7s} {'Gini':>6s} "
-          f"{'CCDF_a':>7s} {'dc_slope':>8s}")
+          f"{'CCDF_a':>7s} {'dc_slope':>8s} {'g_time':>7s} {'meanA_t':>8s}")
     print(f"{'-'*90}")
     for N, grp in df.groupby('N'):
         # A clamped t_end means the logistic could not place t_95 inside the run, so
@@ -534,7 +565,9 @@ def summarize(df):
               f"{grp['max_mult'].median():>5.0f}x "
               f"{grp['gini'].median():>6.3f} "
               f"{grp['alpha_ccdf'].median():>7.2f} "
-              f"{grp['dc_slope'].median():>8.2f}")
+              f"{grp['dc_slope'].median():>8.2f} "
+              f"{grp['gamma_time'].median():>7.2f} "
+              f"{grp['mean_A_time'].median():>8.2f}")
 
     # Log-log regression: max_mult ~ N
     grouped = df.groupby('N').agg({'max_mult': 'median', 'mean_mult': 'median'}).reset_index()
@@ -546,11 +579,17 @@ def summarize(df):
             c = np.polyfit(lN[valid], lY[valid], 1)
             print(f"\n  {col} ~ N^{c[0]:.3f}  (log-log slope)")
 
-    # Gamma stability
-    gammas = df.groupby('N')['gamma'].agg(['median', 'std']).reset_index()
+    # Gamma stability, both units. The event-count column is the historical one;
+    # veg-time is the reported ledger, and the two differ by a fixed offset only if
+    # the offset is flat in N -- which is the whole point of printing them together.
+    g = df.groupby('N')[['gamma', 'gamma_time']].agg(['median', 'std'])
     print(f"\n  Degree-amplification exponent (gamma) across N:")
-    for _, r in gammas.iterrows():
-        print(f"    N={r['N']:>6.0f}:  gamma = {r['median']:.3f} +/- {r['std']:.3f}")
+    print(f"    {'N':>6s}  {'event-count':>18s}  {'veg-time':>18s}  {'offset':>7s}")
+    for N, r in g.iterrows():
+        d = r[('gamma_time', 'median')] - r[('gamma', 'median')]
+        print(f"    {N:>6.0f}  {r[('gamma', 'median')]:>9.3f} +/- {r[('gamma', 'std')]:<6.3f}"
+              f"  {r[('gamma_time', 'median')]:>9.3f} +/- {r[('gamma_time', 'std')]:<6.3f}"
+              f"  {d:>+7.3f}")
 
 
 # ---------------------------------------------------------------------------
