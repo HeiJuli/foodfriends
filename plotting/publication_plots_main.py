@@ -949,7 +949,10 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
     if multipliers_dir is not None:
         for f in sorted(glob.glob(os.path.join(multipliers_dir, '*_A_run_*.npz'))):
             A = np.load(f)['A']
-            mults = np.sort(A[A > 0])[::-1]
+            # 1 + A: own reduction plus the downstream credit. The npz holds the
+            # downstream-only ratio, so the axhline at 1.0 labelled "Personal only"
+            # is only true of the plotted quantity once the agent's own unit is added.
+            mults = np.sort(A[A > 0])[::-1] + 1.0
             mult_runs.append(np.interp(rank_pct, np.linspace(0, 100, len(mults)), mults))
             mean_mults.append(np.mean(mults))
         data = pd.DataFrame()
