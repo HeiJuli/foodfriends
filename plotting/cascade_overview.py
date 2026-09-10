@@ -9,7 +9,8 @@ tree; the arm is one of its direct children and that child's subtree.
 
 --layout tree (default): Didelot et al. 2017 (MBE 34:997) Fig. 5 style. x = conversion
   time, y = depth-first order of the tree, so no link jumps; elbow connectors run along
-  the parent's row. Grey is the rest of the root's tree (--scope all: the whole forest).
+  the parent's row (--links rounded softens the corner, --links straight is Didelot's
+  original diagonal). Grey is the rest of the root's tree (--scope all: the whole forest).
   Arm dots are filled if the stint lasts to t_end, open if the agent later reverts.
 --layout agents: agent x sweep lattice with every event-graph link in grey; rows are the
   arm's agents as a depth-first block, the rest in spectral order.
@@ -19,6 +20,7 @@ Usage: python cascade_overview.py <run.pkl> [--layout L] [--root I] [--arm R] [-
   run.pkl: a trajectory ensemble DataFrame (row --run) or a dict with events/initial_diets/params
 """
 import argparse
+import os
 import sys
 from collections import defaultdict
 
@@ -28,7 +30,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 
-sys.path.insert(0, "../analysis")
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "analysis"))
 from attribution_ledger import _exposure_parents
 
 GREY_LINK, GREY_NODE, INK = "#bdbdbd", "#8c8c8c", "#5b2a86"
@@ -115,6 +117,21 @@ def curves(p, q, bow=0.12, n=14):
     return (1 - s) ** 2 * p[:, None] + 2 * s * (1 - s) * ctrl[:, None] + s ** 2 * q[:, None]
 
 
+def rounded_elbow(p, q, rad, n=9):
+    """Elbows p->q with the corner at (q_x, p_y) rounded by a quadratic Bezier of radius
+    rad (display units), clamped to half the shorter leg so short links stay sharp combs
+    and only long drops visibly soften."""
+    c = np.c_[q[:, 0], p[:, 1]]
+    legs = [p - c, q - c]
+    lens = [np.hypot(e[:, 0], e[:, 1]) for e in legs]
+    d = np.minimum(rad, 0.5 * np.minimum(*lens))
+    b = [c + np.divide(d, l, out=np.zeros_like(d), where=l > 0)[:, None] * e
+         for e, l in zip(legs, lens)]
+    s = np.linspace(0, 1, n)[None, :, None]
+    bez = (1 - s) ** 2 * b[0][:, None] + 2 * s * (1 - s) * c[:, None] + s ** 2 * b[1][:, None]
+    return np.concatenate([p[:, None], bez, q[:, None]], axis=1)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("pkl")
@@ -125,8 +142,10 @@ def main():
                     help="tree: main-cause forest, Didelot Fig. 5 style; agents: agent x sweep lattice")
     ap.add_argument("--scope", choices=["root", "all"], default="root",
                     help="tree layout: the root's tree only, or the whole forest")
-    ap.add_argument("--links", choices=["elbow", "straight"], default="elbow",
-                    help="tree layout: elbow connectors or straight lines (Didelot Fig. 5)")
+    ap.add_argument("--links", choices=["elbow", "rounded", "straight"], default="elbow",
+                    help="tree layout: elbow connectors, rounded elbows, or straight lines "
+                         "(Didelot Fig. 5); straight fades grey links by density so hub "
+                         "fans read as gradients")
     ap.add_argument("--t-end", type=int, default=None)
     ap.add_argument("--size", type=float, nargs=2, default=(7.2, 2.4), help="inches")
     ap.add_argument("--out", default="../visualisations_output/cascade_overview.pdf")
@@ -134,12 +153,25 @@ def main():
 
     events, diets, params = load(a.pkl, a.run)
     N, sweep = len(diets), 2 * len(diets)
-    t_end = a.t_end or params["steps"]
+    t_end = a.t_end if a.t_end is not None else params["steps"]
     nodes, links = event_graph(events, diets, params, t_end)
     kids = main_cause_tree(links)
     inits = [n for n in nodes if isinstance(n, tuple)]      # conversion nodes are ints
-    root = ("init", a.root) if a.root is not None else max(inits, key=lambda n: len(subtree(kids, n)))
+    if not inits:
+        sys.exit("no initial vegetarians in this run; nothing to draw")
+    if a.root is not None:
+        root = ("init", a.root)
+        if root not in nodes:
+            sys.exit(f"--root {a.root}: agent {a.root} is not an initial vegetarian "
+                     f"(valid: {sorted(n[1] for n in inits)})")
+    else:
+        root = max(inits, key=lambda n: len(subtree(kids, n)))
     arms = sorted(kids.get(root, []), key=lambda c: len(subtree(kids, c)), reverse=True)
+    if not arms:
+        sys.exit(f"root agent {root[1]}'s tree has no arms (no conversions); pick another --root")
+    if not 0 <= a.arm < len(arms):
+        sys.exit(f"--arm {a.arm} out of range: root agent {root[1]} has {len(arms)} arms "
+                 f"(0..{len(arms) - 1})")
     arm = [root] + subtree(kids, arms[a.arm])
     armset = set(arm)
     print(f"{len(nodes)} event nodes, {len(links)} links; root agent {root[1]}: "
@@ -168,6 +200,7 @@ def main():
         xy = {n: np.array([(t // sweep) / ncol * W, row[i] / N * H]) for n, (i, t) in nodes.items()}
         grey = [(s, c) for s, c, _ in links]
         draw = curves
+        glw, galpha = 0.08, min(0.55, 12000 / max(1, len(grey)))
     else:
         # the event graph reduced to its main-cause spanning forest: every event keeps one
         # parent, so the layout is a set of trees and no link jumps
@@ -181,21 +214,29 @@ def main():
         grey = [(kid_of[c], c) for c in y if c in kid_of]
         # elbow: along the parent's row to the child's time, then up to the child. A hub's
         # many children become a comb on one line instead of a fan (the root has ~300).
-        draw = (lambda p, q: np.stack([p, np.c_[q[:, 0], p[:, 1]], q], axis=1)) if a.links == "elbow" \
-            else (lambda p, q: np.stack([p, q], axis=1))
+        if a.links == "elbow":
+            draw = lambda p, q: np.stack([p, np.c_[q[:, 0], p[:, 1]], q], axis=1)
+        elif a.links == "rounded":
+            draw = lambda p, q: rounded_elbow(p, q, rad=0.015 * H)
+        else:
+            # straight: hub fans are coherent (children are contiguous rows in time
+            # order), but dense; thin + fade the grey so fans read as gradients
+            draw = lambda p, q: np.stack([p, q], axis=1)
+        glw, galpha = (0.15, 1.0) if a.links != "straight" \
+            else (0.1, min(0.8, 2500 / max(1, len(grey))))
 
     fig = plt.figure(figsize=(W, H))
     ax = fig.add_axes([0, 0, 1, 1])
-    P = np.array([[xy[s], xy[c]] for s, c in grey])
-    ax.add_collection(LineCollection(draw(P[:, 0], P[:, 1]), colors=GREY_LINK,
-                                     lw=0.08 if a.layout == "agents" else 0.15,
-                                     alpha=min(0.55, 12000 / len(grey)) if a.layout == "agents" else 1.0,
-                                     rasterized=True, zorder=1))
+    if grey:
+        P = np.array([[xy[s], xy[c]] for s, c in grey])
+        ax.add_collection(LineCollection(draw(P[:, 0], P[:, 1]), colors=GREY_LINK,
+                                         lw=glw, alpha=galpha, rasterized=True, zorder=1))
     G_xy = np.array(list(xy.values()))
     ax.scatter(*G_xy.T, s=0.25, c=GREY_NODE, lw=0, rasterized=True, zorder=2)
 
-    Q = np.array([[xy[kid_of[c]], xy[c]] for c in arm[1:]])
-    ax.add_collection(LineCollection(draw(Q[:, 0], Q[:, 1]), colors=INK, lw=0.45, zorder=3))
+    if len(arm) > 1:
+        Q = np.array([[xy[kid_of[c]], xy[c]] for c in arm[1:]])
+        ax.add_collection(LineCollection(draw(Q[:, 0], Q[:, 1]), colors=INK, lw=0.45, zorder=3))
     gone = reverted(events, diets, t_end)
     for sel, face in ((lambda n: n not in gone, INK), (lambda n: n in gone, "white")):
         pts = np.array([xy[n] for n in arm[1:] if sel(n)]).reshape(-1, 2)

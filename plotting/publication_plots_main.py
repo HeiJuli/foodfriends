@@ -18,9 +18,6 @@ from t_end_logistic import estimate_t_end, fc_window
 from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMAP, ECO_DIV_CMAP
 
 COL_TOP10, COL_TOP1 = '#6a994e', '#d4a029'
-# Calendar anchor (calendar_anchor_decision_2026-09-09.md): 0.5-1.0 yr per sweep (2N
-# steps); figures use the like-for-like centre, the range goes in the caption.
-YR_PER_SWEEP_MID = 0.665
 
 cm = 1/2.54
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'plot_config.yaml')
@@ -621,9 +618,10 @@ def plot_network_agency_evolution_ensemble(
 
     credit_dir: directory of vegtime_A_run_XX.npz (analysis/vegtime_accounting.py).
     When given, panels B/C and the network highlighting use the reported veg-time
-    ledger instead of the pkl's `reductions` (the submitted in-run ledger): B/C from
-    the npz credit in vegetarian-sweeps (2N steps, clock-free), the network row from a
-    replay of the small-N run's event log at each snapshot time.
+    ledger instead of the pkl's `reductions` (the submitted in-run ledger): B as
+    (1 + A) x delta, t CO2e per year the agent is vegetarian (clock-free, the submitted
+    Fig. 1B footing); C on total credit; the network row from a replay of the small-N
+    run's event log at each snapshot time.
     """
     set_publication_style()
 
@@ -664,24 +662,28 @@ def plot_network_agency_evolution_ensemble(
     traj_q25 = np.percentile(traj_mat, 25, axis=0)
     traj_q75 = np.percentile(traj_mat, 75, axis=0)
 
+    ccdf_vals = all_reds    # submitted route: B and C on the same in-run reductions
     if credit_dir is not None:
-        all_reds = []
+        p0 = data.iloc[0]['params']
+        delta = p0['meat_CO2'] - p0['veg_CO2']
+        all_reds, ccdf_vals = [], []
         for f in sorted(glob.glob(os.path.join(credit_dir, 'vegtime_A_run_*.npz'))):
             z = np.load(f)
             if analysis_t_end is not None and int(z['t_end']) != analysis_t_end:
                 print(f"WARNING: {os.path.basename(f)} is at t={int(z['t_end'])}, "
                       f"figure window is {analysis_t_end}")
-            # veg-time credit is (kg/yr) x steps -> kg over the run at the central anchor
-            all_reds.append(z['credit'] / (2 * len(z['credit'])) * YR_PER_SWEEP_MID)
-    scale = 1000.0   # kg -> t
+            # C needs a summable quantity, so total credit; B is (1 + A) x delta, kg per
+            # year the agent is vegetarian -- no calendar anchor
+            all_reds.append(z['credit'])
+            ccdf_vals.append((1.0 + z['A'][z['A'] > 0]) * delta)
 
-    # Ensemble CCDF: evaluate at common x grid
-    pos_all = np.concatenate([r[r > 1e-6] for r in all_reds]) / scale
-    # from the 1st percentile: deep-chain shares put a few credits at 1e-4 sweeps
+    # Ensemble CCDF: evaluate at common x grid, in t (t per year on the veg-time route)
+    pos_all = np.concatenate([r[r > 1e-6] for r in ccdf_vals]) / 1000
+    # from the 1st percentile: the pooled minimum sits far out in an empty left tail
     ccdf_x = np.logspace(np.log10(np.percentile(pos_all, 1)), np.log10(pos_all.max()), 200)
     ccdf_runs = []
-    for r in all_reds:
-        pos = np.sort(r[r > 1e-6] / scale)
+    for r in ccdf_vals:
+        pos = np.sort(r[r > 1e-6] / 1000)
         if len(pos) > 0:
             ccdf_y = np.array([np.mean(pos > x) for x in ccdf_x])
             ccdf_runs.append(ccdf_y)
@@ -782,9 +784,9 @@ def plot_network_agency_evolution_ensemble(
                ncol=4, fontsize=6.5, frameon=False, handletextpad=0.4, columnspacing=1.0)
 
     if credit_dir is not None:
-        from attribution_ledger import replay
+        from attribution_ledger import replay, veg_time
         net_row = sm_row if dual else big_row
-        net_sweep = 2 * len(net_row['initial_diets'])
+        net_delta = net_row['params']['meat_CO2'] - net_row['params']['veg_CO2']
 
     # === Row 0: Network snapshots (same as original) ===
     for i, t in enumerate(time_points):
@@ -794,9 +796,10 @@ def plot_network_agency_evolution_ensemble(
         net_ax = fig.add_subplot(gs_top[0, i])
         all_diets = snap['diets']
         if credit_dir is not None:
+            t_rep = sm_final_t if t == 'final' else t
             all_red = replay(net_row['events'], net_row['initial_diets'], net_row['params'],
-                             t_end=sm_final_t if t == 'final' else t,
-                             parent='exposure', weight='none', unit='time')
+                             t_end=t_rep, parent='exposure', weight='none', unit='time')
+            own = veg_time(net_row['events'], net_row['initial_diets'], t_rep)
         else:
             all_red = np.array(snap['reductions'])
         node_colors = ['#2a9d8f' if all_diets[n] == 'veg' else '#e76f51' for n in giant_list]
@@ -822,10 +825,10 @@ def plot_network_agency_evolution_ensemble(
                                      edgecolors='#333', linewidths=0.3)
                 top_reducer_value = reductions[top_reducer_idx]
 
-        # Title in big-N time, matching panel A's markers: these are N=385 networks
-        # placed on the N=2000 clock by the F_veg=0.5 rescaling.
+        # Titles by state, not time: these are N=385 snapshots on their own clock,
+        # placed on panel A's N=2000 axis by the F_veg=0.5 rescaling.
         title = ('$t_0$' if t == 0 else '$t_{end}$' if t == 'final'
-                 else f't = {int(t * scale_factor)//1000}k')
+                 else f"$F_{{veg}} = {np.mean(np.asarray(all_diets) == 'veg'):.2f}$")
         net_ax.set_title(title, fontsize=10, pad=2)
         pad_n = 0.02
         net_ax.set_xlim(x_min - pad_n, x_max + pad_n)
@@ -835,8 +838,9 @@ def plot_network_agency_evolution_ensemble(
 
         if top_reducer_value > 0:
             if credit_dir is not None:
-                # veg-time credit is (kg/yr) x steps -> t to this snapshot, as panel B
-                box = f'{top_reducer_value / net_sweep * YR_PER_SWEEP_MID / 1000:.1f} t CO$_2$e'
+                # the top reducer's (1 + A) x delta, as panel B: credit / own + delta
+                j = giant_list[top_reducer_idx]
+                box = f'{(top_reducer_value / own[j] + net_delta) / 1000:.1f} t CO$_2$e/yr'
             else:
                 box = f'{top_reducer_value/1000:.1f} t CO$_2$e'
             net_ax.text(0.5, -0.06, box,
@@ -872,15 +876,14 @@ def plot_network_agency_evolution_ensemble(
         traj_ax.axvline(t_k_pt, color='#888', linestyle=':', linewidth=0.7, alpha=0.6)
         traj_ax.scatter(t_k_pt, ref_traj[t_val], color=marker_color,
                        s=14, zorder=5, edgecolors='#333', linewidths=0.4)
-        # Label in big-N time: the axis is the big-N clock, but t_val is a small-N
-        # snapshot time, so the raw value is off by scale_factor (5.6x here).
+        # Label by state, as the network titles
         label = ('$t_{end}$' if t == 'final'
-                 else f'$t_{{{int(t_val * scale_factor)//1000}k}}$')
+                 else f'$F_{{veg}} = {ref_traj[t_val]:.2f}$')
         traj_ax.text(t_k_pt, 1.02, label, transform=traj_ax.get_xaxis_transform(),
                     fontsize=5, ha='center', va='bottom', color='#555')
 
-    # F_c: reported to stdout only (max-acceleration estimator, not drawn --
-    #      the paper no longer presents it as a threshold)
+    # F_c: max-acceleration estimator; ensemble median and IQR drawn as a horizontal
+    #      band (tipping decision 3, 2026-09-04)
     _sw = savgol_window or fc_window(min_len)
     _burnin = max(5000, _sw)   # mask a whole kernel, see the single-run figure
     if min_len > _burnin + _sw * 2:
@@ -903,6 +906,13 @@ def plot_network_agency_evolution_ensemble(
             if _d2e[_idx] > 0:
                 _fc_list.append(_sme[_idx])
         _fc_ens = float(np.median(_fc_list)) if _fc_list else None
+        if _fc_list:
+            _q25, _q75 = np.percentile(_fc_list, [25, 75])
+            traj_ax.axhspan(_q25, _q75, color='#888', alpha=0.15, linewidth=0, zorder=0)
+            traj_ax.axhline(_fc_ens, color='#555', ls='--', lw=0.7, zorder=1)
+            traj_ax.text(0.98, _fc_ens, '$F_c$', transform=traj_ax.get_yaxis_transform(),
+                         ha='right', va='bottom', fontsize=6, color='#555')
+            print(f"INFO: F_c marker at {_fc_ens:.3f}, IQR [{_q25:.3f}, {_q75:.3f}]")
         if _fc_run is not None:
             _t_tip_k = _t_tip / 1000
             print(f"INFO: F_c = {_fc_run:.3f} (this run), {_fc_ens:.3f} (ens. median, n={len(_fc_list)}) "
@@ -932,7 +942,8 @@ def plot_network_agency_evolution_ensemble(
     ccdf_ax.xaxis.set_major_locator(LogLocator(base=10, numticks=4))
     ccdf_ax.xaxis.set_minor_formatter(NullFormatter())
     ccdf_ax.set_ylabel('$P(\mathrm{reduction} > R)$', fontsize=7)
-    ccdf_ax.set_xlabel('Reduction, $R$ [t CO$_2$e]', fontsize=7)
+    ccdf_ax.set_xlabel('Reduction, $R$ [t CO$_2$e yr$^{-1}$]' if credit_dir is not None
+                       else 'Reduction, $R$ [t CO$_2$e]', fontsize=7)
     ccdf_ax.spines['top'].set_visible(False)
     ccdf_ax.spines['right'].set_visible(False)
     ccdf_ax.tick_params(axis='both', labelsize=6)
