@@ -52,6 +52,12 @@ network_agency_evolution_ensemble:
   savgol_window: 80001         # 20% of the 400k run: tightest per-seed F_c IQR
                                # (0.086 vs 0.121 at 10001), median window-stable.
                                # Matches the window the SI quotes F_c at.
+  # Reported ledger for panels B/C and the network highlighting (2026-09-10): veg-time
+  # credit from vegtime_A_run_XX.npz at t = 310000, as t CO2e over the run at the central
+  # 0.665 yr/sweep; the network row replays the small-N event log at each snapshot and
+  # its boxes use the same 0.665. Unset = the pkl's `reductions`,
+  # the submitted in-run ledger.
+  credit_dir: trajectory_analysis_twin_20260903_kappa0p55_N2000_reduced
 
 amplification_ensemble:
   file: trajectory_analysis_twin_20260903_kappa0p55_N2000.pkl

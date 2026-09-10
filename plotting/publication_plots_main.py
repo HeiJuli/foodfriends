@@ -18,6 +18,9 @@ from t_end_logistic import estimate_t_end, fc_window
 from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMAP, ECO_DIV_CMAP
 
 COL_TOP10, COL_TOP1 = '#6a994e', '#d4a029'
+# Calendar anchor (calendar_anchor_decision_2026-09-09.md): 0.5-1.0 yr per sweep (2N
+# steps); figures use the like-for-like centre, the range goes in the caption.
+YR_PER_SWEEP_MID = 0.665
 
 cm = 1/2.54
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'plot_config.yaml')
@@ -612,9 +615,16 @@ def plot_network_agency_evolution_ensemble(
         file_path=None, small_file_path=None, data=None, small_data=None,
         truncate_steps=None, analysis_t_end=None,
         small_truncate_steps=None, small_mid_t=None, small_analysis_t_end=None,
-        rescale_ref=0.5, savgol_window=None, save=True):
+        rescale_ref=0.5, savgol_window=None, save=True, credit_dir=None):
     """Ensemble version of 6-panel figure: median + IQR shading for panels A/B/C.
-    Network snapshots (top row) still use small-N median run."""
+    Network snapshots (top row) still use small-N median run.
+
+    credit_dir: directory of vegtime_A_run_XX.npz (analysis/vegtime_accounting.py).
+    When given, panels B/C and the network highlighting use the reported veg-time
+    ledger instead of the pkl's `reductions` (the submitted in-run ledger): B/C from
+    the npz credit in vegetarian-sweeps (2N steps, clock-free), the network row from a
+    replay of the small-N run's event log at each snapshot time.
+    """
     set_publication_style()
 
     if data is None:
@@ -654,11 +664,24 @@ def plot_network_agency_evolution_ensemble(
     traj_q25 = np.percentile(traj_mat, 25, axis=0)
     traj_q75 = np.percentile(traj_mat, 75, axis=0)
 
+    if credit_dir is not None:
+        all_reds = []
+        for f in sorted(glob.glob(os.path.join(credit_dir, 'vegtime_A_run_*.npz'))):
+            z = np.load(f)
+            if analysis_t_end is not None and int(z['t_end']) != analysis_t_end:
+                print(f"WARNING: {os.path.basename(f)} is at t={int(z['t_end'])}, "
+                      f"figure window is {analysis_t_end}")
+            # veg-time credit is (kg/yr) x steps -> kg over the run at the central anchor
+            all_reds.append(z['credit'] / (2 * len(z['credit'])) * YR_PER_SWEEP_MID)
+    scale = 1000.0   # kg -> t
+
     # Ensemble CCDF: evaluate at common x grid
-    ccdf_x = np.logspace(-2, 2.5, 200)  # tonnes
+    pos_all = np.concatenate([r[r > 1e-6] for r in all_reds]) / scale
+    # from the 1st percentile: deep-chain shares put a few credits at 1e-4 sweeps
+    ccdf_x = np.logspace(np.log10(np.percentile(pos_all, 1)), np.log10(pos_all.max()), 200)
     ccdf_runs = []
     for r in all_reds:
-        pos = np.sort(r[r > 1e-6] / 1000)
+        pos = np.sort(r[r > 1e-6] / scale)
         if len(pos) > 0:
             ccdf_y = np.array([np.mean(pos > x) for x in ccdf_x])
             ccdf_runs.append(ccdf_y)
@@ -758,6 +781,11 @@ def plot_network_agency_evolution_ensemble(
     fig.legend(handles=net_legend, loc='upper center', bbox_to_anchor=(0.5, 0.995),
                ncol=4, fontsize=6.5, frameon=False, handletextpad=0.4, columnspacing=1.0)
 
+    if credit_dir is not None:
+        from attribution_ledger import replay
+        net_row = sm_row if dual else big_row
+        net_sweep = 2 * len(net_row['initial_diets'])
+
     # === Row 0: Network snapshots (same as original) ===
     for i, t in enumerate(time_points):
         snap = sm_analysis.get(t, sm_snaps.get(t))
@@ -765,7 +793,12 @@ def plot_network_agency_evolution_ensemble(
             continue
         net_ax = fig.add_subplot(gs_top[0, i])
         all_diets = snap['diets']
-        all_red = np.array(snap['reductions'])
+        if credit_dir is not None:
+            all_red = replay(net_row['events'], net_row['initial_diets'], net_row['params'],
+                             t_end=sm_final_t if t == 'final' else t,
+                             parent='exposure', weight='none', unit='time')
+        else:
+            all_red = np.array(snap['reductions'])
         node_colors = ['#2a9d8f' if all_diets[n] == 'veg' else '#e76f51' for n in giant_list]
         reductions = np.array([all_red[n] for n in giant_list])
 
@@ -801,7 +834,12 @@ def plot_network_agency_evolution_ensemble(
         net_ax.axis('off')
 
         if top_reducer_value > 0:
-            net_ax.text(0.5, -0.06, f'{top_reducer_value/1000:.1f} t CO$_2$e',
+            if credit_dir is not None:
+                # veg-time credit is (kg/yr) x steps -> t to this snapshot, as panel B
+                box = f'{top_reducer_value / net_sweep * YR_PER_SWEEP_MID / 1000:.1f} t CO$_2$e'
+            else:
+                box = f'{top_reducer_value/1000:.1f} t CO$_2$e'
+            net_ax.text(0.5, -0.06, box,
                        transform=net_ax.transAxes, ha='center', va='top', fontsize=5.5,
                        fontweight='bold', bbox=dict(boxstyle='round,pad=0.2', fc='white',
                        edgecolor=COL_TOP1, linewidth=0.8, alpha=0.9))
@@ -1109,7 +1147,8 @@ def _run_from_config(cfg, plot_key):
             small_mid_t=sm.get('mid_t'),
             small_analysis_t_end=sm.get('analysis_t_end'),
             rescale_ref=rsc.get('reference_fveg', 0.5),
-            savgol_window=c.get('savgol_window'))
+            savgol_window=c.get('savgol_window'),
+            credit_dir=_cfg_path(c.get('credit_dir')))
     elif plot_key == 'amplification_ensemble':
         c = cfg[plot_key]
         plot_amplification_ensemble(file_path=_cfg_path(c.get('file')),

@@ -151,8 +151,11 @@ PLABEL = {"decay": r"$\lambda$ (attenuation)", "M": r"$M$ (memory)",
 OBS = ["F_veg_final", "t_50",
        "amp_mean_tend", "amp_p90_tend", "amp_max_tend"]
 OLABEL = {"F_veg_final": r"$F_{veg}$ (final)", "F_c": r"$F_c$ (max accel.)",
-          "t_50": r"$t_{50}$ (ksteps)", "amp_mean_tend": "mean amplification",
-          "amp_p90_tend": "p90 amplification", "amp_max_tend": "max amplification"}
+          # event count: the sweep pickles hold no event log, so the reported veg-time
+          # ledger cannot be replayed on them (accounting note 2026-09-09 s.5)
+          "t_50": r"$t_{50}$ (ksteps)", "amp_mean_tend": "mean amplification (event count)",
+          "amp_p90_tend": "p90 amplification (event count)",
+          "amp_max_tend": "max amplification (event count)"}
 HEADLINE = ["F_veg_final", "amp_mean_tend", "amp_max_tend"]
 
 # Aggregated but not reported. fig_lambda's CCDF pools the per-run `mult` array,
@@ -842,6 +845,10 @@ def main():
         df.to_pickle(pkl)
         print(f"INFO: Saved -> {pkl}")
 
+    # A campaign run before a sweep was added (p_rewire, 2026-09-09) has no rows for it
+    for prm in [p for p in SWEEPS if p not in set(df.param)]:
+        print(f"WARNING: no rows for {prm} in this campaign, left out of the outputs")
+        del SWEEPS[prm]
     summary = summarise(df)
     summary.to_csv(f"../model_output/sensitivity_summary_{tag}.csv", index=False)
     sens = sensitivity_index(summary)
