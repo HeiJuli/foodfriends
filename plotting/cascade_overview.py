@@ -8,18 +8,41 @@ largest-share source) gives trees. The root is the initial vegetarian with the l
 tree; the arm is one of its direct children and that child's subtree.
 
 --layout tree (default): Didelot et al. 2017 (MBE 34:997) Fig. 5 style. x = conversion
-  time, y = depth-first order of the tree, so no link jumps; elbow connectors run along
-  the parent's row (--links rounded softens the corner, --links straight is Didelot's
-  original diagonal). Grey is the rest of the root's tree (--scope all: the whole forest).
-  Arm dots are filled if the stint lasts to t_end, open if the agent later reverts.
+  time, y = depth-first order of the tree, so no link jumps. Grey is the rest of the
+  root's tree (--scope all: the whole forest). Arm dots are filled if the stint lasts
+  to t_end, open if the agent later reverts.
+
+  --links elbow (default): connectors run along the parent's row, then up to the child.
+    A hub's many children become a comb on one line instead of a fan (the root has
+    ~300), which is why this stays readable where Didelot's diagonals would not.
+  --links rounded: the same elbow with the corner replaced by a quadratic Bezier. The
+    radius is clamped to half the shorter leg, so one-row comb teeth stay sharp and
+    only long drops visibly soften -- the comb structure is preserved.
+  --links straight: Didelot's original diagonal. Hub fans are coherent (children are
+    contiguous rows in time order, so fan lines never cross) but dense, so grey links
+    are thinned and faded by density (alpha = min(0.8, 2500/n)); fans read as gradients
+    instead of hairballs.
+
+  --top K: prune the rows to the K structurally largest events (greedy largest-subtree-
+    first from the roots, ancestor-closed so links never jump). Long figure-spanning
+    links come from minor late-converting branches, so this pruning is also what
+    de-emphasizes long lines; the largest arm is favored by the size ranking, so the
+    purple highlight survives intact. Pruned nodes stay visible as faint dots at their
+    full-layout positions -- the whole cascade remains as a background texture instead
+    of white space. Node/link pens get chunkier in this mode to match Didelot's look;
+    --size 6.4 3.6 gives a closer, less sprawling aspect than the default banner.
+
 --layout agents: agent x sweep lattice with every event-graph link in grey; rows are the
   arm's agents as a depth-first block, the rest in spectral order.
 Row position carries no meaning beyond adjacency in either layout.
 
 Usage: python cascade_overview.py <run.pkl> [--layout L] [--root I] [--arm R] [--out PATH]
   run.pkl: a trajectory ensemble DataFrame (row --run) or a dict with events/initial_diets/params
+  --root/--arm are validated: the root must be an initial vegetarian and the arm rank
+  must exist, with the valid choices printed on failure.
 """
 import argparse
+import heapq
 import os
 import sys
 from collections import defaultdict
@@ -33,7 +56,7 @@ from matplotlib.collections import LineCollection
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "analysis"))
 from attribution_ledger import _exposure_parents
 
-GREY_LINK, GREY_NODE, INK = "#bdbdbd", "#8c8c8c", "#5b2a86"
+GREY_LINK, GREY_NODE, GHOST, INK = "#bdbdbd", "#8c8c8c", "#d9d9d9", "#5b2a86"
 
 
 def load(path, run):
@@ -95,6 +118,34 @@ def tree_rows(kids, roots, nodes):
     return y
 
 
+def tree_sizes(kids, roots):
+    """Subtree size of every node, one pass over the forest."""
+    size = {}
+    for r in roots:
+        done, st = [], [r]
+        while st:
+            n = st.pop(); done.append(n); st += kids.get(n, [])
+        for n in reversed(done):
+            size[n] = 1 + sum(size[c] for c in kids.get(n, []))
+    return size
+
+
+def top_rows(kids, roots, sizes, k):
+    """Greedy connected selection of ~k rows: pop the node with the largest subtree,
+    keep it, push its children. Ancestor-closed by construction, so the pruned forest
+    still draws without jumps; the largest arm is favoured by the size ranking."""
+    heap = [(-sizes[r], r) for r in roots]
+    heapq.heapify(heap)
+    sel = set()
+    while heap and len(sel) < k:
+        _, n = heapq.heappop(heap)
+        if n not in sel:
+            sel.add(n)
+            for c in kids.get(n, []):
+                heapq.heappush(heap, (-sizes[c], c))
+    return sel
+
+
 def reverted(events, initial_diets, t_end):
     """Event nodes whose stint ended before t_end."""
     open_ = {i: ("init", i) for i, d in enumerate(initial_diets) if d == "veg"}
@@ -142,6 +193,10 @@ def main():
                     help="tree: main-cause forest, Didelot Fig. 5 style; agents: agent x sweep lattice")
     ap.add_argument("--scope", choices=["root", "all"], default="root",
                     help="tree layout: the root's tree only, or the whole forest")
+    ap.add_argument("--top", type=int, default=None, metavar="K",
+                    help="tree layout: keep only the ~K structurally largest events as rows "
+                         "(Didelot-sparse); pruned nodes stay visible as faint dots at their "
+                         "full-layout positions")
     ap.add_argument("--links", choices=["elbow", "rounded", "straight"], default="elbow",
                     help="tree layout: elbow connectors, rounded elbows, or straight lines "
                          "(Didelot Fig. 5); straight fades grey links by density so hub "
@@ -201,6 +256,8 @@ def main():
         grey = [(s, c) for s, c, _ in links]
         draw = curves
         glw, galpha = 0.08, min(0.55, 12000 / max(1, len(grey)))
+        ghost = {}
+        node_s, arm_lw, arm_s, root_s = 0.25, 0.45, 3, 22
     else:
         # the event graph reduced to its main-cause spanning forest: every event keeps one
         # parent, so the layout is a set of trees and no link jumps
@@ -210,8 +267,21 @@ def main():
             others = [n for n in nodes if n not in kid_of and n != root]
             roots = [root] + sorted(others, key=lambda n: (nodes[n][1], -len(subtree(kids, n))))
         y = tree_rows(kids, roots, nodes)
-        xy = {n: np.array([nodes[n][1] / t_end * W, y[n] / len(y) * H]) for n in y}
-        grey = [(kid_of[c], c) for c in y if c in kid_of]
+        ghost = {}
+        if a.top:
+            # prune to the K structurally largest events; pruned nodes keep their
+            # full-layout position as faint dots, so the whole cascade stays visible
+            keep = top_rows(kids, roots, tree_sizes(kids, roots), a.top)
+            pk = {n: [c for c in cs if c in keep] for n, cs in kids.items()}
+            prows = tree_rows(pk, [r for r in roots if r in keep], nodes)
+            ghost = {n: np.array([nodes[n][1] / t_end * W, y[n] / len(y) * H])
+                     for n in y if n not in keep}
+            y = {n: prows[n] for n in prows}
+            xy = {n: np.array([nodes[n][1] / t_end * W, y[n] / len(y) * H]) for n in y}
+            grey = [(kid_of[c], c) for c in y if c in kid_of and kid_of[c] in y]
+        else:
+            xy = {n: np.array([nodes[n][1] / t_end * W, y[n] / len(y) * H]) for n in y}
+            grey = [(kid_of[c], c) for c in y if c in kid_of]
         # elbow: along the parent's row to the child's time, then up to the child. A hub's
         # many children become a comb on one line instead of a fan (the root has ~300).
         if a.links == "elbow":
@@ -224,24 +294,32 @@ def main():
             draw = lambda p, q: np.stack([p, q], axis=1)
         glw, galpha = (0.15, 1.0) if a.links != "straight" \
             else (0.1, min(0.8, 2500 / max(1, len(grey))))
+        if a.top:   # sparse figure: chunkier pen, closer to Didelot Fig. 5
+            glw, node_s, arm_lw, arm_s, root_s = 0.6, 1.5, 1.0, 8, 36
+        else:
+            node_s, arm_lw, arm_s, root_s = 0.25, 0.45, 3, 22
 
     fig = plt.figure(figsize=(W, H))
     ax = fig.add_axes([0, 0, 1, 1])
+    if ghost:
+        Gh = np.array(list(ghost.values()))
+        ax.scatter(*Gh.T, s=0.6, c=GHOST, alpha=0.45, lw=0, rasterized=True, zorder=1.5)
     if grey:
         P = np.array([[xy[s], xy[c]] for s, c in grey])
         ax.add_collection(LineCollection(draw(P[:, 0], P[:, 1]), colors=GREY_LINK,
                                          lw=glw, alpha=galpha, rasterized=True, zorder=1))
     G_xy = np.array(list(xy.values()))
-    ax.scatter(*G_xy.T, s=0.25, c=GREY_NODE, lw=0, rasterized=True, zorder=2)
+    ax.scatter(*G_xy.T, s=node_s, c=GREY_NODE, lw=0, rasterized=True, zorder=2)
 
+    arm = [n for n in arm if n in xy]
     if len(arm) > 1:
         Q = np.array([[xy[kid_of[c]], xy[c]] for c in arm[1:]])
-        ax.add_collection(LineCollection(draw(Q[:, 0], Q[:, 1]), colors=INK, lw=0.45, zorder=3))
+        ax.add_collection(LineCollection(draw(Q[:, 0], Q[:, 1]), colors=INK, lw=arm_lw, zorder=3))
     gone = reverted(events, diets, t_end)
     for sel, face in ((lambda n: n not in gone, INK), (lambda n: n in gone, "white")):
         pts = np.array([xy[n] for n in arm[1:] if sel(n)]).reshape(-1, 2)
-        ax.scatter(*pts.T, s=3, c=face, ec=INK, lw=0.35, zorder=4)
-    ax.scatter(*xy[root], s=22, c=INK, ec="white", lw=0.8, zorder=5)
+        ax.scatter(*pts.T, s=arm_s, c=face, ec=INK, lw=0.35, zorder=4)
+    ax.scatter(*xy[root], s=root_s, c=INK, ec="white", lw=0.8, zorder=5)
     ax.set_xlim(-0.02 * W, 1.01 * W)
     ax.set_ylim(-0.02 * H, 1.02 * H)
     ax.axis("off")

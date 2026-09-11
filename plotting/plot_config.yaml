@@ -42,10 +42,11 @@ network_agency_evolution_ensemble:
   small_n:
     # Network panels only. Both times are SMALL-N snapshots chosen so that, under the
     # F_veg=0.5 rescaling (scale_factor 5.575), they land on the big-N times that matter:
-    #   38000 -> 211.9k, the F_veg=0.5 crossing (the rescale anchor itself)
+    #   30000 -> ~167k, F_veg 0.366: first snapshot past the ensemble F_c (0.35); 28000 is
+    #            0.325. Was 38000 (the F_veg=0.5 crossing, the rescale anchor) to 2026-09-10.
     #   56000 -> 312.2k, the big-N analysis window (310000)
     file: trajectory_sample-max_20260903_kappa0p55_100k.pkl
-    mid_t: 38000
+    mid_t: 30000
     analysis_t_end: 56000
   rescale:
     reference_fveg: 0.5
@@ -55,8 +56,9 @@ network_agency_evolution_ensemble:
   # Reported ledger for panels B/C and the network highlighting (2026-09-10): veg-time
   # vegtime_A_run_XX.npz at t = 310000: B = (1 + A) x 664 kg, t CO2e per year the agent
   # is vegetarian (no calendar anchor); C = total credit; the network row replays the
-  # small-N event log at each snapshot, its box = the top reducer's (1 + A) x 664 kg. Unset = the pkl's `reductions`,
-  # the submitted in-run ledger.
+  # small-N event log at each snapshot, nodes ranked on own + downstream (as B's
+  # 1 + A), its box = the top reducer's cumulative total in t to that snapshot at the central 0.665 yr/sweep. Unset = the pkl's
+  # `reductions`, the submitted in-run ledger.
   credit_dir: trajectory_analysis_twin_20260903_kappa0p55_N2000_reduced
 
 amplification_ensemble:
