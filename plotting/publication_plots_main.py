@@ -18,6 +18,9 @@ from t_end_logistic import estimate_t_end, fc_window
 from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMAP, ECO_DIV_CMAP
 
 COL_TOP10, COL_TOP1 = '#6a994e', '#d4a029'
+# Calendar anchor (calendar_anchor_decision_2026-09-09.md): 0.5-1.0 yr per sweep (2N
+# steps); only the Fig. 1 network boxes (cumulative t) use it, the range goes in the caption.
+YR_PER_SWEEP_MID = 0.665
 
 cm = 1/2.54
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'plot_config.yaml')
@@ -431,6 +434,10 @@ def plot_amplification(data=None, file_path=None, save=True, analysis_t_end=None
     DIRECT_REDUCTION_KG = 664  # 2054 - 1390 kg CO2/year
 
     median_row, snap = _resolve_snapshot(data, analysis_t_end)
+    # The in-run `reductions` ledger is own + downstream, so this ratio is the reported
+    # total factor 1 + A (A = downstream/own, the spillover multiple). The no-cascade
+    # baseline is 1 -- that is what permits the log axis and the "Personal only (1x)"
+    # line below; bare A sits at 0 and is not plotted. Convention: numbers.md s.1.
     reductions_kg = np.array(snap['reductions'])
     pos_mask = reductions_kg > 1e-3
     multipliers = reductions_kg[pos_mask] / DIRECT_REDUCTION_KG
@@ -673,7 +680,9 @@ def plot_network_agency_evolution_ensemble(
                 print(f"WARNING: {os.path.basename(f)} is at t={int(z['t_end'])}, "
                       f"figure window is {analysis_t_end}")
             # C needs a summable quantity, so total credit; B is (1 + A) x delta, kg per
-            # year the agent is vegetarian -- no calendar anchor
+            # year the agent is vegetarian -- no calendar anchor. The npz's A is the
+            # downstream-only spillover multiple; 1 + A is the reported total factor
+            # (numbers.md s.1).
             all_reds.append(z['credit'])
             ccdf_vals.append((1.0 + z['A'][z['A'] > 0]) * delta)
 
@@ -786,6 +795,7 @@ def plot_network_agency_evolution_ensemble(
     if credit_dir is not None:
         from attribution_ledger import replay, veg_time
         net_row = sm_row if dual else big_row
+        net_sweep = 2 * len(net_row['initial_diets'])
         net_delta = net_row['params']['meat_CO2'] - net_row['params']['veg_CO2']
 
     # === Row 0: Network snapshots (same as original) ===
@@ -799,7 +809,9 @@ def plot_network_agency_evolution_ensemble(
             t_rep = sm_final_t if t == 'final' else t
             all_red = replay(net_row['events'], net_row['initial_diets'], net_row['params'],
                              t_end=t_rep, parent='exposure', weight='none', unit='time')
-            own = veg_time(net_row['events'], net_row['initial_diets'], t_rep)
+            # own + downstream, as panel B's 1 + A (the reported total factor; A itself
+            # is downstream-only): ranking and box both on the total
+            all_red = all_red + veg_time(net_row['events'], net_row['initial_diets'], t_rep) * net_delta
         else:
             all_red = np.array(snap['reductions'])
         node_colors = ['#2a9d8f' if all_diets[n] == 'veg' else '#e76f51' for n in giant_list]
@@ -838,9 +850,8 @@ def plot_network_agency_evolution_ensemble(
 
         if top_reducer_value > 0:
             if credit_dir is not None:
-                # the top reducer's (1 + A) x delta, as panel B: credit / own + delta
-                j = giant_list[top_reducer_idx]
-                box = f'{(top_reducer_value / own[j] + net_delta) / 1000:.1f} t CO$_2$e/yr'
+                # (kg/yr) x steps -> cumulative t to this snapshot, at the central anchor
+                box = f'{top_reducer_value / net_sweep * YR_PER_SWEEP_MID / 1000:.1f} t CO$_2$e'
             else:
                 box = f'{top_reducer_value/1000:.1f} t CO$_2$e'
             net_ax.text(0.5, -0.06, box,
@@ -908,10 +919,10 @@ def plot_network_agency_evolution_ensemble(
         _fc_ens = float(np.median(_fc_list)) if _fc_list else None
         if _fc_list:
             _q25, _q75 = np.percentile(_fc_list, [25, 75])
-            traj_ax.axhspan(_q25, _q75, color='#888', alpha=0.15, linewidth=0, zorder=0)
-            traj_ax.axhline(_fc_ens, color='#555', ls='--', lw=0.7, zorder=1)
+            traj_ax.axhspan(_q25, _q75, color='#888', alpha=0.12, linewidth=0, zorder=0)
+            traj_ax.axhline(_fc_ens, color='#555', ls='--', lw=0.4, zorder=1)
             traj_ax.text(0.98, _fc_ens, '$F_c$', transform=traj_ax.get_yaxis_transform(),
-                         ha='right', va='bottom', fontsize=6, color='#555')
+                         ha='right', va='bottom', fontsize=4.5, color='#555')
             print(f"INFO: F_c marker at {_fc_ens:.3f}, IQR [{_q25:.3f}, {_q75:.3f}]")
         if _fc_run is not None:
             _t_tip_k = _t_tip / 1000
@@ -935,6 +946,12 @@ def plot_network_agency_evolution_ensemble(
                          color='#555', alpha=0.10, linewidth=0)
     ccdf_ax.step(ccdf_x[valid], ccdf_med[valid], where='post', color='#555',
                  linewidth=1.2, alpha=0.9)
+    if credit_dir is not None:
+        # 1 + A = 2, downstream credit equal to own: the log head under 1 + A hides that
+        # the median agent sits below it (bare A was rejected, accounting note s.2)
+        ccdf_ax.axvline(2 * delta / 1000, color='#888', linestyle=':', linewidth=0.7, alpha=0.6)
+        ccdf_ax.text(2 * delta / 1000, 1.2, ' downstream = own', fontsize=5.5,
+                     color='#666', va='center', ha='left')
 
     ccdf_ax.set_xscale('log')
     ccdf_ax.set_yscale('log')
@@ -999,8 +1016,10 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
         for f in sorted(glob.glob(os.path.join(multipliers_dir, '*_A_run_*.npz'))):
             A = np.load(f)['A']
             # 1 + A: own reduction plus the downstream credit. The npz holds the
-            # downstream-only ratio, so the axhline at 1.0 labelled "Personal only"
-            # is only true of the plotted quantity once the agent's own unit is added.
+            # downstream-only ratio (A, the spillover multiple), so the axhline at 1.0
+            # labelled "Personal only" is only true of the plotted quantity once the
+            # agent's own unit is added. Reported convention: the total factor 1 + A,
+            # floor 1 = no network effect (numbers.md s.1).
             mults = np.sort(A[A > 0])[::-1] + 1.0
             mult_runs.append(np.interp(rank_pct, np.linspace(0, 100, len(mults)), mults))
             mean_mults.append(np.mean(mults))
