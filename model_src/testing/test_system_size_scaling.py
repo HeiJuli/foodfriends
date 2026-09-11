@@ -15,15 +15,19 @@ Corrects artifacts in prior version (2026-03-22):
   4. Agent cloning above N=5602 reduced parameter heterogeneity
   See: claude_stuff/Infrastructure/system_size_scaling_artifacts_2026-03-23.md
 
-Amplification (mean_mult, max_mult, p90_mult, gamma) uses the primary credit
-convention fixed 2026-09-02 -- exposure-proportional parents, event count, no dwell
-weight -- replayed from the event log by analysis/attribution_ledger.py. The
-in-simulation ledger (last-draw, dwell-weighted) is kept as mean_mult_sub /
-max_mult_sub / n_positive_sub for comparison.
+Amplification is replayed from the event log by analysis/attribution_ledger.py
+(exposure-proportional parents, no dwell weight) at each run's own t_end, on two
+ledgers: veg-time, the reported unit since 2026-09-09 (*_time columns; the reported
+factor is 1 + A over credited agents, as in analysis/vegtime_accounting.py), and
+event count (mean_mult, max_mult, p90_mult, gamma, gini, alpha_ccdf), kept for
+continuity with the sensitivity and null scripts. The in-simulation ledger
+(last-draw, dwell-weighted) is kept as mean_mult_sub / max_mult_sub / n_positive_sub.
+Per-agent values are saved (*_agents columns), so a new statistic is a re-score of
+the pickle, not another sweep.
 
 N values: 2000, 4000, 6000, 10000, 20000
   - N=2000 is the baseline (single community, matches validated model)
-  - N<=20000 keeps runtime tractable (~50 updates/agent)
+  - N<=20000 keeps runtime tractable (adaptive stop, 210-270 updates/agent)
   - Larger N possible but expect multi-day runtimes
 
 Usage:
@@ -436,6 +440,7 @@ def run_single(args):
     mean_A_time = np.mean(pos_t) if len(pos_t) else 0
     max_A_time = np.max(pos_t) if len(pos_t) else 0
     p90_A_time = np.percentile(pos_t, 90) if len(pos_t) else 0
+    median_A_time = np.median(pos_t) if len(pos_t) else 0
     sys_A_time = (reds_t.sum() / (DIRECT_REDUCTION_KG * own.sum())
                   if own.sum() > 0 else np.nan)
 
@@ -468,18 +473,21 @@ def run_single(args):
         if d2_masked[idx] > 0:
             fc = smoothed[idx]
 
-    # 6. CCDF tail slope
-    alpha_ccdf = np.nan
-    if len(pos) > 20:
-        pos_t = pos / 1000
-        sorted_x = np.sort(pos_t)
-        ccdf_y = 1.0 - np.arange(1, len(sorted_x) + 1) / len(sorted_x)
+    # 6. CCDF tail slope, OLS on the log-log CCDF above the median, both ledgers.
+    # Veg-time is fitted on 1 + A over credited agents, the quantity Fig. 1B plots
+    # (publication_plots_main.py:687): the delta scale does not move a slope, the +1 does.
+    def _ccdf_tail(x):
+        if len(x) <= 20:
+            return np.nan
+        sx = np.sort(x)
+        ccdf_y = 1.0 - np.arange(1, len(sx) + 1) / len(sx)
         m = ccdf_y > 0
-        lx, ly = np.log10(sorted_x[m]), np.log10(ccdf_y[m])
+        lx, ly = np.log10(sx[m]), np.log10(ccdf_y[m])
         tail = lx > np.median(lx)
-        if tail.sum() > 5:
-            c = np.polyfit(lx[tail], ly[tail], 1)
-            alpha_ccdf = -c[0]
+        return -np.polyfit(lx[tail], ly[tail], 1)[0] if tail.sum() > 5 else np.nan
+
+    alpha_ccdf = _ccdf_tail(pos / 1000)
+    alpha_ccdf_time = _ccdf_tail(1.0 + pos_t)
 
     # 7. Direct conversions scaling
     dc_slope = np.nan
@@ -498,7 +506,7 @@ def run_single(args):
 
     print(f"  N={N:>6d} run={run_id:>2d}  F_veg={f_veg:.3f}  gamma={gamma:.2f}  "
           f"mean_A={mean_mult:.1f}x  max_A={max_mult:.0f}x  Gini={gini:.3f}  "
-          f"g_t={gamma_time:.2f}  meanA_t={mean_A_time:.2f}  "
+          f"g_t={gamma_time:.2f}  meanA_t={mean_A_time:.2f}  sys1+A_t={1 + sys_A_time:.2f}  "
           f"upd={steps_run/N:.0f}/agent ({stop_reason})  comms={n_communities}  "
           f"elapsed={elapsed:.0f}s")
 
@@ -519,7 +527,15 @@ def run_single(args):
         'gamma_time': gamma_time, 'r2_gamma_time': r2_gamma_time,
         'mean_A_time': mean_A_time, 'max_A_time': max_A_time,
         'p90_A_time': p90_A_time, 'sys_A_time': sys_A_time,
+        'median_A_time': median_A_time, 'alpha_ccdf_time': alpha_ccdf_time,
         'gini_time': gini_time, 'n_positive_time': int((A_time > 0).sum()),
+        # per-agent values at the credit window, index-aligned: any distribution
+        # statistic is then a re-score of this pickle (~5 MB for the sweep)
+        'A_time_agents': A_time.astype(np.float32),
+        'own_time_agents': own.astype(np.float32),
+        'reds_event_agents': np.asarray(reds, dtype=np.float32),
+        'degree_agents': np.asarray(degrees, dtype=np.int32),
+        'init_veg_agents': np.array([d == 'veg' for d in model.snapshots[0]['diets']]),
         'mean_mult': mean_mult, 'max_mult': max_mult, 'p90_mult': p90_mult,
         'mean_mult_sub': mean_mult_sub, 'max_mult_sub': max_mult_sub,
         'n_positive_sub': len(pos_sub),
@@ -569,15 +585,30 @@ def summarize(df):
               f"{grp['gamma_time'].median():>7.2f} "
               f"{grp['mean_A_time'].median():>8.2f}")
 
-    # Log-log regression: max_mult ~ N
-    grouped = df.groupby('N').agg({'max_mult': 'median', 'mean_mult': 'median'}).reset_index()
-    lN = np.log10(grouped['N'].values.astype(float))
-    for col in ['max_mult', 'mean_mult']:
-        lY = np.log10(grouped[col].values)
+    # The reported unit. The table above is event-count apart from g_time/meanA_t.
+    print(f"\n  Veg-time, reported unit (1 + A over credited agents; max_A bare):")
+    print(f"{'N':>7s} {'sys':>6s} {'mean':>6s} {'median':>6s} {'p90':>6s} {'max_A':>6s} "
+          f"{'Gini':>6s} {'CCDF_a':>7s} {'gamma':>6s}")
+    for N, grp in df.groupby('N'):
+        m = grp.median(numeric_only=True)
+        print(f"{N:>7d} {1 + m['sys_A_time']:>6.3f} {1 + m['mean_A_time']:>6.3f} "
+              f"{1 + m['median_A_time']:>6.3f} {1 + m['p90_A_time']:>6.3f} "
+              f"{m['max_A_time']:>6.1f} {m['gini_time']:>6.3f} "
+              f"{m['alpha_ccdf_time']:>7.2f} {m['gamma_time']:>6.3f}")
+
+    # Log-log slopes on N of the per-size medians; veg-time levels as 1 + A
+    med = df.groupby('N').median(numeric_only=True)
+    for col in ['sys_A_time', 'mean_A_time', 'median_A_time']:
+        med[f'1+{col}'] = 1 + med[col]
+    lN = np.log10(med.index.values.astype(float))
+    print()
+    for col in ['max_mult', 'mean_mult', '1+sys_A_time', '1+mean_A_time',
+                '1+median_A_time', 'max_A_time', 'gini_time']:
+        lY = np.log10(med[col].values.astype(float))
         valid = np.isfinite(lY)
         if valid.sum() > 2:
             c = np.polyfit(lN[valid], lY[valid], 1)
-            print(f"\n  {col} ~ N^{c[0]:.3f}  (log-log slope)")
+            print(f"  {col} ~ N^{c[0]:.3f}  (log-log slope)")
 
     # Gamma stability, both units. The event-count column is the historical one;
     # veg-time is the reported ledger, and the two differ by a fixed offset only if
@@ -612,6 +643,12 @@ if __name__ == '__main__':
             i = args.index(flag)
             opts[flag] = int(args[i + 1])
             del args[i:i + 2]
+    # --tag keeps a same-day relaunch from overwriting the date-tagged pickle
+    tag = ""
+    if "--tag" in args:
+        i = args.index("--tag")
+        tag = "_" + args[i + 1]
+        del args[i:i + 2]
     updates = opts.get("--updates", UPDATES_PER_AGENT)
     N_RUNS = opts.get("--runs", N_RUNS)
     sizes = [int(x) for x in args] if args else ALL_SIZES
@@ -666,6 +703,6 @@ if __name__ == '__main__':
     # Save
     outdir = os.path.join('..', 'model_output')
     os.makedirs(outdir, exist_ok=True)
-    outfile = os.path.join(outdir, f'system_size_scaling_{date.today().strftime("%Y%m%d")}.pkl')
+    outfile = os.path.join(outdir, f'system_size_scaling_{date.today().strftime("%Y%m%d")}{tag}.pkl')
     df.to_pickle(outfile)
     print(f"\nSaved: {outfile}")
