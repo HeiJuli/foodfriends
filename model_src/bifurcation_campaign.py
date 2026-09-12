@@ -181,6 +181,7 @@ def _run_cell(job):
         m.run()
     return {"beta": beta, "theta_gate_c": gate, "seed": seed,
             "steps": steps, "kappa": p.get("kappa", 1.0), "N": p["N"],
+            "veg_start": p.get("target_veg_fraction", 0.06),
             **sc._observables(m)}
 
 
@@ -413,10 +414,29 @@ def main():
     ap.add_argument('--plot-only', metavar='TAG',
                     help='regenerate figures from an existing campaign pkl; '
                          'TAG is <date>_N<N>, e.g. 20260821_N2000')
+    ap.add_argument('--betas', help='comma list overriding the beta axis')
+    ap.add_argument('--gates', help='comma list overriding the theta_gate_c axis')
+    # Hysteresis arm: the high start reuses adjust_veg_fraction_to_target, which
+    # flips the most willing meat-eaters (rho, then alpha) up to the target. That
+    # is the most favourable high state the empirical population admits, so a
+    # collapse back to the low branch is the conservative result.
+    ap.add_argument('--veg-start', type=float,
+                    help='initial vegetarian fraction (default 0.06, the empirical NL '
+                         'share); >0.5 starts the system on the high branch')
+    ap.add_argument('--no-plots', action='store_true',
+                    help='report and CSV only; the grid figures index the default '
+                         'cell and assume the full 7x7 axes')
     args = ap.parse_args()
     if args.N:
         BASE_PARAMS["N"] = args.N
         args.oat = ""          # the OAT ensemble is N=2000; not comparable
+    if args.betas:
+        BETAS[:] = [float(b) if "." in b else int(b) for b in args.betas.split(",")]
+    if args.gates:
+        GATES[:] = [float(g) for g in args.gates.split(",")]
+    if args.veg_start is not None:
+        BASE_PARAMS["target_veg_fraction"] = args.veg_start
+        BASE_PARAMS["adjust_veg_fraction"] = True
 
     os.makedirs("../visualisations_output", exist_ok=True)
     os.makedirs("../model_output", exist_ok=True)
@@ -441,6 +461,7 @@ def main():
               f"({0 if reuse is None else len(reuse)} runs), "
               f"{len(jobs)} new runs at {args.runs}/cell, "
               f"N={BASE_PARAMS['N']}, kappa={BASE_PARAMS['kappa']}, "
+              f"veg_start={BASE_PARAMS.get('target_veg_fraction', 0.06)}, "
               f"steps={args.steps}, on {args.cores} cores")
         with Pool(args.cores) as pool:
             df = pd.DataFrame(pool.map(_run_cell, jobs))
@@ -452,10 +473,11 @@ def main():
     stats = cell_stats(df)
     stats.to_csv(f"../model_output/bifurcation_summary_{tag}.csv", index=False)
     print_report(stats)
-    fig_bifurcation(df, stats,
-                    f"../visualisations_output/bifurcation_diagram_{tag}.pdf")
-    fig_panel_a(df, stats,
-                f"../visualisations_output/bifurcation_panelA_{tag}.pdf")
+    if not args.no_plots:
+        fig_bifurcation(df, stats,
+                        f"../visualisations_output/bifurcation_diagram_{tag}.pdf")
+        fig_panel_a(df, stats,
+                    f"../visualisations_output/bifurcation_panelA_{tag}.pdf")
     print("\nINFO: done.")
 
 
