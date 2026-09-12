@@ -30,8 +30,15 @@ Read the gap with the churn factor quoted. The model converts ~6.2 times per con
 the ledger takes no debits, so under credit/delta it is paid for repeat conversions that a
 no-reversion null cannot make.
 
+--unit time (default since 2026-09-11) scores on the reported veg-time ledger: A = downstream
+vegetarian-time / own vegetarian-time, both truncated at each arm's stop, outputs suffixed
+_vegtime, panel a showing 1 + A over agents ever vegetarian. Nulls stop at the model's F_veg,
+not at a common time, so a slow arm (CF1', ~2.4M steps) accrues its initial vegetarians' own
+time over a longer window; read its level with that in mind. --unit event reproduces the
+2026-09-08 event-count figure.
+
 Usage:
-    python dynamics_null.py <reduced_dir> --t-end 310000 [--runs 50] [--seed 0]
+    python dynamics_null.py <reduced_dir> --t-end 310000 [--runs 50] [--seed 0] [--unit time]
 """
 import os, sys, glob, pickle, argparse, csv
 import numpy as np
@@ -39,11 +46,12 @@ import matplotlib
 matplotlib.use('Agg')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from attribution_ledger import replay, _concentration, _veg_count, conv_counts
+from attribution_ledger import replay, veg_time, _concentration, _veg_count, conv_counts
 from naive_counterfactuals import BANDS, rrt_rank_law
 from kappa_ledger import PRIMARY, _degrees, OUT
 
-REPORTED_B = 0.78          # manuscript-v2.tex:110, the submitted sub-linear exponent
+# submitted sub-linear exponent (event-count era); veg-time b in the revised text (:117)
+REPORTED_B = {'event': 0.78, 'time': 1.17}
 
 
 # ------------------------------------------------------------------ simulation
@@ -121,19 +129,30 @@ def simulate(nbr, initial_diets, immune, M, target_f, rng, ceiling):
 
 
 # --------------------------------------------------------------------- scoring
-def _stats(credit, delta, label, extra):
-    """Per-agent distribution over credited agents, plus the system ratio -- total credit
-    per conversion event, which is what the level of the distribution rests on once the
-    model's repeat conversions are divided out."""
-    a = credit[credit > 0] / delta
+def _score(events, d0, p, t, unit, n_conv):
+    """(A per agent, credited mask, panel-a pool mask, system ratio). Event unit: A =
+    credit/delta, system = total credit per conversion event, which is what the level rests
+    on once the model's repeat conversions are divided out. Time unit (the reported ledger):
+    A = downstream / own vegetarian-time, system = total credit / total own time, as
+    vegtime_accounting.py."""
+    delta = p['meat_CO2'] - p['veg_CO2']
+    c = replay(events, d0, p, t_end=t, **dict(PRIMARY, unit=unit))
+    if unit == 'event':
+        return c / delta, c > 0, np.ones(len(c), bool), c.sum() / (delta * n_conv)
+    own = veg_time(events, d0, t)
+    A = np.divide(c, delta * own, out=np.zeros_like(c), where=own > 0)
+    return A, c > 0, own > 0, c.sum() / (delta * own.sum())
+
+
+def _stats(A, cred, sys_amp, label, extra):
+    """Per-agent distribution over credited agents, plus the system ratio."""
+    a = A[cred]
     return dict(model=label, mean=a.mean(), median=np.median(a),
                 p90=np.percentile(a, 90), p99=np.percentile(a, 99), max=a.max(),
-                n_credited=len(a), sys_amp=credit.sum() / (delta * extra['n_conv']),
-                **_concentration(a), **extra)
+                n_credited=len(a), sys_amp=sys_amp, **_concentration(a), **extra)
 
 
-def _bands(credit, delta, deg):
-    A = credit / delta
+def _bands(A, deg):
     out = {}
     for lo, hi in BANDS:
         m = (deg >= lo) & (deg <= hi)
@@ -156,7 +175,11 @@ def main():
     ap.add_argument('--seed', type=int, default=0)
     ap.add_argument('--ceiling', type=int, default=12_000_000,
                     help='step ceiling for a null run that never reaches the target')
+    ap.add_argument('--unit', choices=('event', 'time'), default='time',
+                    help="ledger unit: 'time' = reported veg-time ledger (outputs _vegtime), "
+                         "'event' = the 2026-09-08 event-count scoring")
     a = ap.parse_args()
+    sfx = '' if a.unit == 'event' else '_vegtime'
 
     te = a.t_end
     rows, bands = [], {L: [] for L in LABELS}
@@ -180,12 +203,12 @@ def main():
         nconv = conv_counts(ev, d0, te)
         n_conv, n_cvt = int(nconv.sum()), int((nconv > 0).sum())
         deg, kdeg = _degrees(run, te)
-        credit = replay(ev, d0, p, t_end=te, **PRIMARY)
-        rows.append(_stats(credit, delta, LABELS[0],
+        A, cred, pool, sa = _score(ev, d0, p, te, a.unit, n_conv)
+        rows.append(_stats(A, cred, sa, LABELS[0],
                            dict(run=nm, t_end=te, f_veg=target, n_conv=n_conv,
                                 churn=n_conv / n_cvt, n_adopters=n_cvt)))
-        bands[LABELS[0]].append(_bands(credit, delta, deg))
-        pooled[LABELS[0]].append(credit / delta)
+        bands[LABELS[0]].append(_bands(A, deg))
+        pooled[LABELS[0]].append(A if a.unit == 'event' else 1 + A[pool])
 
         for label, nbr in ((LABELS[1], _neighbours(edges, n)),
                            (LABELS[2], _er_neighbours(n, len(edges), rng)),
@@ -195,25 +218,25 @@ def main():
                 print(f"WARNING: {nm} {label} stopped at F_veg={f_end:.3f} < {target:.3f} "
                       f"after {t_stop} steps", flush=True)
             nd = np.array([len(x) for x in nbr], float)
-            c = replay(events, d0, p, t_end=t_stop, **PRIMARY)
-            rows.append(_stats(c, delta, label,
+            A, cred, pool, sa = _score(events, d0, p, t_stop, a.unit, len(events))
+            rows.append(_stats(A, cred, sa, label,
                                dict(run=nm, t_end=t_stop, f_veg=f_end, n_conv=len(events),
                                     churn=1.0, n_adopters=len(events))))
-            bands[label].append(_bands(c, delta, nd))
-            pooled[label].append(c / delta)
+            bands[label].append(_bands(A, nd))
+            pooled[label].append(A if a.unit == 'event' else 1 + A[pool])
             if label == LABELS[1]:
                 adopters.append(len(events))
         print(f"INFO: {nm} done (model degrees from snapshot {kdeg}, target "
               f"F_veg={target:.3f})", flush=True)
 
     keys = [k for k in rows[0] if k not in ('run', 'model')]
-    out = os.path.join(a.reduced_dir, 'dynamics_null_per_run.csv')
+    out = os.path.join(a.reduced_dir, f'dynamics_null_per_run{sfx}.csv')
     with open(out, 'w', newline='') as f:
         w = csv.DictWriter(f, ['run', 'model'] + keys)
         w.writeheader(); w.writerows(rows)
     print(f"INFO: wrote {out}")
 
-    bout = os.path.join(a.reduced_dir, 'dynamics_null_bands.csv')
+    bout = os.path.join(a.reduced_dir, f'dynamics_null_bands{sfx}.csv')
     with open(bout, 'w', newline='') as f:
         w = csv.writer(f)
         w.writerow(('model', 'k_lo', 'k_hi', 'n', 'k_mean', 'A_mean', 'A_over_k'))
@@ -229,9 +252,9 @@ def main():
 
     # ---- table
     print(f"\n{len(paths)} runs, model scored at t_end={te}, nulls at their own F_veg "
-          f"stop, primary convention (exposure parents, no dwell, event unit, lambda 0.7)")
+          f"stop, exposure parents, no dwell, {a.unit} unit, lambda 0.7; bare A")
     print(f"{'':22}{'mean':>8}{'median':>8}{'p90':>8}{'p99':>8}{'max':>8}{'gini':>8}"
-          f"{'top1':>8}{'top10':>8}{'credited':>9}{'churn':>7}{'per conv':>9}")
+          f"{'top1':>8}{'top10':>8}{'credited':>9}{'churn':>7}{'system':>9}")
     for L in LABELS:
         r = [x for x in rows if x['model'] == L]
         m = {k: np.median([x[k] for x in r]) for k in
@@ -248,15 +271,17 @@ def main():
         v = np.sort(np.concatenate(pooled[L]))[::-1]
         ax.plot(np.arange(1, len(v) + 1) / len(v) * 100, v, lw=1.2, color=col,
                 label=DISPLAY.get(L, L))
-    Ma = int(round(np.mean(adopters)))          # reversion-free cascade size, as CF1's
-    ana = rrt_rank_law(Ma)
-    ax.plot(np.arange(1, Ma + 1) / Ma * 100, ana, 'k--', lw=1.0,
-            label='CF1 analytic $E[A|k]$')
+    if a.unit == 'event':                       # the rank law is an event-count reference
+        Ma = int(round(np.mean(adopters)))      # reversion-free cascade size, as CF1's
+        ana = rrt_rank_law(Ma)
+        ax.plot(np.arange(1, Ma + 1) / Ma * 100, ana, 'k--', lw=1.0,
+                label='CF1 analytic $E[A|k]$')
     ch = np.median([x['churn'] for x in rows if x['model'] == LABELS[0]])
     ax.text(0.97, 0.72, f'model: {ch:.1f} conversions/converter\nnulls: 1 (no reversion)',
             transform=ax.transAxes, fontsize=5.5, ha='right', va='top', color='#777')
-    ax.set(xlabel='Agent rank [%]', ylabel='Amplification factor $A$',
-           xlim=(0, 100), ylim=(1e-2, None), yscale='log')
+    ax.set(xlabel='Agent rank [%]',
+           ylabel='Amplification factor ' + ('$A$' if a.unit == 'event' else '$1 + A$'),
+           xlim=(0, 100), ylim=(1e-2 if a.unit == 'event' else 0.9, None), yscale='log')
     ax.set_title('a  distribution vs naive-dynamics nulls', fontsize=8, loc='left')
     ax.legend(fontsize=6, frameon=False)
 
@@ -280,8 +305,9 @@ def main():
             kk_m, mu_m = kk, mu
     k0 = np.array([kk_m[0], kk_m[-1]], float)
     bx.plot(k0, mu_m[0] * (k0 / kk_m[0]), 'k--', lw=0.9, label='linear, $A \\propto k$')
-    bx.plot(k0, mu_m[0] * (k0 / kk_m[0]) ** REPORTED_B, ':', color='#c33', lw=1.1,
-            label=f'reported $A \\propto k^{{{REPORTED_B}}}$')
+    rb = REPORTED_B[a.unit]
+    bx.plot(k0, mu_m[0] * (k0 / kk_m[0]) ** rb, ':', color='#c33', lw=1.1,
+            label=f'reported $A \\propto k^{{{rb}}}$')
     bx.set(xscale='log', yscale='log', xlabel='Degree $k$',
            ylabel='Mean amplification $E[A|k]$')
     bx.set_title('b  degree scaling, zeros kept', fontsize=8, loc='left')
@@ -293,8 +319,8 @@ def main():
     fig.tight_layout()
     os.makedirs(OUT, exist_ok=True)
     for ext in ('pdf', 'png'):
-        fig.savefig(f'{OUT}/naive_counterfactuals.{ext}', dpi=300, bbox_inches='tight')
-    print(f"\nINFO: wrote {OUT}/naive_counterfactuals.pdf")
+        fig.savefig(f'{OUT}/naive_counterfactuals{sfx}.{ext}', dpi=300, bbox_inches='tight')
+    print(f"\nINFO: wrote {OUT}/naive_counterfactuals{sfx}.pdf")
 
 
 if __name__ == '__main__':
