@@ -32,7 +32,7 @@ no-reversion null cannot make.
 
 --unit time (default since 2026-09-11) scores on the reported veg-time ledger: A = downstream
 vegetarian-time / own vegetarian-time, both truncated at each arm's stop, outputs suffixed
-_vegtime, panel a showing 1 + A over agents ever vegetarian. Nulls stop at the model's F_veg,
+_vegtime, panel a showing the amplification factor A over agents ever vegetarian. Nulls stop at the model's F_veg,
 not at a common time, so a slow arm (CF1', ~2.4M steps) accrues its initial vegetarians' own
 time over a longer window; read its level with that in mind. --unit event reproduces the
 2026-09-08 event-count figure.
@@ -280,7 +280,7 @@ def main():
     ax.text(0.97, 0.72, f'model: {ch:.1f} conversions/converter\nnulls: 1 (no reversion)',
             transform=ax.transAxes, fontsize=5.5, ha='right', va='top', color='#777')
     ax.set(xlabel='Agent rank [%]',
-           ylabel='Amplification factor ' + ('$A$' if a.unit == 'event' else '$1 + A$'),
+           ylabel='Amplification factor $A$',
            xlim=(0, 100), ylim=(1e-2 if a.unit == 'event' else 0.9, None), yscale='log')
     ax.set_title('a  distribution vs naive-dynamics nulls', fontsize=8, loc='left')
     ax.legend(fontsize=6, frameon=False)
@@ -304,12 +304,13 @@ def main():
         if kk_m is None:
             kk_m, mu_m = kk, mu
     k0 = np.array([kk_m[0], kk_m[-1]], float)
-    bx.plot(k0, mu_m[0] * (k0 / kk_m[0]), 'k--', lw=0.9, label='linear, $A \\propto k$')
+    sym = 'A' if a.unit == 'event' else 'A-1'   # veg-time: bands hold the downstream-only ratio
+    bx.plot(k0, mu_m[0] * (k0 / kk_m[0]), 'k--', lw=0.9, label=f'linear, ${sym} \\propto k$')
     rb = REPORTED_B[a.unit]
     bx.plot(k0, mu_m[0] * (k0 / kk_m[0]) ** rb, ':', color='#c33', lw=1.1,
-            label=f'reported $A \\propto k^{{{rb}}}$')
+            label=f'reported ${sym} \\propto k^{{{rb}}}$')
     bx.set(xscale='log', yscale='log', xlabel='Degree $k$',
-           ylabel='Mean amplification $E[A|k]$')
+           ylabel=f'Mean ${sym}$ by degree, $E[{sym}\\,|\\,k]$')
     bx.set_title('b  degree scaling, zeros kept', fontsize=8, loc='left')
     bx.legend(fontsize=6, frameon=False)
     for a_ in (ax, bx):
