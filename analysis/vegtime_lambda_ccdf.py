@@ -1,10 +1,11 @@
-"""SI lambda figure on the reported ledger: CCDF of the amplification factor 1 + A
+"""SI lambda figure on the reported ledger: CCDF of the amplification factor A
 (veg-time, exposure parents, no dwell weight) at lambda 0.5-1.0, pooled over the kappa
 ensemble at t = 310,000. A ledger-only replay with the dynamics fixed, so every curve is
 the same 50 runs. Replaces the pre-kappa, event-count sweep figure drawn by
 sensitivity_campaign.fig_lambda. Numbers: claude_stuff/Review/
-amplification_accounting_final_2026-09-09.md s.3b (reported there as A; here 1 + A,
-the factor Fig. 2 shows).
+amplification_accounting_final_2026-09-09.md s.3b (reported there as the bare
+downstream ratio A - 1; here the amplification factor A = 1 + (A - 1), the quantity
+Fig. 2 shows and the symbol the paper uses since 2026-09-12).
 
 Usage:
     python vegtime_lambda_ccdf.py <reduced_dir> [--t-end 310000] [--cores 3]
@@ -51,7 +52,7 @@ if __name__ == '__main__':
                 ls='-' if base else '--', zorder=3 if base else 2,
                 label=rf"$\lambda={v:g}$" + (" (default)" if base else ""))
     ax.set_xscale('log'); ax.set_yscale('log')
-    ax.set_xlabel("amplification factor, $1 + A$")
+    ax.set_xlabel("amplification factor, $A$")
     ax.set_ylabel(r"CCDF  $P(X>x)$")
     ax.legend(frameon=False, fontsize=7, loc='lower left', handlelength=1.8,
               borderpad=0.2, labelspacing=0.35)
