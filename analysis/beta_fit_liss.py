@@ -11,6 +11,12 @@ beta and the number of activations between waves are not jointly identified (the
 timescale problem), so beta is reported under fixed conventions: one update per wave
 (Galesic et al. 2021's fitting convention) and the stationary limit.
 
+kappa (2026-09-12): the model applies rho_eff = kappa * rho before the hamiltonian
+(model_main.py:263), adopted 2026-09-03, the day after this script was written. Fitting at
+face value leaves the intention-behaviour gap to be absorbed by the slope, which flattens
+beta; the kappa=0.55 row is the anchor for the model as it now runs. The kappa=1.00 row is
+kept because it is the 4.5/4.7 quoted in beta_empirical_anchors_2026-09-02.md s.3.1.
+
 Run from the repo root:  python analysis/beta_fit_liss.py
 """
 import numpy as np
@@ -18,6 +24,7 @@ import pandas as pd
 from scipy.stats import binom
 
 M, GATE_C, GATE_K, A_MIN, A_MAX = 9, 0.35, 35, 0.05, 0.80  # model_runn.DEFAULT_PARAMS
+KAPPA = 0.55                                            # model_runn.DEFAULT_PARAMS, 2026-09-03
 BETAS = np.exp(np.linspace(np.log(0.5), np.log(300), 400))
 LISS = "data/data_construction_paper/su19a_EN_1.0p.dta"
 
@@ -69,13 +76,17 @@ def main():
     print(f"INFO: n={len(d)} complete cases, F_2018={F:.4f}, "
           f"m->v={((y0 == 0) & (y1 == 1)).sum()}, v->m={((y0 == 1) & (y1 == 0)).sum()}")
     print(f"{'convention':22s} {'rho coding':12s} {'beta_hat':>8s}  95% profile CI")
-    # rho in the CSV is the corrected coding (1 = "Yes, definitely"; fixed 2026-09-02);
-    # the second row reproduces the pre-correction (inverted) coding for the record.
-    for rlab, rho in [("corrected", d.rho.values), ("old inverted", 1 - d.rho.values)]:
+    # rho in the CSV is the corrected coding (1 = "Yes, definitely"; fixed 2026-09-02).
+    # kappa=0.55 is the model as it runs; kappa=1.00 reproduces the 2026-09-02 anchor.
+    for rlab, rho in [(f"kappa={KAPPA:.2f}", KAPPA * d.rho.values),
+                      ("kappa=1.00", d.rho.values),
+                      ("old inverted", 1 - d.rho.values)]:
         for nlab, n in [("one update per wave", 1), ("stationary limit", None)]:
             b, lo, hi = fit(n, y0, y1, rho, t, w, F)
             print(f"{nlab:22s} {rlab:12s} {b:8.1f}  [{lo:.1f}, {hi:.1f}]")
     print("NOTE: our beta scale; Galesic-equivalent = beta/2 (see boltzmann_model.md).")
+    print(f"NOTE: quote the kappa={KAPPA:.2f} rows; the kappa=1.00 rows fit a model we no "
+          "longer run.")
 
 
 if __name__ == "__main__":
