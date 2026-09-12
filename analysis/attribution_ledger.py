@@ -81,7 +81,7 @@ def _exposure_parents(buffer, j, gamma, t_conv):
 
 
 def replay(events, initial_diets, params, parent="last", weight="none", unit="event",
-           decay=None, t_end=None, gamma=None, cycle="stint", flow=None):
+           decay=None, t_end=None, gamma=None, cycle="stint", flow=None, by_depth=None):
     """Return credit per agent in kg CO2 (same units as reduction_out).
 
     events        list of ("conv", t, i, partner, partner_diet, buffer) / ("rev", t, i)
@@ -93,6 +93,8 @@ def replay(events, initial_diets, params, parent="last", weight="none", unit="ev
     flow          if a dict, receives (source, child) -> [depth-1 credit, credit paid
                   through that hop at every depth]. Every hop is a network edge, so it
                   decomposes the credit by the link it last travelled (walk_events only).
+    by_depth      if a dict, receives depth -> credit paid at that cascade depth; its values
+                  sum to the credit vector's total.
     """
     if cycle == "visited" and parent != "last":
         raise ValueError("cycle='visited' reproduces the simulation and exists for parent='last' only")
@@ -114,7 +116,10 @@ def replay(events, initial_diets, params, parent="last", weight="none", unit="ev
         if weight == "dwell":
             dur = (t - change_time[p]) if change_time[p] is not None else t
             mass = mass * (1.0 - np.exp(-dur / tau_p))
-        credit[p] += amount * mass * (decay ** (depth - 1))
+        paid = amount * mass * (decay ** (depth - 1))
+        credit[p] += paid
+        if by_depth is not None:
+            by_depth[depth] = by_depth.get(depth, 0.0) + paid
 
     def walk_events(links, amount, t):
         """Level-synchronous walk over the event graph, additive over paths. A frontier
