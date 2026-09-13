@@ -34,7 +34,20 @@ tree; the arm is one of its direct children and that child's subtree.
 
 --layout agents: agent x sweep lattice with every event-graph link in grey; rows are the
   arm's agents as a depth-first block, the rest in spectral order.
-Row position carries no meaning beyond adjacency in either layout.
+
+--layout band: the agents layout opened up. The focus cascade (--focus arm, default, or the
+  root's whole tree) gets a central band of --band of the figure height, one row per agent
+  in depth-first order; the other agents are packed above and below in spectral order.
+  Colour is cascade depth (generations below the root) on a sequential map that fades
+  toward the ground, so the root is saturated and the outermost generations diffuse into
+  the grey context; link alpha and dot size fall with depth the same way. Each focus event
+  also draws its stint as a faint lifeline along the row (Didelot Fig. 1A), and --reinforce
+  adds the non-tree links between focus events as hairlines, so multi-source reinforcement
+  is visible. --ground dark inverts the page. Band rows are in centred tree order (each
+  parent in the middle of its children's rows, so a hub fans both ways); --order spectral
+  uses the Fiedler vector of the focus subgraph instead, so links cross more and the
+  cascade spreads. --axis adds a minimal time axis in sweeps.
+Row position carries no meaning beyond adjacency in any layout.
 
 Usage: python cascade_overview.py <run.pkl> [--layout L] [--root I] [--arm R] [--out PATH]
   run.pkl: a trajectory ensemble DataFrame (row --run) or a dict with events/initial_diets/params
@@ -160,6 +173,60 @@ def reverted(events, initial_diets, t_end):
     return out
 
 
+def depths(kids, root):
+    d, st = {root: 0}, [root]
+    while st:
+        n = st.pop()
+        for c in kids.get(n, []):
+            d[c] = d[n] + 1; st.append(c)
+    return d
+
+
+def centred_order(kids, root, nodes, fset):
+    """Tree-in-a-line order with each parent in the middle of its children's blocks:
+    children (time order) alternate to the left and right of the parent, recursively, so
+    a hub fans both ways instead of piling onto one side. Iterative, in-order emission."""
+    out, st = [], [(root, False)]
+    while st:
+        n, seen = st.pop()
+        if seen:
+            out.append(n); continue
+        cs = sorted((c for c in kids.get(n, []) if c in fset), key=lambda c: nodes[c][1])
+        left, right = cs[0::2], cs[1::2]
+        # stack is LIFO: push right block (reversed), then the node, then left block
+        for c in reversed(right):
+            st.append((c, False))
+        st.append((n, True))
+        for c in reversed(left):
+            st.append((c, False))
+    return out
+
+
+def stint_end(events, initial_diets, t_end):
+    """node -> step its stint ended (t_end if it lasts)."""
+    open_ = {i: ("init", i) for i, d in enumerate(initial_diets) if d == "veg"}
+    end = {n: t_end for n in open_.values()}
+    for k, ev in enumerate(events):
+        if ev[1] > t_end:
+            break
+        if ev[0] == "conv":
+            open_[ev[2]] = k; end[k] = t_end
+        elif ev[2] in open_:
+            end[open_.pop(ev[2])] = ev[1]
+    return end
+
+
+def depth_cmap(name, dark):
+    """Sequential map from the saturated root colour to a tint near the ground."""
+    from matplotlib.colors import LinearSegmentedColormap
+    if name == "ink":
+        stops = ["#2f0a52", "#5b2a86", "#8f62bd", "#bfa3d9", "#e2d6ee"]
+        if dark:
+            stops = ["#f3e8ff", "#c9a4f0", "#9a6fd0", "#5f3f96", "#2c1f45"]
+        return LinearSegmentedColormap.from_list("ink", stops)
+    return plt.get_cmap(name)
+
+
 def curves(p, q, bow=0.12, n=14):
     """Quadratic Beziers p->q (arrays (L, 2), display units), bowed perpendicular."""
     d = q - p
@@ -183,14 +250,165 @@ def rounded_elbow(p, q, rad, n=9):
     return np.concatenate([p[:, None], bez, q[:, None]], axis=1)
 
 
+def draw_band(a, events, diets, nodes, links, kids, kid_of, root, focus, t_end, N, W, H):
+    dark = a.ground == "dark"
+    page = "#101014" if dark else "white"
+    grey_link = "#3a3a44" if dark else GREY_LINK
+    grey_node = "#55555f" if dark else GREY_NODE
+    cmap = depth_cmap(a.cmap, dark)
+    fset = set(focus)
+    depth = depths(kids, root)
+    dmax = max(1, max(depth[n] for n in focus))
+    end = stint_end(events, diets, t_end)
+
+    # rows: focus agents (first appearance in depth-first order, or Fiedler order of the
+    # focus influence graph) fill a central band; everyone else is spectral-ordered on the
+    # whole share-weighted graph and split above and below
+    G = nx.Graph()
+    G.add_nodes_from(range(N))
+    for s, c, w in links:
+        u, v = nodes[s][0], nodes[c][0]
+        if u != v:
+            G.add_edge(u, v, weight=G.get_edge_data(u, v, {"weight": 0})["weight"] + w)
+    block = list(dict.fromkeys(nodes[n][0] for n in centred_order(kids, root, nodes, fset)))
+    if a.order == "spectral" and len(block) > 2:
+        sub = G.subgraph(block)
+        comp = max(nx.connected_components(sub), key=len)
+        fo = nx.spectral_ordering(sub.subgraph(comp), weight="weight", seed=0)
+        block = fo + [i for i in block if i not in comp]
+    bset = set(block)
+    rest = [i for i in nx.spectral_ordering(G, weight="weight", seed=0) if i not in bset]
+    h = len(rest) // 2
+    order = rest[:h] + block + rest[h:]
+    # lens spacing: focus rows get unit spacing, context rows the spacing that leaves the
+    # focus block --band of the height, smoothed over ~40 rows so the band has no edge
+    w = np.full(N, (1 - a.band) / a.band * len(block) / max(1, len(rest)))
+    w[h:h + len(block)] = 1.0
+    sig = max(4, min(40, len(block) // 4))
+    k = np.exp(-0.5 * (np.arange(-3 * sig, 3 * sig + 1) / sig) ** 2)
+    w = np.convolve(np.pad(w, 3 * sig, mode="edge"), k / k.sum(), mode="valid")
+    cum = np.concatenate([[0], np.cumsum(w)])
+    y = np.empty(N)
+    y[order] = (cum[:-1] + cum[1:]) / 2 / cum[-1] * H
+    xy = {n: np.array([t / t_end * W, y[i]]) for n, (i, t) in nodes.items()}
+    xe = {n: np.array([end[n] / t_end * W, y[nodes[n][0]]]) for n in nodes}
+
+    fig = plt.figure(figsize=(W, H), facecolor=page)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_facecolor(page)
+
+    # context: every agent's stints as hairline lifelines, every event-graph link, tiny dots
+    ctx = [n for n in nodes if n not in fset]
+    if ctx:
+        ax.scatter(*np.array([xy[n] for n in ctx]).T, s=0.15, c=grey_node, lw=0, alpha=0.3,
+                   rasterized=True, zorder=2)
+    grey = [(s, c) for s, c, _ in links if c not in fset]
+    if grey:
+        P = np.array([[xy[s], xy[c]] for s, c in grey])
+        ax.add_collection(LineCollection(curves(P[:, 0], P[:, 1]), colors=grey_link, lw=0.08,
+                                         alpha=min(0.5, 12000 / len(grey)), rasterized=True,
+                                         zorder=1))
+
+    # focus: colour, alpha and pen weight by depth, root saturated, leaves diffusing
+    shade = lambda d: cmap(0.9 * d / dmax)
+    fade = lambda d: 1.0 - 0.6 * d / dmax
+    # hub fans (the root has ~300 children) are thinned by the parent's out-degree so they
+    # read as a gradient rather than a solid wedge
+    kids_f = [n for n in focus if n in kid_of and kid_of[n] in fset]
+    deg = defaultdict(int)
+    for c in kids_f:
+        deg[kid_of[c]] += 1
+    hub = lambda c: min(1.0, (12 / deg[kid_of[c]]) ** 0.5)
+    if kids_f:
+        Q = np.array([[xy[kid_of[c]], xy[c]] for c in kids_f])
+        cols = [(*shade(depth[c])[:3], fade(depth[c]) * hub(c)) for c in kids_f]
+        lws = [0.9 - 0.55 * depth[c] / dmax for c in kids_f]
+        ax.add_collection(LineCollection(curves(Q[:, 0], Q[:, 1]), colors=cols, lw=lws,
+                                         zorder=3, capstyle="round"))
+    if a.reinforce:
+        extra = [(s, c) for s, c, _ in links if c in fset and s in fset and kid_of.get(c) != s]
+        if extra:
+            P = np.array([[xy[s], xy[c]] for s, c in extra])
+            cols = [(*shade(depth[c])[:3], 0.35 * fade(depth[c])) for _, c in extra]
+            ax.add_collection(LineCollection(curves(P[:, 0], P[:, 1], bow=-0.08), colors=cols,
+                                             lw=0.25, zorder=2.5))
+    L = np.array([[xy[n], xe[n]] for n in focus])
+    ax.add_collection(LineCollection(L, colors=[(*shade(depth[n])[:3], 0.3 * fade(depth[n]))
+                                                for n in focus], lw=1.0, zorder=2.8))
+    pts = np.array([xy[n] for n in focus])
+    s0 = 16 if len(focus) < 400 else 5
+    ax.scatter(*pts.T, s=[s0 * (1 - 0.8 * depth[n] / dmax) + 1.0 for n in focus],
+               c=[shade(depth[n]) for n in focus], ec=a.outline or "none",
+               lw=0.3 if a.outline else 0, zorder=4)
+    ax.scatter(*xy[root], s=48, c=[shade(0)], ec=a.outline or page, lw=1.0, zorder=5)
+    if a.legend:
+        # minimal: the depth gradient and one lifeline glyph; the grey context goes in the
+        # caption. Sits on the axis baseline row, left, opposite the "sweeps" label.
+        ink = "#8a8a94" if dark else "#6f6f6f"
+        yl, dx = -0.16 * H, 0.022 * W
+        ax.text(0, yl, "generation", ha="left", va="center", fontsize=6, color=ink,
+                style="italic")
+        x0 = 0.075 * W
+        for d in range(dmax + 1):
+            ax.scatter(x0 + d * dx, yl, s=s0 * (1 - 0.8 * d / dmax) + 1.0, c=[shade(d)],
+                       ec=a.outline or "none", lw=0.3 if a.outline else 0, clip_on=False,
+                       zorder=6)
+            ax.text(x0 + d * dx, yl - 0.035 * H, str(d), ha="center", va="top", fontsize=5,
+                    color=ink)
+        x1 = x0 + (dmax + 1.5) * dx
+        ax.plot([x1, x1 + 2 * dx], [yl, yl], color=(*shade(1)[:3], 0.3), lw=1.0, clip_on=False)
+        ax.text(x1 + 2.4 * dx, yl, "vegetarian stint", ha="left", va="center", fontsize=6,
+                color=ink, style="italic")
+    if a.axis:
+        sweep = 2 * N
+        step = 10 ** int(np.log10(t_end / sweep / 4))
+        ticks = np.arange(0, t_end / sweep + 1e-9, step)
+        ink = "#8a8a94" if dark else "#6f6f6f"
+        ax.plot([0, W], [-0.045 * H] * 2, color=ink, lw=0.5, clip_on=False)
+        for t in ticks:
+            x = t * sweep / t_end * W
+            ax.plot([x, x], [-0.045 * H, -0.06 * H], color=ink, lw=0.5, clip_on=False)
+            ax.text(x, -0.07 * H, f"{t:g}", ha="center", va="top", fontsize=6, color=ink)
+        ax.text(W, -0.115 * H, "sweeps", ha="right", va="top", fontsize=6, color=ink,
+                style="italic")
+        ax.set_ylim(-0.23 * H if a.legend else -0.16 * H, 1.01 * H)
+    else:
+        ax.set_ylim(-0.01 * H, 1.01 * H)
+    ax.set_xlim(-0.02 * W, 1.01 * W)
+    ax.axis("off")
+    fig.savefig(a.out, dpi=600, facecolor=page)
+    fig.savefig(a.out.rsplit(".", 1)[0] + ".png", dpi=300, facecolor=page)
+    print(f"wrote {a.out}  (focus {len(focus)} events, {len(block)} agents, depth {dmax})")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("pkl")
     ap.add_argument("--run", type=int, default=0)
     ap.add_argument("--root", type=int, default=None, help="default: largest main-cause tree")
     ap.add_argument("--arm", type=int, default=0, help="rank of the root's child subtrees by size")
-    ap.add_argument("--layout", choices=["tree", "agents"], default="tree",
-                    help="tree: main-cause forest, Didelot Fig. 5 style; agents: agent x sweep lattice")
+    ap.add_argument("--layout", choices=["tree", "agents", "band"], default="tree",
+                    help="tree: main-cause forest, Didelot Fig. 5 style; agents: agent x sweep "
+                         "lattice; band: agent rows with the focus cascade in a wide central band, "
+                         "coloured by depth")
+    ap.add_argument("--focus", choices=["arm", "tree"], default="arm",
+                    help="band layout: colour the chosen arm or the root's whole tree")
+    ap.add_argument("--band", type=float, default=0.6,
+                    help="band layout: fraction of the height given to the focus agents")
+    ap.add_argument("--order", choices=["centred", "spectral"], default="centred",
+                    help="band layout: row order inside the band (centred: each parent in the "
+                         "middle of its children's rows)")
+    ap.add_argument("--axis", action="store_true", help="band layout: a minimal time axis in sweeps")
+    ap.add_argument("--cmap", default="ink",
+                    help="band layout: 'ink' (violet fading to the ground) or a matplotlib name")
+    ap.add_argument("--ground", choices=["light", "dark"], default="light")
+    ap.add_argument("--outline", default=None, metavar="COLOR",
+                    help="band layout: edge colour for the focus dots (default none)")
+    ap.add_argument("--legend", action="store_true",
+                    help="band layout: minimal legend (generation gradient, stint glyph) on "
+                         "the axis row; needs --axis")
+    ap.add_argument("--reinforce", action="store_true",
+                    help="band layout: draw the non-tree links between focus events as hairlines")
     ap.add_argument("--scope", choices=["root", "all"], default="root",
                     help="tree layout: the root's tree only, or the whole forest")
     ap.add_argument("--top", type=int, default=None, metavar="K",
@@ -235,6 +453,10 @@ def main():
 
     W, H = a.size
     kid_of = {c: s for s, cs in kids.items() for c in cs}
+    if a.layout == "band":
+        focus = [root] + subtree(kids, root) if a.focus == "tree" else arm
+        draw_band(a, events, diets, nodes, links, kids, kid_of, root, focus, t_end, N, W, H)
+        return
     if a.layout == "agents":
         # rows: the arm's agents as one block in depth-first tree order (parent and child
         # rows adjacent), the rest by spectral ordering of the share-weighted influence
