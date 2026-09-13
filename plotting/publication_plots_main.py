@@ -787,7 +787,8 @@ def plot_network_agency_evolution_ensemble(
         Patch(facecolor='#2a9d8f', edgecolor='#333', linewidth=0.4, label='Vegetarian'),
         Patch(facecolor='#e76f51', edgecolor='#333', linewidth=0.4, label='Meat eater'),
         Patch(facecolor=COL_TOP10, edgecolor='#333', linewidth=0.4, label='Top 10% reducers'),
-        Patch(facecolor=COL_TOP1, edgecolor='#333', linewidth=0.4, label='Top reducer'),
+        Patch(facecolor=COL_TOP1, edgecolor='#333', linewidth=0.4,
+              label='Top reducer from converts' if credit_dir is not None else 'Top reducer'),
     ]
     fig.legend(handles=net_legend, loc='upper center', bbox_to_anchor=(0.5, 0.995),
                ncol=4, fontsize=6.5, frameon=False, handletextpad=0.4, columnspacing=1.0)
@@ -797,6 +798,16 @@ def plot_network_agency_evolution_ensemble(
         net_row = sm_row if dual else big_row
         net_sweep = 2 * len(net_row['initial_diets'])
         net_delta = net_row['params']['meat_CO2'] - net_row['params']['veg_CO2']
+        # One agent followed through the panels (Jordan 2026-09-13): the initial meat eater,
+        # vegetarian at t_end, with the largest own + downstream total at t_end. The top
+        # reducer overall started vegetarian and says nothing about what a switch achieves.
+        d0 = np.asarray(net_row['initial_diets'])
+        fin_diets = sm_analysis['final']['diets']
+        fin_tot = (replay(net_row['events'], net_row['initial_diets'], net_row['params'],
+                          t_end=sm_final_t, parent='exposure', weight='none', unit='time')
+                   + veg_time(net_row['events'], net_row['initial_diets'], sm_final_t) * net_delta)
+        follow = max((n for n in giant_list if d0[n] != 'veg' and fin_diets[n] == 'veg'),
+                     key=lambda n: fin_tot[n])
 
     # === Row 0: Network snapshots (same as original) ===
     for i, t in enumerate(time_points):
@@ -825,12 +836,13 @@ def plot_network_agency_evolution_ensemble(
         if np.max(reductions) > 0:
             n_top = max(1, int(0.1 * len(reductions)))
             top_idx = np.argsort(reductions)[-n_top:]
-            top_10_nodes = [giant_list[j] for j in top_idx[:-1] if reductions[j] > 0]
+            top_reducer_idx = giant_list.index(follow) if credit_dir is not None else top_idx[-1]
+            top_10_nodes = [giant_list[j] for j in top_idx
+                            if j != top_reducer_idx and reductions[j] > 0]
             if top_10_nodes:
                 nx.draw_networkx_nodes(G, pos_layout, nodelist=top_10_nodes, ax=net_ax,
                                      node_color=COL_TOP10, node_size=10, alpha=0.9,
                                      edgecolors='#333', linewidths=0.2)
-            top_reducer_idx = top_idx[-1]
             if reductions[top_reducer_idx] > 0:
                 nx.draw_networkx_nodes(G, pos_layout, nodelist=[giant_list[top_reducer_idx]], ax=net_ax,
                                      node_color=COL_TOP1, node_size=12, alpha=1.0,
