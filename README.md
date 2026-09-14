@@ -40,6 +40,10 @@ pip install -r requirements_foodfriends.txt --no-deps
 
 ## Workflow
 
+`python run.py` from the repo root runs the two one-time preparation steps (skipped
+if their outputs already exist) followed by the ensemble run. Equivalent to, and run
+in place of, the first three lines below:
+
 ```bash
 cd auxillary && python create_hierarchical_agents.py   # one-time: merge survey files
 cd auxillary && python create_pmf_tables.py            # one-time: imputation PMFs
