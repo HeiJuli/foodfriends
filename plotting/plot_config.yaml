@@ -70,3 +70,19 @@ amplification_ensemble:
   # multipliers_dir set the pkl (whose `reductions` is the submitted in-run ledger) is
   # not read.
   multipliers_dir: trajectory_analysis_twin_20260903_kappa0p55_N2000_reduced
+
+# Cascade overview (Methods figure, plotting/cascade_overview.py). These seed the argparse
+# defaults, so `python cascade_overview.py` with no flags writes the paper version; any flag
+# overrides. Jordan's chosen look (2026-09-14): band layout, ink map, black dot outlines,
+# axis and legend, double-column 7.1 x 2.8 in.
+cascade_overview:
+  pkl: ../model_output/cascade_overview_run_twin_N2000_kappa0p55_seed42_20260910.pkl
+  layout: band
+  cmap: ink
+  outline: black
+  axis: true
+  legend: true
+  size: [7.1, 2.8]
+  # cut at the analysis t_end (310k steps, ~78 sweeps) so the axis matches the paper's window
+  t_end: 310000
+  out: ../visualisations_output/cascade_band/band_ink.pdf

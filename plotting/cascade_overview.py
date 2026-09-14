@@ -219,7 +219,15 @@ def stint_end(events, initial_diets, t_end):
 def depth_cmap(name, dark):
     """Sequential map from the saturated root colour to a tint near the ground."""
     from matplotlib.colors import LinearSegmentedColormap
+    # ink drifts in hue (indigo -> violet -> magenta -> rose) as well as in lightness so
+    # generations 1-8 stay distinguishable on a white ground; ink-mono is the earlier
+    # single-hue ramp, which reviewers read as "nothing changes across the tree"
     if name == "ink":
+        stops = ["#1a0536", "#4b1d85", "#8a3fb3", "#c04fa8", "#e27ba5", "#f3b8c4"]
+        if dark:
+            stops = ["#f8d6dc", "#e58ab0", "#b955ad", "#7c3aa0", "#4a2578", "#2a1848"]
+        return LinearSegmentedColormap.from_list("ink", stops)
+    if name == "ink-mono":
         stops = ["#2f0a52", "#5b2a86", "#8f62bd", "#bfa3d9", "#e2d6ee"]
         if dark:
             stops = ["#f3e8ff", "#c9a4f0", "#9a6fd0", "#5f3f96", "#2c1f45"]
@@ -310,7 +318,7 @@ def draw_band(a, events, diets, nodes, links, kids, kid_of, root, focus, t_end, 
                                          zorder=1))
 
     # focus: colour, alpha and pen weight by depth, root saturated, leaves diffusing
-    shade = lambda d: cmap(0.9 * d / dmax)
+    shade = lambda d: cmap(d / dmax)
     fade = lambda d: 1.0 - 0.6 * d / dmax
     # hub fans (the root has ~300 children) are thinned by the parent's out-degree so they
     # read as a gradient rather than a solid wedge
@@ -335,11 +343,18 @@ def draw_band(a, events, diets, nodes, links, kids, kid_of, root, focus, t_end, 
     L = np.array([[xy[n], xe[n]] for n in focus])
     ax.add_collection(LineCollection(L, colors=[(*shade(depth[n])[:3], 0.3 * fade(depth[n]))
                                                 for n in focus], lw=1.0, zorder=2.8))
-    pts = np.array([xy[n] for n in focus])
+    # filled if the stint lasts to t_end, open (page fill, generation-coloured ring) if the
+    # agent reverts; most stints are shorter than a sweep, so the lifeline alone cannot show it
     s0 = 16 if len(focus) < 400 else 5
-    ax.scatter(*pts.T, s=[s0 * (1 - 0.8 * depth[n] / dmax) + 1.0 for n in focus],
-               c=[shade(depth[n]) for n in focus], ec=a.outline or "none",
-               lw=0.3 if a.outline else 0, zorder=4)
+    size = lambda n: s0 * (1 - 0.8 * depth[n] / dmax) + 1.0
+    for sel, fill in ((lambda n: end[n] >= t_end, True), (lambda n: end[n] < t_end, False)):
+        sub = [n for n in focus if sel(n)]
+        if not sub:
+            continue
+        ax.scatter(*np.array([xy[n] for n in sub]).T, s=[size(n) for n in sub],
+                   c=[shade(depth[n]) for n in sub] if fill else page,
+                   ec=(a.outline or "none") if fill else [shade(depth[n]) for n in sub],
+                   lw=(0.3 if a.outline else 0) if fill else 0.6, zorder=4)
     ax.scatter(*xy[root], s=48, c=[shade(0)], ec=a.outline or page, lw=1.0, zorder=5)
     if a.legend:
         # minimal: the depth gradient and one lifeline glyph; the grey context goes in the
@@ -353,12 +368,21 @@ def draw_band(a, events, diets, nodes, links, kids, kid_of, root, focus, t_end, 
             ax.scatter(x0 + d * dx, yl, s=s0 * (1 - 0.8 * d / dmax) + 1.0, c=[shade(d)],
                        ec=a.outline or "none", lw=0.3 if a.outline else 0, clip_on=False,
                        zorder=6)
-            ax.text(x0 + d * dx, yl - 0.035 * H, str(d), ha="center", va="top", fontsize=5,
+            ax.text(x0 + d * dx, yl - 0.035 * H, str(d), ha="center", va="top", fontsize=6,
                     color=ink)
         x1 = x0 + (dmax + 1.5) * dx
         ax.plot([x1, x1 + 2 * dx], [yl, yl], color=(*shade(1)[:3], 0.3), lw=1.0, clip_on=False)
         ax.text(x1 + 2.4 * dx, yl, "vegetarian stint", ha="left", va="center", fontsize=6,
                 color=ink, style="italic")
+        x2 = x1 + 9.5 * dx
+        ax.scatter(x2, yl, s=s0 * 0.6 + 1, c=[shade(3)], ec=a.outline or "none",
+                   lw=0.3 if a.outline else 0, clip_on=False, zorder=6)
+        ax.text(x2 + 0.6 * dx, yl, "stayed", ha="left", va="center", fontsize=6, color=ink,
+                style="italic")
+        ax.scatter(x2 + 3.4 * dx, yl, s=s0 * 0.6 + 1, c=page, ec=[shade(3)], lw=0.6,
+                   clip_on=False, zorder=6)
+        ax.text(x2 + 4.0 * dx, yl, "reverted", ha="left", va="center", fontsize=6, color=ink,
+                style="italic")
     if a.axis:
         sweep = 2 * N
         step = 10 ** int(np.log10(t_end / sweep / 4))
@@ -383,7 +407,7 @@ def draw_band(a, events, diets, nodes, links, kids, kid_of, root, focus, t_end, 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("pkl")
+    ap.add_argument("pkl", nargs="?", help="default: plot_config.yaml cascade_overview.pkl")
     ap.add_argument("--run", type=int, default=0)
     ap.add_argument("--root", type=int, default=None, help="default: largest main-cause tree")
     ap.add_argument("--arm", type=int, default=0, help="rank of the root's child subtrees by size")
@@ -400,7 +424,8 @@ def main():
                          "middle of its children's rows)")
     ap.add_argument("--axis", action="store_true", help="band layout: a minimal time axis in sweeps")
     ap.add_argument("--cmap", default="ink",
-                    help="band layout: 'ink' (violet fading to the ground) or a matplotlib name")
+                    help="band layout: 'ink' (indigo to rose by generation), 'ink-mono' (the "
+                         "single-hue violet ramp) or a matplotlib name")
     ap.add_argument("--ground", choices=["light", "dark"], default="light")
     ap.add_argument("--outline", default=None, metavar="COLOR",
                     help="band layout: edge colour for the focus dots (default none)")
@@ -422,7 +447,15 @@ def main():
     ap.add_argument("--t-end", type=int, default=None)
     ap.add_argument("--size", type=float, nargs=2, default=(7.2, 2.4), help="inches")
     ap.add_argument("--out", default="../visualisations_output/cascade_overview.pdf")
+    # the paper's settings live in plot_config.yaml (block cascade_overview); flags override
+    cfg = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plot_config.yaml")
+    if os.path.exists(cfg):
+        import yaml
+        with open(cfg) as f:
+            ap.set_defaults(**(yaml.safe_load(f).get("cascade_overview") or {}))
     a = ap.parse_args()
+    if a.pkl is None:
+        ap.error("no pkl given and none in plot_config.yaml")
 
     events, diets, params = load(a.pkl, a.run)
     N, sweep = len(diets), 2 * len(diets)
