@@ -13,7 +13,7 @@ Originally started at the CSH Winterschool.
 
 ```
 .
-├── data/                 Survey inputs and processed parameter tables
+├── data/                 Parameter tables (LISS inputs not included, see LICENSE-DATA)
 ├── model_src/            Core simulation engine and runners
 │   └── testing/          Validation tests
 ├── auxillary/            Data preparation, sampling, network utilities

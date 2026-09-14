@@ -9,12 +9,13 @@ Creates the hierarchical agent dataset from raw survey data.
 
 **Purpose**: Combines theta, rho, and alpha surveys into a single dataset with hierarchical parameter availability (complete cases prioritized over partial cases).
 
-**Input**:
+**Input** (LISS panel extracts; not in the repository, see `../LICENSE-DATA`):
 - `../data/theta_diet_demographics.xlsx`
 - `../data/rho_demographics.xlsx`
 - `../data/alpha_demographics.xlsx`
 
-**Output**:
+**Output** (respondent-level, gitignored; `create_synthetic_agents.py` builds a
+stand-in without LISS access):
 - `../data/hierarchical_agents.csv`
 
 **When to run**: When raw survey data is updated or when recreating the agent population.
