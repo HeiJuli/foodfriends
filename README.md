@@ -205,6 +205,14 @@ Topology options: `homophilic_emp`, `BA`, `complete`, `WS`, `CSF`, `PATCH`,
 
 ---
 
+## Source data
+
+`source_data/` holds the numbers behind every main-figure panel (one CSV per
+panel, mapped in `source_data/README.md`), written by
+`analysis/export_source_data.py` from the ensemble artefacts.
+
+---
+
 ## Licensing
 
 - **Code** — MIT (see `LICENSE`).
