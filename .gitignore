@@ -23,3 +23,6 @@ submission/
 data/data_construction_paper/*.dta
 data/hierarchical_agents.csv
 data/*_demographics.xlsx
+
+# Local run helper: ntfy notification wrapper, not part of the model
+model_src/run_and_notify.sh
