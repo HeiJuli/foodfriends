@@ -277,7 +277,7 @@ def _smooth_derivs(traj, win, burnin, stride=DERIV_STRIDE, poly=3):
 
 
 def _filter_sensitivity(all_data, fracs=(0.02, 0.05, 0.10, 0.20)):
-    """A2: how much of F_c is the Savitzky-Golay window (reviewer R4.3(2), R1.4).
+    """How much of F_c is the Savitzky-Golay window.
 
     Windows are fractions of the run, matching the reporting convention, and each
     is masked by its own width. The previous version swept absolute windows against

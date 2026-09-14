@@ -1,4 +1,4 @@
-"""Calendar anchor for the model clock (R1.5): stint distribution and the years-per-sweep range.
+"""Calendar anchor for the model clock: stint distribution and the years-per-sweep range.
 
 The model has no clock. The native unit is the sweep (2N steps: with the p=0.5 activation
 coin, 2N steps activate every agent once in expectation). This script measures the model's
@@ -26,7 +26,6 @@ T50 = 178013            # ensemble median t_50, ensemble_measures.csv
 STEPS = 400000          # default run length
 
 # Empirical anchors. Each value is verified at the cited source; see
-# claude_stuff/Review/calendar_anchor_results_2026-09-09.md for the quotations.
 EMPIRICAL = {
     "milfont_leave_nomeat_yr": (
         0.212,

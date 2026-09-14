@@ -37,7 +37,6 @@ Generates conditional PMF tables for parameter imputation.
 **When to run**: After updating survey data or when modifying imputation strategy.
 
 ### `sampling_utils.py`
-**STRATIFIED SAMPLING UTILITY** (NEW: 2025-01-27)
 
 Provides demographic-preserving sampling for agent initialization when N < 5602.
 
@@ -56,7 +55,6 @@ Provides demographic-preserving sampling for agent initialization when N < 5602.
 - 78.9% improvement in education preservation
 
 ### `analyze_sample_size.py`
-**OPTIMAL N ANALYSIS TOOL** (NEW: 2025-01-27)
 
 Analyzes trade-off between finite-size effects and parameter imputation accuracy.
 
@@ -78,24 +76,9 @@ Analyzes trade-off between finite-size effects and parameter imputation accuracy
 
 **When to run**: When questioning optimal N or preparing publication justification.
 
-### `stratified_sampling.py`
-**SAMPLING COMPARISON TOOL** (NEW: 2025-01-27)
-
-Demonstrates improvement of stratified sampling over random sampling.
-
-**Purpose**: Provides validation and comparison analysis of sampling methods.
-
-**What it does**:
-1. Compares random vs stratified sampling across multiple trials
-2. Quantifies demographic preservation quality
-3. Generates comparison statistics
-
-**When to run**: For validation or when documenting sampling approach for publication.
-
 ## Validation Scripts
 
 ### `validate_theta_stratification.py`
-**PRIMARY VALIDATION SCRIPT**
 
 Validates that the PMF sampling approach preserves parameter correlations. Rho uses theta-stratified PMFs; alpha uses demographics-only PMFs.
 
@@ -110,7 +93,6 @@ Validates that the PMF sampling approach preserves parameter correlations. Rho u
 - Validation plots in `../visualisations_output/`
 
 ### `parameter_diagnostics.py`
-**CONSOLIDATED DIAGNOSTICS**
 
 Comprehensive diagnostic suite for troubleshooting parameter sampling issues.
 
@@ -173,33 +155,18 @@ Test script for network homophily measures.
 
 ## Archive
 
-The `old/` folder contains superseded validation scripts from earlier iterations:
-- `validation_full.py` (Sep 2025)
-- `validation_testing.py` (Sep 2025)
-- `demographic_validation.py` (Sep 2025)
-- `parameter_pairwise_validation.py` (Sep 2025)
-- And others...
+The repository's top-level `old/` folder holds superseded validation scripts from
+earlier iterations, kept for reference only.
 
-These are kept for reference but have been replaced by the current validation suite.
+## Design decisions
 
-## Key Findings Documented
+### Sample size
+- N=2000 balances finite-size effects against empirical grounding.
+- Complete cases: 1298 (23.2%) of 5602 participants.
+- Stratified sampling preserves demographics within +-0.21%, against ~1% for random.
+- Finite-size CV at N=2000: 2.2%. Imputation fraction at N=2000: 35%, against 77% at N=5602.
 
-### Optimal Sample Size (2025-01-27)
-**See**: `../claude_stuff/Archive/optimal_sample_size_analysis_2025-01-27.md`
-
-Key findings:
-- **N=2000 recommended** for optimal balance of finite-size effects vs empirical grounding
-- Complete cases: only 1298 (23.2%) of 5602 total participants
-- **Stratified sampling essential**: preserves demographics within ±0.21% (vs ~1% for random)
-- Finite-size CV at N=2000: 2.2% (publication quality, < 2.5% threshold)
-- Imputation fraction at N=2000: 35% (vs 77% at N=5602)
-- **CRITICAL FIX**: Replaced simple random sampling with stratified sampling in model code
-
-### Complete Cases Analysis (2025-01-16)
-**See**: `complete_cases_analysis_2025-01-16.md`
-
-Key findings:
-- Why complete-cases-only approach is infeasible (age bias: 70+ overrepresented 33% vs 19%)
-- Stratified sampling feasibility assessment
-- Comparison of different parametrization approaches
-- Recommendation to continue with PMF imputation approach
+### Complete cases
+- A complete-cases-only parametrisation is infeasible: the 70+ group is overrepresented
+  (33% against 19% in the population).
+- PMF imputation is used instead, conditioned on demographics.

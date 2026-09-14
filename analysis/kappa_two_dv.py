@@ -17,8 +17,7 @@ re-run here rather than scraped because the shipped functions print.
 b is measured AT a stated snapshot time and rises through a run: never quote it
 without one, and never measure it past t_end (section 5a). It is also strongly
 ledger-dependent -- 0.904 under last-draw against 1.051 under exposure-proportional
-parents, on the same runs -- so quote the convention with it
-(`claude_stuff/Review/two_dv_ledger_and_sample_2026-09-04.md` s.3).
+parents, on the same runs -- so quote the convention with it.
 
 Usage:
     python kappa_two_dv.py <reduced_dir> --t-end 310000 [--ledger primary|vegtime] [-o out.csv]

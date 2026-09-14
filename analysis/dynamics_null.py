@@ -5,7 +5,7 @@ Rebuilds the multi-arm counterfactual figure that `naive_counterfactuals.py` pro
 before 2026-09-08, on a footing that survives the primary ledger. The retired CF1-CF3
 credited a single sampled partner in a reversion-free tree and were compared against an
 in-run ledger that spreads credit over exposure-proportional parents on an event graph:
-not a like-for-like comparison (null_models_reassessment_2026-09-08.md s.1). The fix is to
+not a like-for-like comparison. The fix is to
 make the nulls nulls on the DYNAMICS rather than on the attribution, then score every arm
 through the same replay:
 

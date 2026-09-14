@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adversarial diagnostics for the post-peak gamma decline (scratch, not for commit).
+"""Adversarial diagnostics for the post-peak gamma decline.
 
 Same continuation as gamma_convergence.py (seeds 42+run_id, twin N=2000) but records,
 at every snapshot:

@@ -5,11 +5,7 @@ social network, grounded in survey data from 5,602 Dutch participants. The
 model tracks adoption dynamics, CO2 reduction, and how influence cascades
 attribute "credit" for triggering chains of dietary change.
 
-Originally started at the CSH Winterschool. **The manuscript is currently under major
-revisions** at Communications Sustainability (COMMSSUSTAIN-26-0276-T; reviewer comments
-received 2026-07-29). The revision round is tracked in `claude_stuff/Review/` (not part of
-this repository); expect the model, parameter defaults and figures to move while the
-sensitivity analyses requested by the reviewers are being run.
+Originally started at the CSH Winterschool.
 
 ---
 

@@ -1,6 +1,6 @@
 """Ensemble 1st and 2nd derivatives of F_veg(t) under several smoothing windows.
 
-Analysis A1 of claude_stuff/Review/tipping_analyses_a1_a4_2026-08-20.md: shows whether
+Shows whether
 acceleration has a peak or a broad plateau. Median across runs with the IQR band; the
 smoothing window is stated on every panel because F_c depends on it.
 

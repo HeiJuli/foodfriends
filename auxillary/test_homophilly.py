@@ -3,7 +3,7 @@
 """
 Created on Thu Jun 26 17:00:41 2025
 
-@author: jpoveralls
+@author: everall
 """
 
 from auxillary import network_stats

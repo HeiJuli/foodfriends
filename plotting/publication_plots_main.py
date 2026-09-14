@@ -18,7 +18,7 @@ from t_end_logistic import estimate_t_end, fc_window
 from plot_styles import set_publication_style, apply_axis_style, COLORS, ECO_CMAP, ECO_DIV_CMAP
 
 COL_TOP10, COL_TOP1 = '#6a994e', '#d4a029'
-# Calendar anchor (calendar_anchor_decision_2026-09-09.md): 0.5-1.0 yr per sweep (2N
+# Calendar anchor: 0.5-1.0 yr per sweep (2N
 # steps); only the Fig. 1 network boxes (cumulative t) use it, the range goes in the caption.
 YR_PER_SWEEP_MID = 0.665
 
@@ -798,7 +798,7 @@ def plot_network_agency_evolution_ensemble(
         net_row = sm_row if dual else big_row
         net_sweep = 2 * len(net_row['initial_diets'])
         net_delta = net_row['params']['meat_CO2'] - net_row['params']['veg_CO2']
-        # One agent followed through the panels (Jordan 2026-09-13): the initial meat eater,
+        # One agent followed through the panels: the initial meat eater,
         # vegetarian at t_end, with the largest own + downstream total at t_end. The top
         # reducer overall started vegetarian and says nothing about what a switch achieves.
         d0 = np.asarray(net_row['initial_diets'])
@@ -906,7 +906,7 @@ def plot_network_agency_evolution_ensemble(
                     fontsize=5, ha='center', va='bottom', color='#555')
 
     # F_c: max-acceleration estimator; ensemble median and IQR drawn as a horizontal
-    #      band (tipping decision 3, 2026-09-04)
+    #      band
     _sw = savgol_window or fc_window(min_len)
     _burnin = max(5000, _sw)   # mask a whole kernel, see the single-run figure
     if min_len > _burnin + _sw * 2:

@@ -2,7 +2,7 @@
 """
 Created on Tue May 21 17:13:30 2024
 
-@author: Jordan
+@author: everall
 """
 import networkx as nx
 from collections import Counter

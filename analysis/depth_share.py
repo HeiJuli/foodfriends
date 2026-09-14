@@ -1,11 +1,10 @@
-"""Depth-resolved system credit on the kappa ensemble (R4.20, owed item 1).
+"""Depth-resolved system credit on the kappa ensemble.
 
 Share of veg-time system credit paid at cascade depth d = 1, 2, 3, >=4, and the system
 ratio with every depth, depth 1 only, and depth <= 3, at the headline window. Exposure
 parents, no dwell weight, lambda 0.7 (vegtime_accounting.VT). A depth cap changes only
 what is paid, not the walk, so the capped system ratio is a partial sum of the histogram;
 a per-agent capped A would need a cap inside replay and is not computed here.
-Record: claude_stuff/Review/lambda_christakis_fowler_check_2026-09-11.md s.3.
 
 Usage:
     python depth_share.py <reduced_dir> [--t-end 310000] [--cores 3]

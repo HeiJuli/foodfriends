@@ -4,8 +4,8 @@ Hypothesis: the ~25% omnivore remainder at t_end persists because non-immune omn
 bubbles around immune omnivores (who never switch), not because of their own theta/rho.
 Reads the reduced kappa=0.55 N=2000 twin ensemble; t_end = snapshot at 310,000.
 
-Note that theta, rho and the immune set are identical in every run (the sampler reseeds at
-42, CLAUDE.md), only the network differs, so runs are replicate networks over one population.
+Note that theta, rho and the immune set are identical in every run (the sampler reseeds
+at 42), only the network differs, so runs are replicate networks over one population.
 
 Usage: python analysis/omnivore_bubbles.py [n_runs]   (from repo root)
 Writes omnivore_bubbles_per_run.csv beside the run pkls; prints the summary table.

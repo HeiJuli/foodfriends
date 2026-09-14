@@ -164,7 +164,7 @@ def load_sample_max_agents(filepath="../data/hierarchical_agents.csv", shuffle_s
             sampled.append(group.sample(n=n_target, replace=False, random_state=42))
     # Shuffle arrival order: the growth model assigns node IDs in row order and PA
     # gives early arrivals the hubs; age-block ordering otherwise confounds degree
-    # with age (r=-0.58, see network_generation_review_2026-06-10.md).
+    # with age (r=-0.58).
     result = (pd.concat(sampled, ignore_index=True)
               .sample(frac=1, random_state=shuffle_seed).reset_index(drop=True))
     print(f"Sample-max: {len(result)} agents with perfect age stratification")

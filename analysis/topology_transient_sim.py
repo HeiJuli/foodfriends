@@ -7,7 +7,7 @@ Arms, all twin N=2000, kappa 0.55, model_runn.DEFAULT_PARAMS, same seed per repl
   ER   G(N, m) with the EMP edge count: degree heterogeneity destroyed as well
 Rewiring is frozen (p_rewire = 0) in every arm, otherwise triadic closure would regrow
 clustering in DPR/ER and blur the contrast; frozen vs default moved F_veg by +0.0015
-(prewire_and_topology_results_2026-09-12.md s.1), so this is not a different model.
+so this is not a different model.
 
 Dynamics are model_main.Agent.step unchanged. Only per-step O(N) bookkeeping the dynamics
 never read is skipped (system_C, harmonise_netIn, steady-state check, record_fraction, which

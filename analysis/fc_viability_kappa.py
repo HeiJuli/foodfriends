@@ -239,7 +239,7 @@ def load_reduced():
 
     The reduced dicts carry `fraction_veg` as float32 (lossless for what this
     script measures -- the ledger replay validates against the in-run credit at
-    atol = 0 on all 50 runs, see handover_2026-09-03_kappa_ensemble.md s.1) and
+    atol = 0 on all 50 runs) and
     fit in laptop memory, which the raw 1.77 GB pickle does not. Runs the same
     integrity gate as load_and_check, adapted to the per-run dict layout."""
     import glob
@@ -492,7 +492,7 @@ def main():
     res.to_csv(OUT_CSV, index=False)
     print(f"\nINFO: per-run numbers -> {OUT_CSV}")
 
-    # --- verdict-relevant summaries (numbers only; wording left to the user)
+    # --- summary statistics
     print(f"\n{'='*72}\n STEP 4: VERDICT INPUTS\n{'='*72}")
     for name, col in zip(WINDOWS, fc_cols):
         v = res[col].values

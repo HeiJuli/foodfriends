@@ -17,7 +17,7 @@ converter to <= 2 conversions and the median stint to >= 10 activations while
 holding F_end near 0.75 and keeping the sigmoid, the answer to decision 12 is a
 persistence term or a disclosure, not a parameter choice.
 
-Design (claude_stuff/Review/handover_2026-09-08_churn_check.md, part A):
+Design:
   default  M = 9, beta = 13, kappa = 0.55   reference; must reproduce churn 6.22
   M        12, 15
   beta     20, 30
@@ -34,8 +34,8 @@ pickles by --measure, which can therefore be re-run against a changed definition
 without touching the model.
 
 Every statistic is reported twice: at the run's own fitted t_end, and at the fixed
-310000 of the kappa N=2000 ensemble so the default point is comparable with the
-numbers in churn_realism_2026-09-08.md. F_c is deliberately absent -- its window
+310000 of the kappa N=2000 ensemble so the default point is comparable. F_c is
+deliberately absent -- its window
 is a fraction of run length, so it is not comparable across points whose t_end
 differs (sensitivity_campaign, OBS block).
 
@@ -134,8 +134,7 @@ def run(seeds, steps, cores):
 def churn_stats(events, N, t_end):
     """Conversion/reversion statistics up to t_end.
 
-    This is the implementation that produced churn_realism_2026-09-08.md s.1;
-    it is reused verbatim so the default point is comparable with it. Stints are
+    Stints are
     the ones that ENDED inside the window -- an open stint has no length yet, and
     counting the truncation as a length would make every point look calmer the
     later its conversions fall.

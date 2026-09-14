@@ -1,14 +1,11 @@
 visualisations_output/
 model_output/
 .venv/
-CLAUDE.md
 manuscript.txt
-claude_stuff/
 model_src/__pycache__
 model_src/visualisations_output
 **__pycache__
 old/
-**/.claude/
 submission/
 /overleaf
 **nohup.out

@@ -213,7 +213,7 @@ def analyze_rho_by_theta_bin(df):
 
     # Check whether high-theta meat eaters have higher rho
     print("\n" + "="*80)
-    print("KEY FINDING: Do meat eaters with high theta have higher rho? (expected after the 2026-09-02 rho sign correction)")
+    print("Do meat eaters with high theta have higher rho?")
     print("="*80)
 
     low_theta_meat = meat_eaters[meat_eaters['theta'] < 0.4]
@@ -234,9 +234,9 @@ def analyze_rho_by_theta_bin(df):
         print(f"  Rho difference: {rho_diff:+.3f}")
 
         if rho_diff > 0.05:
-            print(f"\n  ✓ SUCCESS: High-theta meat eaters have {rho_diff:.3f} higher rho")
+            print(f"\n  OK SUCCESS: High-theta meat eaters have {rho_diff:.3f} higher rho")
         else:
-            print(f"\n  ✗ CONCERN: High-theta meat eaters don't have significantly higher rho")
+            print(f"\n  FAIL CONCERN: High-theta meat eaters don't have significantly higher rho")
 
     return df
 
@@ -314,10 +314,10 @@ def check_complete_cases_representativeness():
     print(f'\nUsing +/- 5% as acceptable deviation threshold:\n')
 
     if not issues:
-        print('✓ ALL DEMOGRAPHIC CATEGORIES WITHIN +/-5% THRESHOLD')
-        print('✓ COMPLETE CASES SAMPLE IS DEMOGRAPHICALLY REPRESENTATIVE')
+        print('OK ALL DEMOGRAPHIC CATEGORIES WITHIN +/-5% THRESHOLD')
+        print('OK COMPLETE CASES SAMPLE IS DEMOGRAPHICALLY REPRESENTATIVE')
     else:
-        print('✗ SOME DEMOGRAPHIC CATEGORIES EXCEED +/-5% THRESHOLD:')
+        print('FAIL SOME DEMOGRAPHIC CATEGORIES EXCEED +/-5% THRESHOLD:')
         for issue in issues:
             print(f'  - {issue}')
         print(f'\n  Sample size: n={len(complete_cases)}')

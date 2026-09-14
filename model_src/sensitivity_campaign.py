@@ -10,10 +10,9 @@ is not a choice of N but the complete-case count that sample-max mode forces
 tau 12,000-60,000 at N=2000 against 2,310-11,550 at N=385 -- a different
 response, not a rescale of the same one.
 
-Answers three reviewer comments in one pass:
-  R1.3  -- which inputs is the model most sensitive to?
-  R4.16 -- why is memory fixed at M=9?
-  R4.21 -- a sensitivity analysis of the attenuation factor lambda is necessary.
+Answers three questions in one pass: which inputs the model is most sensitive to,
+why memory is fixed at M=9, and how the attenuation factor lambda behaves under a
+sensitivity sweep.
 
 Eight parameters are swept one at a time around the default configuration, each
 against six observables. Every sweep point uses the SAME seed set (42..42+runs-1),
@@ -41,8 +40,7 @@ The amplification observables are the PRIMARY credit convention fixed on 2026-09
 replayed in-worker from the event log by analysis/attribution_ledger.py. The
 in-simulation ledger (last-draw parent, dwell-weighted) is the submitted convention
 and is carried alongside as amp_mean_sub / amp_max_sub / n_credited_sub so the two
-can be compared without a rerun. See
-claude_stuff/Review/model_changes_before_rerun_2026-09-02.md section 6.
+can be compared without a rerun.
 
 NOTE on M: tau_persistence = M*2*N (model_main.py:336) enters the dwell weight only,
 so under the primary convention the M row is a clean memory-length response; the
@@ -79,7 +77,6 @@ without rerunning anything:
 
     python sensitivity_campaign.py --plot-only <tag>
 
-See claude_stuff/Review/revision_triage.md, Wave 4 item 1.
 """
 import sys, os, io, random, pickle, argparse, contextlib
 from multiprocessing import Pool
@@ -122,9 +119,8 @@ SWEEPS = {
     "kappa":        [0.40, 0.55, 0.70, 0.85, 1.00],
     # p_rewire was never calibrated, and its realised rate is halved by the activation
     # coin (0.005/step), which at the calendar pin turns over 19-39% of an ego network
-    # over the whole transition (calendar_anchor_results_2026-09-09.md s.5). 0.0 is the
-    # frozen-network check; 1.0 rewires on every activation. R1.5 asks whether the
-    # dynamics care.
+    # over the whole transition. 0.0 is the
+    # frozen-network check; 1.0 rewires on every activation.
     "p_rewire":     [0.0, 0.01, 0.1, 1.0],
 }
 
@@ -168,8 +164,7 @@ EXTRA_AGG = ["amp_mean", "amp_p90", "amp_max"]
 
 # Inherit from the runner that produced the reported ensemble, NOT from
 # model_main.params -- the latter is for ad-hoc single runs and differs. Starting
-# from the wrong runner is what put the 2026-08-19 campaign on tau = 11,700
-# (claude_stuff/Review/regeneration_results_2026-08-20.md section 6).
+# from the wrong runner silently changes tau_persistence.
 BASE_PARAMS = dict(model_runner_mp.DEFAULT_PARAMS)
 BASE_PARAMS.update({
     "agent_ini": "twin",         # the reported ensemble; sample-max would force N to 385
@@ -547,7 +542,7 @@ def fig_response_curves(summary, out, observables=HEADLINE):
 
 
 def fig_lambda(df, summary, out):
-    """R4.21: the attenuation sweep in one panel, on the fixed-window columns.
+    """The attenuation sweep in one panel, on the fixed-window columns.
 
     The pooled `mult` arrays only exist at t = steps, and all five decay points
     share one run length and bit-identical dynamics, so the comparison across
@@ -616,7 +611,7 @@ def fig_lambda(df, summary, out):
 # gate steepness, which is the pair the mean-field argument turns on: binomial
 # memory noise (sd ~ 1/sqrt(M)) against the gate transition width (~1/k).
 # If a sharp collective threshold is reachable anywhere in the model, it is here,
-# so F_c STAYS in this grid (Jordan, 2026-09-08) even though it is out of the OAT
+# so F_c stays in this grid even though it is out of the OAT
 # outputs. Two conditions make it trustworthy here and neither holds there:
 # the grid is single-length, so the 20%-of-run kernel is the same kernel in every
 # cell; and at the length this grid is run the kernel is the headline convention

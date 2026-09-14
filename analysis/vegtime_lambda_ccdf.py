@@ -2,10 +2,8 @@
 (veg-time, exposure parents, no dwell weight) at lambda 0.5-1.0, pooled over the kappa
 ensemble at t = 310,000. A ledger-only replay with the dynamics fixed, so every curve is
 the same 50 runs. Replaces the pre-kappa, event-count sweep figure drawn by
-sensitivity_campaign.fig_lambda. Numbers: claude_stuff/Review/
-amplification_accounting_final_2026-09-09.md s.3b (reported there as the bare
-downstream ratio A - 1; here the amplification factor A = 1 + (A - 1), the quantity
-Fig. 2 shows and the symbol the paper uses since 2026-09-12).
+sensitivity_campaign.fig_lambda. Plotted as the amplification factor
+A = 1 + (A - 1), the quantity Fig. 2 shows, not the bare downstream ratio A - 1.
 
 Usage:
     python vegtime_lambda_ccdf.py <reduced_dir> [--t-end 310000] [--cores 3]

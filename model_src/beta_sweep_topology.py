@@ -10,7 +10,7 @@ Arms (identical except topology):
   - homophilic_theta  : NEW theta-homophily (theta-assort ~0.27, PA kept on)
 
 For each beta in BETAS, runs SEEDS replicates per arm and plots the mean +/- band
-F_veg trajectory. Trajectories only (no stat suite), per user request.
+F_veg trajectory. Trajectories only; no stat suite.
 
 Run from model_src/:
     python beta_sweep_topology.py [--betas 5 10 20 35 50] [--seeds 4] [--steps 30000] [--quick]

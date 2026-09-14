@@ -67,7 +67,7 @@ def stratified_sample_agents(df, n_target, strata_cols=['gender', 'age_group', '
         sampled_dfs.append(sampled)
 
     # Shuffle so stratum-block row order does not confound growth-model arrival order
-    # with demographics (see network_generation_review_2026-06-10.md).
+    # with demographics (see auxillary/README.md).
     result = (pd.concat(sampled_dfs, ignore_index=True)
               .sample(frac=1, random_state=random_state).reset_index(drop=True))
     result = result.drop(columns=['_strata'])
@@ -112,8 +112,7 @@ def load_sample_max_agents(filepath, shuffle_seed=42):
         else:
             sampled.append(group.sample(n=n_target, replace=False, random_state=42))
 
-    # Shuffle arrival order (see model_main.load_sample_max_agents; keeps this
-    # duplicate consistent -- no active consumers import it).
+    # Shuffle arrival order so that network arrival does not track demographics.
     result = (pd.concat(sampled, ignore_index=True)
               .sample(frac=1, random_state=shuffle_seed).reset_index(drop=True))
     print(f"Sample-max mode: {len(result)} agents with perfect age stratification")

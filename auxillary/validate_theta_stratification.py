@@ -227,7 +227,7 @@ def create_validation_plots(simulation_results, empirical_data):
 
     plt.tight_layout()
     plt.savefig('../visualisations_output/theta_stratification_validation.png', dpi=150, bbox_inches='tight')
-    print(f"\n✓ Saved validation plot to ../visualisations_output/theta_stratification_validation.png")
+    print(f"\nOK Saved validation plot to ../visualisations_output/theta_stratification_validation.png")
     plt.close()
 
 def main():
@@ -258,17 +258,17 @@ def main():
     theta_alpha_preserved = abs(sim_corrs['theta_alpha'][0] - empirical_corrs['theta_alpha']) < 0.05
 
     print(f"\nValidation criteria:")
-    print(f"  [{'✓' if theta_rho_preserved else '✗'}] theta-rho correlation preserved (diff < 0.05)")
-    print(f"  [{'✓' if theta_alpha_preserved else '✗'}] theta-alpha correlation preserved (diff < 0.05)")
+    print(f"  [{'OK' if theta_rho_preserved else 'FAIL'}] theta-rho correlation preserved (diff < 0.05)")
+    print(f"  [{'OK' if theta_alpha_preserved else 'FAIL'}] theta-alpha correlation preserved (diff < 0.05)")
 
     if theta_rho_preserved and theta_alpha_preserved:
         print(f"\n{'='*80}")
-        print("✓✓✓ ALL VALIDATION CHECKS PASSED ✓✓✓")
+        print("OKOKOK ALL VALIDATION CHECKS PASSED OKOKOK")
         print(f"{'='*80}")
         print("\nTheta-stratified PMF sampling successfully preserves correlations!")
     else:
         print(f"\n{'='*80}")
-        print("✗✗✗ VALIDATION FAILED ✗✗✗")
+        print("FAILFAILFAIL VALIDATION FAILED FAILFAILFAIL")
         print(f"{'='*80}")
         print("\nSome validation criteria not met. Review PMF stratification approach.")
 

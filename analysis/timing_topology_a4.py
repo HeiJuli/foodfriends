@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """A4: does timing multiply with topology, or is the early/late gap accounting?
 
-Analysis A4 of claude_stuff/Review/tipping_analyses_a1_a4_2026-08-20.md. A1-A3 live in
-the existing scripts (plotting/explore_derivatives.py, analysis/results_analysis.py
-analysis_5_inflection, analysis/t_end_logistic.py compare_logistic_linear); only A4 is new.
+A1-A3 live in the existing scripts (plotting/explore_derivatives.py,
+analysis/results_analysis.py analysis_5_inflection, analysis/t_end_logistic.py
+compare_logistic_linear); only A4 is new.
 
   A4a  re-attribute with the dwell weight w == 1 and recompute the early/late gap.
        Needs 'reductions_unw' in the snapshots -- the passive second ledger added to

@@ -11,7 +11,7 @@ Design decisions:
 - Alpha/rho excluded: too many missing values (77% incomplete)
 - Theta included: available for all agents, represents stable preference
 
-Author: Generated for foodfriends project
+Part of the foodfriends project
 Date: 2025-01-20
 """
 

@@ -8,8 +8,7 @@ exposure-proportional parents on an event graph with 6.22 conversions per conver
 so they no longer compare like with like and the headline sentence ("the model
 amplifies less than a psychology-free null") reverses. The replacement is the
 permutation null on the model's own event log: attribution_ledger.permute_buffers,
-driven by `kappa_ledger.py --null mf nb`. See null_models_reassessment_2026-09-08.md
-s.1, s.3 and permutation_null_results_2026-09-08.md. It also runs only on an
+driven by `kappa_ledger.py --null mf nb`. It also runs only on an
 unreduced pickle picked by `is_median_twin`, which the kappa ensemble has not got.
 
 The FIGURE is rebuilt from dynamics nulls by dynamics_null.py (naive contagion on ER and

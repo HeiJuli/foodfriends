@@ -1,21 +1,21 @@
 """Fit beta (inverse temperature) to the LISS panel with the model's own switching rule.
 
-Same-data lower anchor for beta (R4.17). Each complete-case respondent (theta, rho, alpha
+Same-data lower anchor for beta. Each complete-case respondent (theta, rho, alpha
 observed) is a two-state chain under hamiltonian() with mean-field social field h_soc = F,
 the 2018 vegan fraction. Diet observed twice: oi18a016 (2018, vegan yes/no) and su19a046
 (2019, meat frequency; 6 = never). Because the 2018 item is "vegan", most 2018 non-vegans
 who never eat meat in 2019 were vegetarian already; the data are closer to a cross-section
 than to transitions, so the stationary-limit row is the one to quote.
 
-beta and the number of activations between waves are not jointly identified (the R1.5
+beta and the number of activations between waves are not jointly identified (the
 timescale problem), so beta is reported under fixed conventions: one update per wave
 (Galesic et al. 2021's fitting convention) and the stationary limit.
 
 kappa (2026-09-12): the model applies rho_eff = kappa * rho before the hamiltonian
 (model_main.py:263), adopted 2026-09-03, the day after this script was written. Fitting at
 face value leaves the intention-behaviour gap to be absorbed by the slope, which flattens
-beta; the kappa=0.55 row is the anchor for the model as it now runs. The kappa=1.00 row is
-kept because it is the 4.5/4.7 quoted in beta_empirical_anchors_2026-09-02.md s.3.1.
+beta; the kappa=0.55 row is the anchor for the model as it now runs. The kappa=1.00 row
+is kept for comparison with the undiscounted fit.
 
 Run from the repo root:  python analysis/beta_fit_liss.py
 """
@@ -84,9 +84,9 @@ def main():
         for nlab, n in [("one update per wave", 1), ("stationary limit", None)]:
             b, lo, hi = fit(n, y0, y1, rho, t, w, F)
             print(f"{nlab:22s} {rlab:12s} {b:8.1f}  [{lo:.1f}, {hi:.1f}]")
-    print("NOTE: our beta scale; Galesic-equivalent = beta/2 (see boltzmann_model.md).")
-    print(f"NOTE: quote the kappa={KAPPA:.2f} rows; the kappa=1.00 rows fit a model we no "
-          "longer run.")
+    print("NOTE: beta is on this model's scale; the Galesic-equivalent is beta/2.")
+    print(f"NOTE: the kappa={KAPPA:.2f} rows describe the model as it runs; the "
+          "kappa=1.00 rows are the undiscounted comparison.")
 
 
 if __name__ == "__main__":

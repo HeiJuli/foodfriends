@@ -6,7 +6,7 @@ import os, sys, random, pickle
 import numpy as np
 from multiprocessing import Pool
 
-SRC = "/home/jpoveralls/Documents/Projects_code/foodfriends/model_src"
+SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "model_src")
 os.chdir(SRC); sys.path.insert(0, SRC)
 import scipy.stats as st
 import model_main

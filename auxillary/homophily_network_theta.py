@@ -1,11 +1,11 @@
 """
-Theta-homophily network generation (EXPERIMENTAL, post-submission).
+Theta-homophily network generation (experimental variant).
 
 Parameterized variant of `homophily_network_v2.generate_homophily_network_v2`
 that can produce a network ASSORTATIVE ON THETA (intrinsic dietary preference),
 the trait that actually drives the dynamics. Built as a separate module so the
-in-review production path (`homophily_network_v2` / topology="homophilic_emp")
-is left byte-for-byte untouched.
+production path (`homophily_network_v2` / topology="homophilic_emp") is left
+untouched.
 
 Knobs added over v2:
   - sim_power : sharpen the similarity kernel (sim ** sim_power). Near-identical
@@ -28,7 +28,6 @@ in model_main) measures +0.25 ensemble-mean t0 (30 runs, 0529 pkl; single seeds 
 ~0.20-0.30), i.e. at the top of the 0.2-0.25 target and inside the empirical range. The self-test
 below uses theta_w=3.0 (~0.36) as a STRONGER illustration, not the production setting.
 
-See claude_stuff/Infrastructure/homophily_network_audit_2026-05-29.md sections 6-7.
 """
 import os
 import sys

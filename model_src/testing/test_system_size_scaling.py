@@ -8,12 +8,11 @@ Tests how key observables scale with N using:
   - KDE synthetic agents for N > 5602 (no cloning)
   - random demographic partition across communities
 
-Corrects artifacts in prior version (2026-03-22):
-  1. Steps capped at 150k -> agents at large N never equilibrated
-  2. tau_persistence ~ N was correct but steps didn't keep pace
-  3. Holme-Kim network had no community structure at any scale
-  4. Agent cloning above N=5602 reduced parameter heterogeneity
-  See: claude_stuff/Infrastructure/system_size_scaling_artifacts_2026-03-23.md
+Four conditions must hold for the scaling to be measured rather than censored:
+  1. steps must scale with N, or agents at large N never equilibrate
+  2. tau_persistence ~ N, with steps keeping pace
+  3. the network must carry community structure at every scale
+  4. no agent cloning above N=5602, which would reduce parameter heterogeneity
 
 Amplification is replayed from the event log by analysis/attribution_ledger.py
 (exposure-proportional parents, no dwell weight) at each run's own t_end, on two

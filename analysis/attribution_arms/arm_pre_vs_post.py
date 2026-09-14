@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoketest: how much does the veg-only credit fix move the top-agent multiplier?
+"""How much does the veg-only credit fix move the top-agent multiplier?
 
 Paired design: identical seeds, two arms.
   post  = current code (credit only if partner is veg)
@@ -10,8 +10,7 @@ import os, sys, random, pickle
 import numpy as np
 from multiprocessing import Pool
 
-os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')) if False else None
-SRC = "/home/jpoveralls/Documents/Projects_code/foodfriends/model_src"
+SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "model_src")
 os.chdir(SRC)
 sys.path.insert(0, SRC)
 import scipy.stats as st
@@ -79,7 +78,7 @@ if __name__ == "__main__":
     jobs = [(a, s) for a in ("post", "pre") for s in SEEDS]
     with Pool(6) as pool:
         res = pool.map(one_run, jobs)
-    with open('/tmp/claude-1000/-home-jpoveralls-Documents-Projects-code-foodfriends/52421b30-0366-4fe3-aae1-80d758999dfe/scratchpad/smoke_res.pkl', 'wb') as f:
+    with open('arm_pre_vs_post_res.pkl', 'wb') as f:
         pickle.dump(res, f)
 
     import pandas as pd

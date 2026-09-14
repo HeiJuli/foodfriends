@@ -619,7 +619,7 @@ def make_degree_scaling_figure(df, output_dir='../visualisations_output'):
 # --- Primary-ledger path: summaries straight from kappa_two_dv.py output ---
 
 # The in-run `reductions` array is the submitted (last-draw, dwell-weighted) ledger.
-# Everything reports the primary convention since 2026-09-04, and that ledger only
+# Everything reports the primary convention, and that ledger only
 # exists as an offline replay, so DV2 has to come from the replay's per-run CSV
 # rather than from the snapshot.
 CSV_STATS = {

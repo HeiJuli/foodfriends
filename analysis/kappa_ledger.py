@@ -11,8 +11,7 @@ response to the output.
 Amplification accumulates over the run, so --t-end is not optional in practice:
 quote the window and the churn factor with every multiplier.
 
---null runs the permutation null of null_models_reassessment_2026-09-08.md s.3
-instead: the primary convention replayed on event logs whose vegetarian buffer
+--null runs the permutation null instead: the primary convention replayed on event logs whose vegetarian buffer
 sources have been redrawn from the vegetarians at that step (mf) or from the
 converting agent's vegetarian neighbours (nb). F_veg(t), churn, arrival order
 and chain termination are held exactly; only who is credited moves. Both
@@ -36,7 +35,7 @@ matplotlib.use('Agg')
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from attribution_ledger import (CONVENTIONS, summarise, replay, permute_buffers,
                                 conv_counts, _concentration, _veg_count)
-from naive_counterfactuals import BANDS          # superseded script, band scheme stands
+from naive_counterfactuals import BANDS          # band scheme only
 
 PRIMARY = dict(parent="exposure", weight="none", unit="event")
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'visualisations_output')

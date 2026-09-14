@@ -7,7 +7,6 @@ vegetarians' share of the tail, the own-time denominator, early/late split on th
 conversion, window sensitivity, lambda sensitivity. Writes vegtime_stats.csv and one
 vegtime_A_run_XX.npz per run (full-length A, credit, own) into the reduced dir; the
 npz files feed publication_plots_main.plot_amplification_ensemble(multipliers_dir=...).
-Record: claude_stuff/Review/amplification_accounting_final_2026-09-09.md.
 
 Usage:
     python vegtime_accounting.py <reduced_dir> [--t-end 310000] [--cores 3]

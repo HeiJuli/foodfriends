@@ -3,7 +3,7 @@
 """
 Created on Wed Mar 12 21:18:44 2025
 
-@author: jpoveralls
+@author: everall
 """
 
 # plot_styles.py

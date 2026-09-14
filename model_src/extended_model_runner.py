@@ -3,7 +3,7 @@
 """
 Created on Fri Feb 28 14:23:39 2025
 
-@author: jpoveralls
+@author: everall
 """
 
 # -*- coding: utf-8 -*-

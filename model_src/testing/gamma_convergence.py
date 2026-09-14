@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Does the degree-amplification exponent converge, or does it just track run length?
 
-Background: claude_stuff/Infrastructure/gamma_stage_dependence_2026-08-27.md
 gamma rises monotonically for the whole of a 150k-step run (ensemble 0.53 at 100k, 0.72 at
 t_end, 0.76 at 148k) and has not plateaued when the runs stop, because attributed reduction
 is a cumulative ledger and F_veg saturating does not stop credit accruing. This extends the
@@ -13,8 +12,8 @@ exactly as in model_runner_mp.run_single_trajectory_model. So run i here is bit-
 run i of trajectory_analysis_twin_20260820.pkl for its first 150,000 steps -- which the
 --check flag verifies.
 
-Snapshots are NOT retained: record_snapshot copies the whole graph, and 200 of those per run
-is ~800 MB per worker. We override it to fold each snapshot down to one row of statistics.
+Snapshots are not retained: record_snapshot copies the whole graph, and 200 of those per run
+is ~800 MB per worker. The runner is overridden to fold each snapshot down to one row of statistics.
 Output is a CSV of a few hundred KB, no pkl.
 
 Usage (from model_src/testing):

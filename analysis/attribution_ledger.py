@@ -15,13 +15,12 @@ change one:
                       CONVENTIONS row still labelled PRIMARY for CSV continuity)
           "time"      delta per step for as long as the stint lasts (veg-time) --
                       THE REPORTED UNIT since 2026-09-09: A_i = credited vegetarian-
-                      time / own vegetarian-time (analysis/vegtime_accounting.py;
-                      claude_stuff/Review/amplification_accounting_final_2026-09-09.md)
+                      time / own vegetarian-time (analysis/vegtime_accounting.py)
   decay   lambda, geometric attenuation per cascade depth
   gamma   exponent of the exposure shares; defaults to the run's own. Set it to
           something else to see the ledger's gamma-sensitivity at fixed dynamics.
 
-Propagation (decided 2026-09-02; claude_stuff/Review/ledger_convention_decision_2026-09-02.md).
+Propagation.
 Credit walks the graph of conversion EVENTS. A conversion's shares are read as the
 probability that each source was its cause, and an ancestor's credit is its expected
 credit under the single-cause chain rule: the sum over paths of (product of shares) x
