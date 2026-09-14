@@ -594,13 +594,14 @@ def fig_response_curves(summary, out, observables=HEADLINE):
 
 
 def fig_lambda(df, summary, out):
-    """The attenuation sweep in one panel, on the fixed-window columns.
+    """The attenuation sweep in one panel, on the vegetarian-time ledger at t_end.
 
-    The pooled `mult` arrays only exist at t = steps, and all five decay points
-    share one run length and bit-identical dynamics, so the comparison across
-    lambda is unaffected by the window (S = +0.253 fixed, +0.254 at t_end). The
-    figure is therefore internally consistent but its absolute level is not
-    comparable with the tornado and the table, which report at t_end.
+    Was on the fixed-window event-count columns until 2026-09-14, which left its
+    absolute level incomparable with the tornado and the table beside it. Both the
+    pooled CCDF and the inset now read the veg-time arrays credited at each run's
+    own t_end, so the whole figure is on the reported ledger. lambda does not alter
+    dynamics -- all five points share bit-identical runs and one t_end -- so the
+    comparison across lambda is unchanged by the switch.
 
     Measured 2026-09-07: lambda rescales the whole distribution near-uniformly
     (0.9/0.5 ratios: mean x1.29, p90 x1.31, max x1.31), so the older reading --
@@ -616,7 +617,7 @@ def fig_lambda(df, summary, out):
     # main: pooled CCDF, one curve per lambda
     for v in SWEEPS["decay"]:
         pool = np.sort(np.concatenate(
-            df[(df.param == "decay") & (df.value == v)]["mult"].values))
+            df[(df.param == "decay") & (df.value == v)]["mult_vt"].values))
         if not len(pool):
             continue
         ccdf = 1.0 - np.arange(1, len(pool) + 1) / len(pool)
@@ -626,7 +627,7 @@ def fig_lambda(df, summary, out):
                 label=rf"$\lambda={v:g}$" + (" (default)" if base else ""))
     ax.axvline(1.0, color='#555', ls=':', lw=1.0, zorder=1)
     ax.set_xscale('log'); ax.set_yscale('log'); ax.set_xlim(left=0.05)
-    ax.set_xlabel("amplification multiplier")
+    ax.set_xlabel(r"amplification factor $A$ (vegetarian-time)")
     ax.set_ylabel(r"CCDF  $P(X>x)$")
     ax.legend(frameon=False, fontsize=7, loc='lower left', handlelength=1.8,
               borderpad=0.2, labelspacing=0.35)
@@ -635,9 +636,9 @@ def fig_lambda(df, summary, out):
     # inset: summary statistics against lambda
     ins = ax.inset_axes((0.60, 0.62, 0.38, 0.35))
     x = d.value.values
-    for ob, c, lbl in [("amp_max", COLORS['meat'], "max"),
-                       ("amp_p90", COLORS['vegetation'], "p90"),
-                       ("amp_mean", COLORS['primary'], "mean")]:
+    for ob, c, lbl in [("amp_vt_max_tend", COLORS['meat'], "max"),
+                       ("amp_vt_p90_tend", COLORS['vegetation'], "p90"),
+                       ("amp_vt_mean_tend", COLORS['primary'], "mean")]:
         y, sd = d[f"{ob}_mean"].values, d[f"{ob}_std"].values
         ins.fill_between(x, y - sd, y + sd, color=c, alpha=0.16)
         ins.plot(x, y, 'o-', color=c, ms=3, lw=1.3)
