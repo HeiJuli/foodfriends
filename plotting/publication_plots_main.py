@@ -1012,8 +1012,8 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
     multipliers_dir: directory of per-run npz files holding a full-length `A` array
     (analysis/vegtime_accounting.py writes vegtime_A_run_XX.npz). When given, the
     multipliers come from there -- the reported veg-time ledger -- and the pkl, whose
-    `reductions` array is the submitted in-run ledger, is not loaded. No early-adopter
-    line on that route: the dichotomy was retired 2026-09-01.
+    `reductions` array is the submitted in-run ledger, is not loaded.
+    Early/late cohort lines on that route read vegtime_stats.csv in the same directory.
     """
     set_publication_style()
 
@@ -1023,7 +1023,7 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
     # Collect rank-ordered multipliers at common percentiles
     rank_pct = np.linspace(0, 100, 500)
     mult_runs = []
-    early_mults, early_medians, mean_mults = [], [], []
+    early_mults, early_medians, late_mults, mean_mults = [], [], [], []
     if multipliers_dir is not None:
         for f in sorted(glob.glob(os.path.join(multipliers_dir, '*_A_run_*.npz'))):
             A = np.load(f)['A']
@@ -1035,6 +1035,14 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
             mults = np.sort(A[A > 0])[::-1] + 1.0
             mult_runs.append(np.interp(rank_pct, np.linspace(0, 100, len(mults)), mults))
             mean_mults.append(np.mean(mults))
+        # early/late cohorts (first conversion before/after the run's own F_veg = 0.5
+        # crossing) come from vegtime_stats.csv, written by the same script; the npz
+        # holds no conversion times. Per-run means of A, +1 for the total factor.
+        st = os.path.join(multipliers_dir, 'vegtime_stats.csv')
+        if os.path.exists(st):
+            df = pd.read_csv(st)
+            early_mults = list(df['early_mean_time'] + 1.0)
+            late_mults = list(df['late_mean_time'] + 1.0)
         data = pd.DataFrame()
     elif data is None:
         data = load_data(file_path)
@@ -1084,19 +1092,24 @@ def plot_amplification_ensemble(data=None, file_path=None, save=True, analysis_t
 
     # Mean line (ensemble median of means)
     mean_mult = np.median(mean_mults)
-    ax.axhline(mean_mult, color='#555', linestyle='--', linewidth=1.0, alpha=0.7)
-    ax.text(97, mean_mult * 0.88, f'Mean: {mean_mult:.1f}x', fontsize=6, color='#555',
-            va='top', ha='right')
+    ax.axhline(mean_mult, color='#555', linestyle='--', linewidth=1.0, alpha=0.7,
+               label=f'Mean: {mean_mult:.1f}x')
 
-    # Early-adopter line
+    # Early/late-adopter lines
     if early_mults:
         early_mult = np.median(early_mults)
-        early_med = np.median(early_medians)
         print(f"INFO: Early-adopter amplification (ensemble, n={len(early_mults)} runs) — "
-              f"median of medians={early_med:.2f}x, median of means={early_mult:.2f}x")
-        ax.axhline(early_mult, color='#2ca02c', linestyle='--', linewidth=1.0, alpha=0.7)
-        ax.text(97, early_mult * 1.12, f'Early adopters: {early_mult:.1f}x', fontsize=6,
-                color='#2ca02c', va='bottom', ha='right')
+              f"median of means={early_mult:.2f}x")
+        ax.axhline(early_mult, color='#2ca02c', linestyle='--', linewidth=1.0, alpha=0.7,
+                   label=f'Early adopters: {early_mult:.1f}x')
+    if late_mults:
+        late_mult = np.median(late_mults)
+        print(f"INFO: Late-adopter amplification (ensemble) — median of means={late_mult:.2f}x")
+        ax.axhline(late_mult, color='#d62728', linestyle='--', linewidth=1.0, alpha=0.7,
+                   label=f'Late adopters: {late_mult:.1f}x')
+    # the three means sit within 0.15 decades of each other, so a legend beats inline labels
+    ax.legend(loc='upper right', bbox_to_anchor=(1.0, 0.86), fontsize=6, frameon=False,
+              handlelength=1.6)
 
     ax.axhline(1.0, color='#aaa', linestyle=':', linewidth=0.8, alpha=0.6)
     ax.text(50, 1.25, 'Personal only (1x)', fontsize=5.5, color='#aaa',
