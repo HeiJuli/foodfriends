@@ -46,11 +46,12 @@ Defines two classes:
   switches diet by Boltzmann probability over a Hamiltonian energy:
 
   ```
-  H(s) = (1 − w)·(s − h_ind)² + w·(s − h_soc)² − tau·s
+  H(s) = (1 − w)·(s − h_ind)² + w·(s − h_soc)²
   ```
 
   with `h_ind` shifting toward theta on dissonance, `h_soc` from neighbor diet
-  shares (with diminishing-returns gamma), `tau` an external pro-veg field.
+  shares (with diminishing-returns gamma). Intention enters `h_ind` discounted
+  by kappa (intention–behaviour gap).
 
 - **`Model`** — population, network, and simulation loop. Builds the network
   (default `homophilic_emp`, empirically calibrated homophily), loads agents
@@ -60,13 +61,16 @@ Defines two classes:
 
 ### Runners
 
-- **`model_runner_mp.py`** — main multiprocessing CLI runner for parameter
-  sweeps and batch ensembles. Output as `.pkl` in `model_output/`.
+- **`model_runn.py`** — production runner for the paper ensembles. Saves
+  snapshots, `steady_state_t` and the conversion event log. `DEFAULT_PARAMS`
+  here is the source of truth for parameters.
   ```bash
-  python model_runner_mp.py --analysis trajectory --agent_ini twin --runs 50
+  python model_runn.py
   ```
-- **`model_runn.py`** — lighter single-process runner used by some testing
-  scripts. Stores `steady_state_t` alongside snapshots.
+- **`model_runner_mp.py`** — multiprocessing runner for parameter sweeps.
+  Drops snapshots in `sample-max` mode, and silently overwrites a same-day
+  `.pkl`, so it is not used for anything needing snapshots.
+- **`sensitivity_campaign.py`** — one-at-a-time sensitivity sweep.
 - **`extended_model_runner.py`** — helper functions for emissions analysis,
   vegetarian-fraction studies, and topology comparisons.
 
@@ -93,6 +97,12 @@ Run once before simulating:
    preserves the empirical correlations.
 4. **`analyze_sample_size.py`** — finite-size vs. imputation trade-off; lands
    on **N=2000** (CV=2.2%, ±0.21% demographic deviation).
+5. **`create_synthetic_agents.py`** — without LISS access, run this instead of
+   steps 1 and 2: samples `data/synthetic_agents.csv` (same shape as the real
+   file, no real respondent) from the aggregate cell counts in
+   `data/synthetic_aggregates.json` and the PMFs in `data/demographic_pmfs.pkl`.
+   Point `survey_file` at it. Reproduces the qualitative results, not the paper's
+   numbers. `--aggregate` rebuilds the JSON from the real CSV.
 
 Other utilities:
 
@@ -141,9 +151,16 @@ See `auxillary/README.md` for more.
 ```bash
 conda env create -f environment_foodfriends.yml
 conda activate foodfriends
+pip install -r requirements_foodfriends.txt --no-deps
 ```
 
-Or `pip install -r requirements_foodfriends.txt`.
+Two steps because conda's solver rejects `pandas==3.0.5`, which is needed to
+read the result pickles. With `uv` instead:
+
+```bash
+uv venv --python 3.11 .venv && source .venv/bin/activate
+uv pip install -r requirements_foodfriends.txt --no-deps
+```
 
 ## Typical workflow
 
@@ -155,7 +172,7 @@ python create_pmf_tables.py
 
 # Simulation
 cd ../model_src
-python model_runner_mp.py --analysis trajectory --agent_ini twin --runs 50
+python model_runn.py
 
 # Analysis + figures
 cd ../analysis && python results_analysis.py
@@ -166,18 +183,19 @@ cd ../plotting && python publication_plots_main.py
 
 | Param            | Default          | Meaning                                          |
 |------------------|------------------|--------------------------------------------------|
-| `N`              | 2000             | Population size                                  |
-| `steps`          | 150,000          | Interaction steps                                |
+| `N`              | 2000             | Population size (file default is 650)            |
+| `steps`          | 400,000          | Interaction steps (set from the fitted t_end)    |
 | `beta`           | 13               | Inverse temperature / attention to dissonance    |
 | `w_i`            | 1 − alpha        | Social weight (per-agent)                        |
 | `alpha`          | survey/imputed   | Self-identity weight, compressed [0.05, 0.80]    |
 | `rho`            | survey/imputed   | Behavioral intention                             |
 | `theta`          | survey           | Intrinsic veg preference                         |
-| `gamma`          | 0.45             | Diminishing returns on repeat contacts           |                           |
+| `gamma`          | 0.3              | Diminishing returns on repeat contacts           |
 | `M`              | 9                | Memory buffer length                             |
 | `decay`          | 0.7              | Cascade-credit depth decay                       |
 | `tau_persistence`| M·2·N            | Dwell-time weighting timescale                   |
-| `immune_n`       | 0.10–0.15        | Fraction of immune (extreme-conviction) agents   |
+| `immune_n`       | 0.10             | Fraction of immune (extreme-conviction) agents   |
+| `kappa`          | 0.55             | Intention–behaviour discount applied to rho      |
 | `topology`       | `homophilic_emp` | Network type                                     |
 | `agent_ini`      | `sample-max`     | Agent initialization mode                        |
 
@@ -187,7 +205,10 @@ Topology options: `homophilic_emp`, `BA`, `complete`, `WS`, `CSF`, `PATCH`,
 
 ---
 
-## License
+## Licensing
 
-Source code: BSD 3-clause (see `LICENSE.md`). Manuscript text is not open
-source — rights reserved by the authors.
+- **Code** — MIT (see `LICENSE`).
+- **Data** — see `LICENSE-DATA`. Files derived by us are CC BY 4.0; the
+  underlying LISS panel microdata are not ours to license and are not
+  redistributed here (gitignored; obtain them from the LISS Data Archive).
+- **Manuscript text** — not open source, rights reserved by the authors.

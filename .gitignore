@@ -17,3 +17,9 @@ submission/
 *.eps
 *.jpg
 *.jpeg
+
+# LISS panel microdata and respondent-level derivatives: never redistributed
+# (see LICENSE-DATA). paper_dofile.do in the same directory stays tracked.
+data/data_construction_paper/*.dta
+data/hierarchical_agents.csv
+data/*_demographics.xlsx

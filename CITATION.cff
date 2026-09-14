@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Foodfriends: an agent-based model of vegetarian dietary change in social networks"
+abstract: >-
+  Agent-based model of how vegetarian dietary behaviour spreads through a social
+  network, parameterised from a survey of 5,602 Dutch participants. Tracks
+  adoption dynamics, CO2 reductions, and the attribution of downstream change to
+  the individuals who triggered it.
+type: software
+authors:
+  - given-names: "Jordan P."
+    family-names: Everall
+    email: jordan.everall@uni-graz.at
+    affiliation: "Wegener Center for Climate and Global Change, University of Graz, Austria"
+  - given-names: Emma
+    family-names: Thill
+    affiliation: "Department of Economics and Management, University of Luxembourg, Luxembourg"
+  - given-names: Alison
+    family-names: Hochen
+    affiliation: "Department of Biology, University of Oxford, UK"
+  - given-names: Sandeep
+    family-names: Chowdhary
+    affiliation: "International Institute for Applied Systems Analysis, Laxenburg, Austria"
+  - given-names: "Ilona M."
+    family-names: Otto
+    affiliation: "Wegener Center for Climate and Global Change, University of Graz, Austria"
+repository-code: "https://github.com/HeiJuli/foodfriends"
+license: MIT
+version: 1.0.0
+date-released: 2026-09-14
+keywords:
+  - agent-based model
+  - social networks
+  - dietary change
+  - behaviour change
+  - climate mitigation

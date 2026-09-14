@@ -1,0 +1,3954 @@
+{
+ "cells": [
+  {
+   "cell": "Female|18-29|1|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 20
+  },
+  {
+   "cell": "Female|18-29|1|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Female|18-29|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 102
+  },
+  {
+   "cell": "Female|18-29|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Female|18-29|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 27
+  },
+  {
+   "cell": "Female|18-29|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 18
+  },
+  {
+   "cell": "Female|18-29|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Female|18-29|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|18-29|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 31
+  },
+  {
+   "cell": "Female|18-29|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 13
+  },
+  {
+   "cell": "Female|18-29|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Female|18-29|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|18-29|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 20
+  },
+  {
+   "cell": "Female|18-29|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Female|18-29|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|18-29|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 23
+  },
+  {
+   "cell": "Female|18-29|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|18-29|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|18-29|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|18-29|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 16
+  },
+  {
+   "cell": "Female|18-29|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|18-29|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Female|18-29|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|18-29|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|18-29|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|18-29|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|18-29|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|18-29|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|18-29|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 37
+  },
+  {
+   "cell": "Female|18-29|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 18
+  },
+  {
+   "cell": "Female|18-29|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Female|18-29|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Female|18-29|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|4|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|18-29|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 15
+  },
+  {
+   "cell": "Female|18-29|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|18-29|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|18-29|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Female|30-39|1|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|1|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|30-39|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|30-39|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|30-39|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|30-39|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Female|30-39|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|30-39|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|30-39|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|30-39|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 15
+  },
+  {
+   "cell": "Female|30-39|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Female|30-39|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Female|30-39|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|30-39|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Female|30-39|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|30-39|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 21
+  },
+  {
+   "cell": "Female|30-39|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|30-39|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 24
+  },
+  {
+   "cell": "Female|30-39|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|30-39|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 22
+  },
+  {
+   "cell": "Female|30-39|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Female|30-39|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|30-39|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Female|30-39|3|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|30-39|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|30-39|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Female|30-39|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Female|30-39|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Female|30-39|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|30-39|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 39
+  },
+  {
+   "cell": "Female|30-39|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|30-39|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 19
+  },
+  {
+   "cell": "Female|30-39|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Female|30-39|4|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|30-39|4|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|4|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|30-39|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|30-39|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|30-39|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|30-39|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 46
+  },
+  {
+   "cell": "Female|30-39|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 15
+  },
+  {
+   "cell": "Female|30-39|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 16
+  },
+  {
+   "cell": "Female|30-39|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Female|40-49|1|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|40-49|1|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|40-49|1|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|40-49|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|40-49|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|40-49|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|40-49|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Female|40-49|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|40-49|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Female|40-49|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|40-49|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|40-49|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|40-49|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Female|40-49|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|40-49|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Female|40-49|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|40-49|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|40-49|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|40-49|2|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|40-49|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 15
+  },
+  {
+   "cell": "Female|40-49|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|40-49|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|40-49|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|40-49|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 30
+  },
+  {
+   "cell": "Female|40-49|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 24
+  },
+  {
+   "cell": "Female|40-49|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|40-49|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Female|40-49|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 14
+  },
+  {
+   "cell": "Female|40-49|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Female|40-49|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|40-49|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|40-49|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Female|40-49|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|40-49|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|40-49|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|40-49|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 14
+  },
+  {
+   "cell": "Female|40-49|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Female|40-49|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 12
+  },
+  {
+   "cell": "Female|40-49|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|40-49|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 18
+  },
+  {
+   "cell": "Female|40-49|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Female|40-49|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|40-49|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Female|40-49|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|40-49|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|40-49|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|40-49|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Female|40-49|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Female|40-49|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Female|40-49|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 32
+  },
+  {
+   "cell": "Female|40-49|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 19
+  },
+  {
+   "cell": "Female|40-49|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 15
+  },
+  {
+   "cell": "Female|40-49|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Female|50-59|1|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|1|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|50-59|1|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|50-59|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 20
+  },
+  {
+   "cell": "Female|50-59|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 32
+  },
+  {
+   "cell": "Female|50-59|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|50-59|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 13
+  },
+  {
+   "cell": "Female|50-59|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|50-59|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 21
+  },
+  {
+   "cell": "Female|50-59|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|50-59|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Female|50-59|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Female|50-59|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|50-59|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|50-59|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Female|50-59|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|50-59|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|50-59|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|50-59|2|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 19
+  },
+  {
+   "cell": "Female|50-59|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 26
+  },
+  {
+   "cell": "Female|50-59|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|50-59|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 20
+  },
+  {
+   "cell": "Female|50-59|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 18
+  },
+  {
+   "cell": "Female|50-59|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 20
+  },
+  {
+   "cell": "Female|50-59|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|50-59|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|50-59|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Female|50-59|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 13
+  },
+  {
+   "cell": "Female|50-59|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|50-59|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|50-59|3|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|3|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|50-59|3|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|50-59|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|50-59|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Female|50-59|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Female|50-59|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|50-59|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 14
+  },
+  {
+   "cell": "Female|50-59|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|50-59|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Female|50-59|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|50-59|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 18
+  },
+  {
+   "cell": "Female|50-59|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|50-59|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Female|50-59|4|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|4|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|50-59|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Female|50-59|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|50-59|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|4|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|50-59|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 18
+  },
+  {
+   "cell": "Female|50-59|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 18
+  },
+  {
+   "cell": "Female|50-59|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Female|50-59|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Female|60-69|1|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|1|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Female|60-69|1|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|1|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|60-69|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 18
+  },
+  {
+   "cell": "Female|60-69|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 35
+  },
+  {
+   "cell": "Female|60-69|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 16
+  },
+  {
+   "cell": "Female|60-69|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 33
+  },
+  {
+   "cell": "Female|60-69|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|60-69|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Female|60-69|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|60-69|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Female|60-69|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|60-69|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 16
+  },
+  {
+   "cell": "Female|60-69|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|60-69|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Female|60-69|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|60-69|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Female|60-69|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Female|60-69|2|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|60-69|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 27
+  },
+  {
+   "cell": "Female|60-69|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 34
+  },
+  {
+   "cell": "Female|60-69|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 24
+  },
+  {
+   "cell": "Female|60-69|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 38
+  },
+  {
+   "cell": "Female|60-69|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|60-69|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 18
+  },
+  {
+   "cell": "Female|60-69|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|60-69|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 15
+  },
+  {
+   "cell": "Female|60-69|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|60-69|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 19
+  },
+  {
+   "cell": "Female|60-69|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|60-69|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 16
+  },
+  {
+   "cell": "Female|60-69|3|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|3|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|60-69|3|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|3|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|60-69|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Female|60-69|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|60-69|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|60-69|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Female|60-69|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|60-69|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|60-69|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|60-69|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 12
+  },
+  {
+   "cell": "Female|60-69|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 15
+  },
+  {
+   "cell": "Female|60-69|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|60-69|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|60-69|4|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|60-69|4|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|60-69|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|60-69|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|60-69|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|60-69|4|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|60-69|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|60-69|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Female|60-69|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Female|60-69|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 16
+  },
+  {
+   "cell": "Female|70+|1|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|70+|1|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|70+|1|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|70+|1|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|70+|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|70+|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 25
+  },
+  {
+   "cell": "Female|70+|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Female|70+|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Female|70+|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|70+|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Female|70+|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|70+|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Female|70+|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|70+|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|70+|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|70+|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|70+|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Female|70+|2|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 18
+  },
+  {
+   "cell": "Female|70+|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 22
+  },
+  {
+   "cell": "Female|70+|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 44
+  },
+  {
+   "cell": "Female|70+|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 25
+  },
+  {
+   "cell": "Female|70+|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 52
+  },
+  {
+   "cell": "Female|70+|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|70+|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Female|70+|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|70+|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Female|70+|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|70+|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Female|70+|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Female|70+|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 13
+  },
+  {
+   "cell": "Female|70+|3|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|70+|3|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|70+|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|70+|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Female|70+|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Female|70+|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 25
+  },
+  {
+   "cell": "Female|70+|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|70+|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|70+|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Female|70+|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|70+|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Female|70+|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Female|70+|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Female|70+|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Female|70+|4|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|70+|4|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|70+|4|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|70+|4|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|70+|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Female|70+|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|70+|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|70+|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Female|70+|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Female|70+|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Female|70+|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Female|70+|4|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Female|70+|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Female|70+|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Female|70+|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 17
+  },
+  {
+   "cell": "Female|70+|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Male|18-29|1|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 16
+  },
+  {
+   "cell": "Male|18-29|1|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|18-29|1|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|18-29|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 71
+  },
+  {
+   "cell": "Male|18-29|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|18-29|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 17
+  },
+  {
+   "cell": "Male|18-29|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|18-29|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|18-29|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|18-29|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|18-29|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 17
+  },
+  {
+   "cell": "Male|18-29|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Male|18-29|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|18-29|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|18-29|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Male|18-29|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|18-29|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Male|18-29|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|18-29|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|18-29|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Male|18-29|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|18-29|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|18-29|3|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|18-29|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|18-29|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|18-29|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Male|18-29|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|18-29|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|18-29|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 20
+  },
+  {
+   "cell": "Male|18-29|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Male|18-29|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|18-29|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|18-29|4|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|18-29|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|18-29|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Male|18-29|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|18-29|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|18-29|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|1|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|30-39|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|30-39|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|30-39|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|30-39|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|30-39|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|30-39|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|30-39|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|30-39|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|30-39|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|30-39|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|30-39|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|3|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Male|30-39|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|30-39|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 18
+  },
+  {
+   "cell": "Male|30-39|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Male|30-39|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|30-39|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Male|30-39|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 18
+  },
+  {
+   "cell": "Male|30-39|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|30-39|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 12
+  },
+  {
+   "cell": "Male|30-39|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|30-39|4|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|30-39|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Male|30-39|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|30-39|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|30-39|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|30-39|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 16
+  },
+  {
+   "cell": "Male|30-39|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|30-39|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 12
+  },
+  {
+   "cell": "Male|30-39|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 60
+  },
+  {
+   "cell": "Male|30-39|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 25
+  },
+  {
+   "cell": "Male|30-39|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 28
+  },
+  {
+   "cell": "Male|30-39|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Male|40-49|1|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|40-49|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|40-49|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|40-49|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|40-49|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|40-49|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|40-49|2|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|40-49|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|40-49|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|40-49|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Male|40-49|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|3|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|3|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|40-49|3|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|40-49|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Male|40-49|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 14
+  },
+  {
+   "cell": "Male|40-49|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|40-49|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Male|40-49|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Male|40-49|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 14
+  },
+  {
+   "cell": "Male|40-49|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|40-49|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Male|40-49|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|40-49|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|40-49|4|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|40-49|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|40-49|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Male|40-49|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|40-49|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|40-49|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Male|40-49|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Male|40-49|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Male|40-49|4|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Male|40-49|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 39
+  },
+  {
+   "cell": "Male|40-49|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 21
+  },
+  {
+   "cell": "Male|40-49|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 25
+  },
+  {
+   "cell": "Male|40-49|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 28
+  },
+  {
+   "cell": "Male|50-59|1|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|1|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|1|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|50-59|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|50-59|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|50-59|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|50-59|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|50-59|1|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|50-59|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Male|50-59|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|50-59|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|50-59|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Male|50-59|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Male|50-59|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|50-59|2|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Male|50-59|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Male|50-59|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|50-59|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Male|50-59|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|50-59|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|50-59|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|50-59|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|50-59|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|50-59|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|50-59|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|50-59|3|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|50-59|3|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|50-59|3|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|3|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Male|50-59|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Male|50-59|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|50-59|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Male|50-59|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|50-59|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 20
+  },
+  {
+   "cell": "Male|50-59|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|50-59|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Male|50-59|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|50-59|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|50-59|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|50-59|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Male|50-59|4|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|50-59|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 15
+  },
+  {
+   "cell": "Male|50-59|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 16
+  },
+  {
+   "cell": "Male|50-59|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|50-59|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 15
+  },
+  {
+   "cell": "Male|50-59|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 14
+  },
+  {
+   "cell": "Male|50-59|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Male|50-59|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|50-59|4|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Male|50-59|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 33
+  },
+  {
+   "cell": "Male|50-59|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 30
+  },
+  {
+   "cell": "Male|50-59|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 19
+  },
+  {
+   "cell": "Male|50-59|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 33
+  },
+  {
+   "cell": "Male|60-69|1|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|60-69|1|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|60-69|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|60-69|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|60-69|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|60-69|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|60-69|1|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|60-69|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|60-69|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|60-69|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|60-69|1|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Male|60-69|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|60-69|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|60-69|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|60-69|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|60-69|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|60-69|2|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Male|60-69|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|60-69|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Male|60-69|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Male|60-69|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 21
+  },
+  {
+   "cell": "Male|60-69|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|60-69|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 13
+  },
+  {
+   "cell": "Male|60-69|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|60-69|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Male|60-69|2|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|60-69|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|60-69|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|60-69|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Male|60-69|3|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Male|60-69|3|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|60-69|3|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|60-69|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 13
+  },
+  {
+   "cell": "Male|60-69|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 13
+  },
+  {
+   "cell": "Male|60-69|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 9
+  },
+  {
+   "cell": "Male|60-69|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 18
+  },
+  {
+   "cell": "Male|60-69|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|60-69|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 19
+  },
+  {
+   "cell": "Male|60-69|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|60-69|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 15
+  },
+  {
+   "cell": "Male|60-69|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 14
+  },
+  {
+   "cell": "Male|60-69|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 16
+  },
+  {
+   "cell": "Male|60-69|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Male|60-69|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Male|60-69|4|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|60-69|4|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|60-69|4|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|60-69|4|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|60-69|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|60-69|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Male|60-69|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 10
+  },
+  {
+   "cell": "Male|60-69|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 14
+  },
+  {
+   "cell": "Male|60-69|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|60-69|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 23
+  },
+  {
+   "cell": "Male|60-69|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 11
+  },
+  {
+   "cell": "Male|60-69|4|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Male|60-69|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 25
+  },
+  {
+   "cell": "Male|60-69|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 41
+  },
+  {
+   "cell": "Male|60-69|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 30
+  },
+  {
+   "cell": "Male|60-69|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 46
+  },
+  {
+   "cell": "Male|70+|1|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|1|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|1|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|1|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|70+|1|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|1|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 6
+  },
+  {
+   "cell": "Male|70+|1|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|1|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|70+|1|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|70+|1|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|70+|1|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|70+|2|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|70+|2|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 8
+  },
+  {
+   "cell": "Male|70+|2|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|70+|2|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 15
+  },
+  {
+   "cell": "Male|70+|2|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|70+|2|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 22
+  },
+  {
+   "cell": "Male|70+|2|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 7
+  },
+  {
+   "cell": "Male|70+|2|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 25
+  },
+  {
+   "cell": "Male|70+|2|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|70+|2|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 12
+  },
+  {
+   "cell": "Male|70+|2|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|70+|2|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 17
+  },
+  {
+   "cell": "Male|70+|2|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 4
+  },
+  {
+   "cell": "Male|70+|2|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|70+|2|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 5
+  },
+  {
+   "cell": "Male|70+|3|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|70+|3|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|70+|3|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 7
+  },
+  {
+   "cell": "Male|70+|3|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|3|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 20
+  },
+  {
+   "cell": "Male|70+|3|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 12
+  },
+  {
+   "cell": "Male|70+|3|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 31
+  },
+  {
+   "cell": "Male|70+|3|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 3
+  },
+  {
+   "cell": "Male|70+|3|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 11
+  },
+  {
+   "cell": "Male|70+|3|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 8
+  },
+  {
+   "cell": "Male|70+|3|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 22
+  },
+  {
+   "cell": "Male|70+|3|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 4
+  },
+  {
+   "cell": "Male|70+|3|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 13
+  },
+  {
+   "cell": "Male|70+|3|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 12
+  },
+  {
+   "cell": "Male|70+|3|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 28
+  },
+  {
+   "cell": "Male|70+|4|1",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|4|1",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|4|1",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|4|1",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 2
+  },
+  {
+   "cell": "Male|70+|4|2",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 1
+  },
+  {
+   "cell": "Male|70+|4|2",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 9
+  },
+  {
+   "cell": "Male|70+|4|2",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 5
+  },
+  {
+   "cell": "Male|70+|4|2",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 18
+  },
+  {
+   "cell": "Male|70+|4|3",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 2
+  },
+  {
+   "cell": "Male|70+|4|3",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 3
+  },
+  {
+   "cell": "Male|70+|4|3",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 6
+  },
+  {
+   "cell": "Male|70+|4|3",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 10
+  },
+  {
+   "cell": "Male|70+|4|4",
+   "has_rho": false,
+   "has_alpha": false,
+   "n": 14
+  },
+  {
+   "cell": "Male|70+|4|4",
+   "has_rho": false,
+   "has_alpha": true,
+   "n": 34
+  },
+  {
+   "cell": "Male|70+|4|4",
+   "has_rho": true,
+   "has_alpha": false,
+   "n": 26
+  },
+  {
+   "cell": "Male|70+|4|4",
+   "has_rho": true,
+   "has_alpha": true,
+   "n": 56
+  }
+ ],
+ "veg_share_by_theta_bin": {
+  "(-1.0,0.2)": 0.0,
+  "[0.2,0.4)": 0.0008976660682226212,
+  "[0.4,0.6)": 0.004514672686230248,
+  "[0.6,0.8)": 0.010092514718250631,
+  "[0.8,1.0]": 0.062111801242236024
+ },
+ "n_total": 5602
+}

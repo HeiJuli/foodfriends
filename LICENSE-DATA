@@ -1,0 +1,44 @@
+Data licensing
+==============
+
+This repository's code is licensed under the MIT License (see LICENSE). Data
+files are covered separately, as follows.
+
+LISS panel microdata
+--------------------
+The survey data underlying this work come from the LISS panel (Longitudinal
+Internet studies for the Social Sciences), administered and managed by the
+non-profit research institute Centerdata (Tilburg University, the Netherlands).
+Centerdata's user statement prohibits redistribution of LISS data. The raw
+files are therefore NOT distributed here and are not ours to license.
+
+Obtain them from the LISS Data Archive (https://www.dataarchive.lissdata.nl/)
+after signing the user statement (https://liss.statements.centerdata.nl/);
+access is free. The study units used are:
+
+  avars_201102_EN_2.0p    background variables, 2011
+  avars_201807_EN_1.0p    background variables, 2018
+  avars_201905_EN_1.0p    background variables, 2019
+  ed11a_EN_1.0p           Core Study: education, wave a
+  oi18a_EN_1.0p           Core Study: income, wave a
+  su19a_EN_1.0p           Core Study: social integration, wave a
+
+auxillary/create_hierarchical_agents.py and auxillary/create_pmf_tables.py
+rebuild every derived input from these files.
+
+Derived files
+-------------
+Aggregate tables produced by us from the above (for example the conditional
+probability tables in data/demographic_pmfs.pkl) are licensed CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/), insofar as the LISS terms
+permit their release. Respondent-level derived files are not redistributed.
+data/synthetic_agents.csv is a synthetic population sampled from those
+aggregate tables by auxillary/create_synthetic_agents.py; it contains no LISS
+respondent and is CC BY 4.0 on the same condition.
+
+Acknowledgement
+---------------
+Any publication using these data must state: "In this paper, we make use of
+data from the LISS panel (Longitudinal Internet studies for the Social
+Sciences), which is administered and managed by the non-profit research
+institute Centerdata (Tilburg University, the Netherlands)."
