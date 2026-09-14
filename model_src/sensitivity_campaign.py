@@ -92,7 +92,7 @@ sys.path.append('../plotting')
 sys.path.append('../analysis')
 import model_main
 import model_runner_mp
-from attribution_ledger import replay
+from attribution_ledger import replay, veg_time
 from t_end_logistic import estimate_t_end, t_end_with_status, fc_window, FC_WIN_FRAC
 from plot_styles import (set_publication_style, apply_axis_style, COLORS,
                          ECO_CMAP, ECO_DIV_CMAP)
@@ -144,15 +144,20 @@ PLABEL = {"decay": r"$\lambda$ (attenuation)", "M": r"$M$ (memory)",
 # window is a fraction of run length -- so after --extend it is not comparable
 # across points of different `steps` and has no `_tend` fallback to correct it.
 # Still computed by _observables and kept in the pickle as raw data.
+# Reported on the vegetarian-time ledger, matching the main text. The event-count
+# columns are scored in the same worker from the same event log and kept as the
+# _tend extras, so both units come out of one campaign.
 OBS = ["F_veg_final", "t_50",
-       "amp_mean_tend", "amp_p90_tend", "amp_max_tend"]
+       "amp_vt_mean_tend", "amp_vt_p90_tend", "amp_vt_max_tend"]
 OLABEL = {"F_veg_final": r"$F_{veg}$ (final)", "F_c": r"$F_c$ (max accel.)",
-          # event count: the sweep pickles hold no event log, so the reported veg-time
-          # ledger cannot be replayed on them (accounting note 2026-09-09 s.5)
-          "t_50": r"$t_{50}$ (ksteps)", "amp_mean_tend": "mean amplification (event count)",
+          "t_50": r"$t_{50}$ (ksteps)",
+          "amp_vt_mean_tend": "mean amplification (veg-time)",
+          "amp_vt_p90_tend": "p90 amplification (veg-time)",
+          "amp_vt_max_tend": "max amplification (veg-time)",
+          "amp_mean_tend": "mean amplification (event count)",
           "amp_p90_tend": "p90 amplification (event count)",
           "amp_max_tend": "max amplification (event count)"}
-HEADLINE = ["F_veg_final", "amp_mean_tend", "amp_max_tend"]
+HEADLINE = ["F_veg_final", "amp_vt_mean_tend", "amp_vt_max_tend"]
 
 # Aggregated but not reported. fig_lambda's CCDF pools the per-run `mult` array,
 # which only exists at the fixed window (the event log does not leave the worker,
@@ -160,7 +165,9 @@ HEADLINE = ["F_veg_final", "amp_mean_tend", "amp_max_tend"]
 # stays on the fixed-window columns throughout, which costs nothing here: all five
 # decay points share one run length and bit-identical dynamics, and decay's
 # sensitivity index is +0.253 fixed against +0.254 at t_end.
-EXTRA_AGG = ["amp_mean", "amp_p90", "amp_max"]
+EXTRA_AGG = ["amp_mean", "amp_p90", "amp_max",
+             "amp_mean_tend", "amp_p90_tend", "amp_max_tend",
+             "amp_vt_sys_tend", "n_credited_vt_tend"]
 
 # Inherit from the runner that produced the reported ensemble, NOT from
 # model_main.params -- the latter is for ad-hoc single runs and differs. Starting
@@ -283,6 +290,14 @@ def _observables(m):
     reds_te = replay(m.events, m.snapshots[0]['diets'], m.params,
                      parent="exposure", weight="none", unit="event", t_end=t_end)
     mult_te = reds_te[reds_te > 0] / DIRECT_REDUCTION_KG
+    # Vegetarian-time ledger (the reported one): same parents, same lambda, unit
+    # 'time', divided by the agent's own vegetarian-time. Both units are scored here
+    # because the event log does not leave the worker.
+    own = veg_time(m.events, m.snapshots[0]['diets'], t_end)
+    reds_vt = replay(m.events, m.snapshots[0]['diets'], m.params,
+                     parent="exposure", weight="none", unit="time", t_end=t_end)
+    mvt = reds_vt > 0
+    mult_vt = reds_vt[mvt] / (DIRECT_REDUCTION_KG * own[mvt])
     return {
         "mult": mult.astype(np.float32),   # pooled for CCDF panels
         "traj_ds": traj[::TRAJ_STRIDE].astype(np.float32),   # offline re-scoring
@@ -304,6 +319,13 @@ def _observables(m):
         "amp_p90_tend": np.percentile(mult_te, 90) if len(mult_te) else 0.0,
         "amp_max_tend": mult_te.max() if len(mult_te) else 0.0,
         "n_credited_tend": int(len(mult_te)),
+        "amp_vt_mean_tend": mult_vt.mean() if len(mult_vt) else 0.0,
+        "amp_vt_p90_tend": np.percentile(mult_vt, 90) if len(mult_vt) else 0.0,
+        "amp_vt_max_tend": mult_vt.max() if len(mult_vt) else 0.0,
+        "amp_vt_sys_tend": float(reds_vt.sum() / (DIRECT_REDUCTION_KG * own.sum()))
+                           if own.sum() > 0 else 0.0,
+        "n_credited_vt_tend": int(mvt.sum()),
+        "mult_vt": mult_vt.astype(np.float32),
     }
 
 
