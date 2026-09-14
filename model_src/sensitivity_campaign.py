@@ -410,15 +410,43 @@ def run_extension(df, points, runs, steps, cores, tag):
     return out
 
 
-def build_jobs(runs, steps):
-    """Baseline runs once and is reused as every parameter's baseline point."""
+def build_jobs(runs, steps, only=None, exclude=None):
+    """Baseline runs once and is reused as every parameter's baseline point.
+
+    `only`/`exclude` are sets of (param, value). They exist so the points that are
+    known to censor at 400k can be run straight at their longer length, in parallel
+    with the rest of the campaign, instead of being run twice. Credit is taken at
+    each run's own t_end and a longer run is a prefix-extension of the shorter one
+    (same seed, same RNG draws), so a point that turns out to have saturated early
+    reports the same `_tend` amplification either way; only the fixed-window `amp_*`
+    columns, which are already unreadable across mixed lengths, would differ.
+    """
     jobs = [("baseline", np.nan, 42 + i, steps) for i in range(runs)]
     for prm, vals in SWEEPS.items():
         for v in vals:
             if v == BASELINE[prm]:
                 continue
+            if only is not None and (prm, v) not in only:
+                continue
+            if exclude and (prm, v) in exclude:
+                continue
             jobs += [(prm, v, 42 + i, steps) for i in range(runs)]
     return jobs
+
+
+def parse_points(spec):
+    """"M=12,theta_gate_c=0.45" -> {("M", 12.0), ("theta_gate_c", 0.45)}."""
+    out = set()
+    for tok in spec.split(","):
+        k, _, v = tok.partition("=")
+        k = k.strip()
+        if k not in SWEEPS:
+            sys.exit(f"ERROR: unknown parameter {k!r}")
+        vals = [x for x in SWEEPS[k] if float(x) == float(v)]
+        if not vals:
+            sys.exit(f"ERROR: {v!r} is not a swept value of {k!r}: {SWEEPS[k]}")
+        out.add((k, vals[0]))
+    return out
 
 
 def expand_baseline(df):
@@ -433,7 +461,9 @@ def expand_baseline(df):
 
 def summarise(df):
     g = df.groupby(["param", "value"])
-    s = g[OBS + EXTRA_AGG + ["n_credited", "total_credit_kg"]].agg(["mean", "std"])
+    cols = [c for c in OBS + EXTRA_AGG + ["n_credited", "total_credit_kg"]
+            if c in df.columns]   # a pre-patch campaign has no veg-time columns
+    s = g[cols].agg(["mean", "std"])
     s.columns = [f"{a}_{b}" for a, b in s.columns]
     s["n_runs"] = g.size()
     s["F_c_n"] = g["F_c"].apply(lambda x: int(np.isfinite(x).sum()))
@@ -709,7 +739,9 @@ def fig_interaction(df, out):
 def write_table(summary, sens, out):
     fmt = {"F_veg_final": "{:.3f}", "F_c": "{:.3f}", "t_50": "{:.1f}",
            "amp_mean_tend": "{:.2f}", "amp_p90_tend": "{:.2f}",
-           "amp_max_tend": "{:.1f}"}
+           "amp_max_tend": "{:.1f}",
+           "amp_vt_mean_tend": "{:.2f}", "amp_vt_p90_tend": "{:.2f}",
+           "amp_vt_max_tend": "{:.1f}"}
     pname = {"decay": r"$\lambda$", "M": r"$M$", "beta": r"$\beta$",
              "gamma": r"$\gamma$", "immune_n": r"$f_{imm}$",
              "theta_gate_c": r"$c$", "theta_gate_k": r"$k$",
@@ -725,10 +757,10 @@ def write_table(summary, sens, out):
          r"expressed as a fraction of its value at the default configuration "
          r"and signed by the direction of the response. $S$ is conditional on "
          r"the ranges swept here, so it ranks parameters within those ranges "
-         r"rather than globally. Amplification uses the primary credit "
-         r"convention (exposure-proportional parents, event count, no dwell "
-         r"weight); the $\gamma$ sweep therefore moves the social-influence "
-         r"kernel and the credit split together.}",
+         r"rather than globally. Amplification is on the vegetarian-time "
+         r"ledger (exposure-proportional parents, no dwell weight), credited "
+         r"at each run's own $t_{\mathrm{end}}$; the $\gamma$ sweep therefore "
+         r"moves the social-influence kernel and the credit split together.}",
          r"\label{tab:sensitivity}",
          r"\begin{tabular}{llccccc}", r"\toprule",
          r"Parameter & Value & $F_{veg}$ & $t_{50}$ (k) & "
@@ -804,10 +836,36 @@ def main():
                     help='override the automatic selection, e.g. "M=15,theta_gate_c=0.45"')
     ap.add_argument('--dry-run', action='store_true',
                     help='with --extend, list the points that would be rerun and stop')
+    ap.add_argument('--params', metavar='LIST',
+                    help='run only these sweep parameters, e.g. "decay,M,beta". Splits one '
+                         'campaign across boxes: each writes its own pkl (--tag-suffix), the '
+                         'frames concatenate, and --plot-only draws the merged tag. Each box '
+                         'reruns the shared baseline block on the same seeds, so the copies '
+                         'are identical and expand_baseline has already labelled them per '
+                         'parameter -- concatenation needs no dedup.')
+    ap.add_argument('--tag-suffix', default='',
+                    help='appended to the output tag, to keep split runs apart')
+    ap.add_argument('--only-points', metavar='LIST',
+                    help='run only these sweep points (plus the baseline block), e.g. '
+                         '"M=12,theta_gate_c=0.45". With --steps, runs the known-censored '
+                         'points straight at their longer length alongside the main campaign.')
+    ap.add_argument('--exclude-points', metavar='LIST',
+                    help='skip these sweep points; the complement of --only-points, for the '
+                         'campaign that runs beside such an arm.')
+    ap.add_argument('--no-plots', action='store_true',
+                    help='skip figures and the LaTeX table (a partial frame cannot draw them)')
     ap.add_argument('--interaction', action='store_true',
                     help='also run the M x theta_gate_k 2D grid')
     ap.add_argument('--interaction-runs', type=int, default=20)
     args = ap.parse_args()
+    if args.params:
+        keep = {k.strip() for k in args.params.split(',')}
+        unknown = keep - set(SWEEPS)
+        if unknown:
+            raise SystemExit(f"ERROR: unknown sweep parameter(s): {sorted(unknown)}")
+        for k in [k for k in SWEEPS if k not in keep]:
+            del SWEEPS[k]
+        print(f"INFO: restricted to {sorted(keep)}")
     if args.quick:
         args.runs = 4
 
@@ -818,6 +876,8 @@ def main():
     # configuration it swept, and sample-max (385) and twin (2000) runs are not
     # comparable on any amplification observable.
     tag = args.plot_only or args.extend or f"{date.today().strftime('%Y%m%d')}_N{BASE_PARAMS['N']}"
+    if args.tag_suffix:
+        tag = f"{tag}_{args.tag_suffix.lstrip('_')}"
     global CFG_N
     if "_N" in tag:
         CFG_N = int(tag.split("_N")[1].split("_")[0])
@@ -852,7 +912,11 @@ def main():
     elif args.plot_only:
         df = pd.read_pickle(pkl)
     else:
-        jobs = build_jobs(args.runs, args.steps)
+        only = parse_points(args.only_points) if args.only_points else None
+        excl = parse_points(args.exclude_points) if args.exclude_points else None
+        if only and excl:
+            sys.exit("ERROR: --only-points and --exclude-points are mutually exclusive")
+        jobs = build_jobs(args.runs, args.steps, only=only, exclude=excl)
         print(f"INFO: {len(jobs)} runs ({args.runs}/point, {len(SWEEPS)} parameters, "
               f"N={BASE_PARAMS['N']}, kappa={BASE_PARAMS['kappa']}, "
               f"steps={args.steps}) on {args.cores} cores")
@@ -872,11 +936,14 @@ def main():
 
     print_report(summary, sens)
     V = "../visualisations_output"
-    fig_tornado(sens, f"{V}/sensitivity_tornado_{tag}.pdf")
-    fig_heatmap(sens, f"{V}/sensitivity_heatmap_{tag}.pdf")
-    fig_response_curves(summary, f"{V}/sensitivity_response_curves_{tag}.pdf")
-    fig_lambda(df, summary, f"{V}/sensitivity_lambda_{tag}.pdf")
-    write_table(summary, sens, f"{V}/sensitivity_table_{tag}.tex")
+    if args.no_plots:
+        print("INFO: --no-plots, figures and table skipped")
+    else:
+        fig_tornado(sens, f"{V}/sensitivity_tornado_{tag}.pdf")
+        fig_heatmap(sens, f"{V}/sensitivity_heatmap_{tag}.pdf")
+        fig_response_curves(summary, f"{V}/sensitivity_response_curves_{tag}.pdf")
+        fig_lambda(df, summary, f"{V}/sensitivity_lambda_{tag}.pdf")
+        write_table(summary, sens, f"{V}/sensitivity_table_{tag}.tex")
 
     ipkl = f"../model_output/sensitivity_interaction_{tag}.pkl"
     if args.interaction or (args.plot_only and os.path.exists(ipkl)):
