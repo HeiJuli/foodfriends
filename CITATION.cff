@@ -11,18 +11,23 @@ authors:
   - given-names: "Jordan P."
     family-names: Everall
     email: jordan.everall@uni-graz.at
+    orcid: "https://orcid.org/0000-0002-2441-166X"
     affiliation: "Wegener Center for Climate and Global Change, University of Graz, Austria"
   - given-names: Emma
     family-names: Thill
+    orcid: "https://orcid.org/0000-0003-2463-617X"
     affiliation: "Department of Economics and Management, University of Luxembourg, Luxembourg"
   - given-names: Alison
     family-names: Hochen
+    orcid: "https://orcid.org/0000-0002-6218-4648"
     affiliation: "Department of Biology, University of Oxford, UK"
   - given-names: Sandeep
     family-names: Chowdhary
+    orcid: "https://orcid.org/0000-0001-8679-8946"
     affiliation: "International Institute for Applied Systems Analysis, Laxenburg, Austria"
   - given-names: "Ilona M."
     family-names: Otto
+    orcid: "https://orcid.org/0000-0003-4935-7660"
     affiliation: "Wegener Center for Climate and Global Change, University of Graz, Austria"
 repository-code: "https://github.com/foroveralls/foodfriends"
 license: MIT

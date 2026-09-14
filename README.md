@@ -220,3 +220,9 @@ panel, mapped in `source_data/README.md`), written by
   underlying LISS panel microdata are not ours to license and are not
   redistributed here (gitignored; obtain them from the LISS Data Archive).
 - **Manuscript text** — not open source, rights reserved by the authors.
+
+## Citation
+
+Machine-readable metadata is in `CITATION.cff`. Cite the archived release
+(Zenodo DOI, minted from the tagged release) for the code, and the paper for
+the model itself once it is published.
