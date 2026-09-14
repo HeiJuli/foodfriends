@@ -343,11 +343,12 @@ def draw_band(a, events, diets, nodes, links, kids, kid_of, root, focus, t_end, 
     L = np.array([[xy[n], xe[n]] for n in focus])
     ax.add_collection(LineCollection(L, colors=[(*shade(depth[n])[:3], 0.3 * fade(depth[n]))
                                                 for n in focus], lw=1.0, zorder=2.8))
-    # filled if the stint lasts to t_end, open (page fill, generation-coloured ring) if the
-    # agent reverts; most stints are shorter than a sweep, so the lifeline alone cannot show it
+    # --open-reverted: page fill and a generation-coloured ring for stints that revert before
+    # t_end (most are shorter than a sweep, so the lifeline alone cannot show it)
     s0 = 16 if len(focus) < 400 else 5
     size = lambda n: s0 * (1 - 0.8 * depth[n] / dmax) + 1.0
-    for sel, fill in ((lambda n: end[n] >= t_end, True), (lambda n: end[n] < t_end, False)):
+    lasts = (lambda n: end[n] >= t_end) if a.open_reverted else (lambda n: True)
+    for sel, fill in ((lasts, True), (lambda n: not lasts(n), False)):
         sub = [n for n in focus if sel(n)]
         if not sub:
             continue
@@ -375,6 +376,7 @@ def draw_band(a, events, diets, nodes, links, kids, kid_of, root, focus, t_end, 
         ax.text(x1 + 2.4 * dx, yl, "vegetarian stint", ha="left", va="center", fontsize=6,
                 color=ink, style="italic")
         x2 = x1 + 9.5 * dx
+    if a.legend and a.open_reverted:
         ax.scatter(x2, yl, s=s0 * 0.6 + 1, c=[shade(3)], ec=a.outline or "none",
                    lw=0.3 if a.outline else 0, clip_on=False, zorder=6)
         ax.text(x2 + 0.6 * dx, yl, "stayed", ha="left", va="center", fontsize=6, color=ink,
@@ -426,6 +428,9 @@ def main():
     ap.add_argument("--cmap", default="ink",
                     help="band layout: 'ink' (indigo to rose by generation), 'ink-mono' (the "
                          "single-hue violet ramp) or a matplotlib name")
+    ap.add_argument("--open-reverted", action="store_true",
+                    help="band layout: draw stints that revert before t_end as open dots "
+                         "(default: every dot filled; reversion is disclosed in the text)")
     ap.add_argument("--ground", choices=["light", "dark"], default="light")
     ap.add_argument("--outline", default=None, metavar="COLOR",
                     help="band layout: edge colour for the focus dots (default none)")
