@@ -85,4 +85,6 @@ cascade_overview:
   size: [7.1, 2.8]
   # cut at the analysis t_end (310k steps, ~78 sweeps) so the axis matches the paper's window
   t_end: 310000
+  # the manuscript's branch (gen-1 agent 130 at 18 sweeps); arm 0 is a larger branch at this cut
+  arm: 1
   out: ../visualisations_output/cascade_band/band_ink.pdf
